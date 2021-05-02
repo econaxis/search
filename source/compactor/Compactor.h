@@ -10,18 +10,20 @@
 #include <filesystem>
 
 namespace Compactor {
+    namespace fs=std::filesystem;
     enum class ReadState {
         PROCESSED_ALREADY,
         GOOD,
         STREAM_ERROR
     };
     void create_directory(const std::filesystem::path& dirpath);
-    void compact_directory(const std::filesystem::path &path, int max_merge = 2);
+    void compact_directory(const std::filesystem::path &path, int max_merge = 100);
 
 
-    std::tuple<ReadState, std::string, std::string> read_one_index(std::fstream &stream);
+    std::tuple<Compactor::ReadState, fs::path, fs::path> read_one_index(std::fstream &stream);
 
-    std::pair<ReadState, std::string> read_and_mark_line(std::fstream &stream);
+    std::pair<Compactor::ReadState, std::string> read_and_mark_line(std::fstream &stream);
+    std::pair<Compactor::ReadState, std::string> read_line(std::ifstream &stream);
 };
 
 

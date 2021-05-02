@@ -12,7 +12,7 @@
 // Returns the number of files processed.
 
 namespace fs = std::filesystem;
-constexpr unsigned int MAX_FILES_PER_INDEX = 10000;
+constexpr unsigned int MAX_FILES_PER_INDEX = 1000;
 const auto data_file_path = fs::path("../data-files");
 const auto indice_file_path = data_file_path / "indices";
 

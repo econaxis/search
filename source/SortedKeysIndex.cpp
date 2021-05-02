@@ -17,8 +17,6 @@
 #include "WordIndexEntry.h"
 
 
-using SearchResult = std::vector<DocumentPositionPointer>;
-
 std::vector<WordIndexEntry>::iterator vector_find(std::vector<WordIndexEntry> &vec, const std::string &key) {
     auto it = std::lower_bound(vec.begin(), vec.end(), key, [](const auto &_vec_elem, const auto &_key) {
         return _vec_elem.key < _key;

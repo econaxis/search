@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 
 
-add_library(search-share "source/DocumentPositionPointer.cpp"
+add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/DocIDFilePair.cpp"
         "source/Serializer.h"
         "source/Tokenizer.cpp"
@@ -23,7 +23,7 @@ add_library(search-share "source/DocumentPositionPointer.cpp"
         "source/SortedKeysIndex.h"
         "source/SortedKeysIndex.cpp"
         "source/compactor/Compactor.cpp"
-        "source/compactor/Compactor.h")
+        "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h)
 target_include_directories(search-share PUBLIC source OleanderStemmingLibrary/include)
 target_link_libraries(search-share tbb)
 

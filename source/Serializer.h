@@ -35,6 +35,8 @@ namespace Serializer {
     std::vector<DocIDFilePair> read_filepairs(std::istream& stream);
 
     void read_some_files();
+
+    SortedKeysIndex read_sorted_keys_index(std::istream &stream, std::streampos start, std::streampos end);
 };
 
 

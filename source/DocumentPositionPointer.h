@@ -18,7 +18,7 @@ struct DocumentPositionPointer {
 
     DocumentPositionPointer(uint32_t docid, uint16_t docpos) : document_id(docid), document_position(docpos) {};
 };
-
+using SearchResult = std::vector<DocumentPositionPointer>;
 std::ostream &operator<<(std::ostream &os, std::vector<DocumentPositionPointer> vec);
 
 #endif //GAME_DOCUMENTPOSITIONPOINTER_H

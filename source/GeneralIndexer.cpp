@@ -10,7 +10,7 @@
 
 
 // Returns the number of files processed.
-
+using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
 constexpr unsigned int MAX_FILES_PER_INDEX = 1000;
 const auto data_file_path = fs::path("../data-files");
@@ -22,7 +22,7 @@ int GeneralIndexer::read_some_files() {
 
     SortedKeysIndex master;
     std::vector<SortedKeysIndex> children;
-    std::vector<DocIDFilePair> filepairs;
+    FilePairs filepairs;
     filepairs.reserve(MAX_FILES_PER_INDEX);
     auto dir_it = fs::directory_iterator(data_file_path);
     uint32_t doc_id_counter = 0, files_processed = 0;
@@ -38,8 +38,6 @@ int GeneralIndexer::read_some_files() {
     if (filepairs.empty()) {
         return 0;
     }
-    std::mutex global_merge;
-    int num_merges_master = 0;
     children.resize(filepairs.size());
     std::transform(std::execution::par, filepairs.begin(), filepairs.end(),
                    children.begin(), [&](const DocIDFilePair &entry) {
@@ -54,17 +52,7 @@ int GeneralIndexer::read_some_files() {
                     std::cout << "Done " << entry.docid << "\n";
                 }
 
-                if (global_merge.try_lock()) {
-                    std::lock_guard<std::mutex> guard(global_merge, std::adopt_lock);
-                    master.merge_into(index1);
-                    if (++num_merges_master % 500 == 0) {
-                        std::cout << "Sort group all master\n";
-                        master.sort_and_group_all();
-                    }
-                    return SortedKeysIndex();
-                } else {
-                    return index1;
-                }
+                return index1;
             });
 
     std::cout << "Merging\n";
@@ -78,27 +66,31 @@ int GeneralIndexer::read_some_files() {
 
     master.sort_and_group_all();
 
-    // Multiple indices output possible. Check them.
+    persist_indices(master, filepairs);
+    // Since indexing was successful, we move the processed files to the processed folder.
+    for (const auto &fp : filepairs) {
+        auto p = fs::path(fp.file_name);
+        std::filesystem::rename(p, p.parent_path() / fs::path("processed") / p.filename());
+    }
+
+    return filepairs.size();
+}
+
+void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
+                                     const FilePairs &filepairs) {// Multiple indices output possible. Check them.
     std::string suffix = random_b64_str(5);
     if (std::filesystem::is_regular_file(
-            std::filesystem::__cxx11::path("../data-files/indices/master_index" + suffix))) {
+            fs::path(indice_file_path / ("master_index" + suffix)))) {
         // File already exists. Get a new suffix that's more random.
         suffix += random_b64_str(30);
     }
 
     std::cout << "Persisting files to disk\n";
-    std::ofstream out_index(indice_file_path.string() + "/master_index" + suffix, std::ios_base::binary);
-    std::ofstream filemapstream(indice_file_path.string() + "/filemap" + suffix, std::ios_base::binary);
-    std::ofstream index_file(indice_file_path.string() + "/index_files", std::ios_base::app);
+    std::ofstream out_index(indice_file_path / ("master_index" + suffix), std::ios_base::binary);
+    std::ofstream filemapstream(indice_file_path / ("filemap" + suffix), std::ios_base::binary);
+    std::ofstream index_file(indice_file_path / "index_files", std::ios_base::app);
     Serializer::serialize(filemapstream, filepairs);
     Serializer::serialize(out_index, master);
     index_file << indice_file_path.string() + "/master_index" + suffix << "\n"
                << indice_file_path.string() + "/filemap" + suffix << "\n";
-    // Since indexing was successful, we move the processed files to the processed folder.
-    for (const auto &fp : filepairs) {
-        auto p = std::filesystem::__cxx11::path(fp.file_name);
-        std::filesystem::rename(p, p.parent_path() / std::filesystem::__cxx11::path("processed") / p.filename());
-    }
-
-    return filepairs.size();
 }

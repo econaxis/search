@@ -15,9 +15,12 @@
 namespace Tokenizer {
     SortedKeysIndex index_istream(std::ifstream &stream, uint32_t docid);
 
-    std::string remove_punctuation(std::string a);
 
     void stem_english(std::string &a);
+
+    int clean_token_to_index(std::string &token);
+
+    void remove_punctuation(std::string &a);
 };
 
 

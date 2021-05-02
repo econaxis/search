@@ -9,6 +9,7 @@
 #include "DocIDFilePair.h"
 #include "GeneralIndexer.h"
 #include "compactor/Compactor.h"
+#include "Constants.h"
 
 namespace fs = std::filesystem;
 
@@ -19,11 +20,13 @@ bool compdocid(const DocIDFilePair &t1, const DocIDFilePair &t2) {
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
     if (argc == 1) {
-        while (GeneralIndexer::read_some_files() != 0) {}
+        GeneralIndexer::register_atexit_handler();
+        int max=20;
+        while (GeneralIndexer::read_some_files() != 0 && max--) {}
         return 1;
     };
 
-    std::ifstream index_file("../data-files/indices/index_files", std::ios_base::in);
+    std::ifstream index_file(data_files_dir / "indices" / "index_files", std::ios_base::in);
 
 
     auto[statedb, dbline] = Compactor::read_line(index_file);
@@ -38,7 +41,7 @@ int main(int argc, char *argv[]) {
     SortedKeysIndex index = Serializer::read_sorted_keys_index(stream);
 
     if (!std::is_sorted(filepairs.begin(), filepairs.end(), compdocid)) {
-        std::cout<<"Not sorted...sorting\n";
+        std::cout << "Not sorted...sorting\n";
         std::sort(filepairs.begin(), filepairs.end(), compdocid);
 
         // Close fpstream and rewrite file.
@@ -50,9 +53,11 @@ int main(int argc, char *argv[]) {
 
     for (int i = 1; i < argc; i++) {
         std::string s(argv[i]);
-        for (auto &c: s) c = std::toupper(c);
-        std::cout << s << " ";
-        terms.emplace_back(s);
+
+        if (Tokenizer::clean_token_to_index(s)) {
+            std::cout << s << " ";
+            terms.emplace_back(s);
+        }
     }
 
 

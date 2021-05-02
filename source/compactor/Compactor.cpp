@@ -97,7 +97,7 @@ void Compactor::compact_directory(const fs::path &path, int max_merge) {
         }
     }
 
-    master_ssk.sort_and_group_all();
+    master_ssk.sort_and_group_shallow();
     auto random_suffix = random_b64_str(5);
     auto master_ssk_path = path / ("master_index" + random_suffix);
     auto filemap_p = path / ("filemap" + random_suffix);

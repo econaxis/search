@@ -3,8 +3,9 @@
 //
 #include "compactor/Compactor.h"
 #include <filesystem>
+#include "Constants.h"
 
 namespace fs=std::filesystem;
 int main() {
-    Compactor::compact_directory(fs::path("../data-files/indices"));
+    Compactor::compact_directory(data_files_dir/"indices");
 }

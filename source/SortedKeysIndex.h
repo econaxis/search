@@ -36,12 +36,14 @@ public:
 
     std::vector<DocumentPositionPointer> search_keys(const std::vector<std::string> &keys) const;
 
-    void sort_and_group_all();
+    void sort_and_group_shallow();
     int index_size() const;
 
     void merge_into(SortedKeysIndex &other);
 
     void reserve_more(size_t len);
+
+    void sort_and_group_all();
 };
 
 

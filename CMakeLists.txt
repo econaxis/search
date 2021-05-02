@@ -8,7 +8,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
 
 
-
 add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/DocIDFilePair.cpp"
         "source/Serializer.h"
@@ -23,14 +22,15 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/SortedKeysIndex.h"
         "source/SortedKeysIndex.cpp"
         "source/compactor/Compactor.cpp"
-        "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h)
+        "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
+        source/Constants.cpp
+        source/Constants.h)
 target_include_directories(search-share PUBLIC source OleanderStemmingLibrary/include)
 target_link_libraries(search-share tbb)
 
 
 add_executable(search source/main.cpp)
 target_link_libraries(search PRIVATE tbb search-share)
-
 
 
 add_executable(compactor source/compactor/main.cpp)

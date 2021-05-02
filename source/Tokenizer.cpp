@@ -10,8 +10,14 @@
 #include <codecvt>
 #include <locale>
 
+int Tokenizer::clean_token_to_index(std::string &token) {
+    remove_punctuation(token);
+    if (token.size() <= 2) return 0; // Token shouldn't be included in index.
+    else return 1;
+
+}
+
 SortedKeysIndex Tokenizer::index_istream(std::ifstream &stream, uint32_t docid) {
-    std::string word;
     std::unordered_map<std::string, WordIndexEntry> index_temp;
     std::string file((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     index_temp.reserve(file.length() / 20);
@@ -20,14 +26,14 @@ SortedKeysIndex Tokenizer::index_istream(std::ifstream &stream, uint32_t docid) 
         cur_pos = file.find_first_of(" ,.;-{}()[]#?/;!\t\n'\"", prev_pos);
         if (cur_pos == std::string::npos) break;
 
-        auto no_punctuation = remove_punctuation(file.substr(prev_pos, cur_pos - prev_pos));
-//        stem_english(no_punctuation);
-        if (auto it = index_temp.find(no_punctuation); it == index_temp.end()) {
-            std::vector<DocumentPositionPointer> temp;
-            temp.reserve(30);
-            index_temp.insert({no_punctuation, {no_punctuation, {}}});
+        std::string temp = file.substr(prev_pos, cur_pos - prev_pos);
+
+        if (clean_token_to_index(temp)) {
+            if (auto it = index_temp.find(temp); it == index_temp.end()) {
+                index_temp.insert({temp, {temp, {}}});
+            }
+            index_temp.at(temp).files.emplace_back(docid, (uint16_t) prev_pos);
         }
-        index_temp.at(no_punctuation).files.emplace_back(docid, (uint16_t) prev_pos);
 
     }
     std::vector<WordIndexEntry> final;
@@ -40,7 +46,7 @@ SortedKeysIndex Tokenizer::index_istream(std::ifstream &stream, uint32_t docid) 
     return SortedKeysIndex(std::move(final));
 }
 
-std::string Tokenizer::remove_punctuation(std::string a) {
+void Tokenizer::remove_punctuation(std::string &a) {
     a.erase(std::remove_if(a.begin(), a.end(), [](char c) {
         int asciicode = static_cast<int>(c);
         if (asciicode > 90) asciicode -= 32;
@@ -50,7 +56,6 @@ std::string Tokenizer::remove_punctuation(std::string a) {
     for (auto &c : a) {
         c = (char) std::toupper(c);
     }
-    return a;
 }
 
 

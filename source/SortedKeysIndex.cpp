@@ -4,9 +4,9 @@
 #include "DocIDFilePair.h"
 #include <thread>
 #include <execution>
+#include <cassert>
 #include "SortedKeysIndex.h"
 #include "WordIndexEntry.h"
-
 
 std::vector<WordIndexEntry>::iterator vector_find(std::vector<WordIndexEntry> &vec, const std::string &key) {
     auto it = std::lower_bound(vec.begin(), vec.end(), key, [](const auto &_vec_elem, const auto &_key) {
@@ -61,6 +61,7 @@ void SortedKeysIndex::merge_into(SortedKeysIndex &other) {
 //
 //    std::merge(index.begin(), index.end(), this->index.begin(), this->index.end(), std::back_inserter(new_index));
 //    this->index = std::move(new_index);
+    index.reserve(index.size() + other.index.size());
     std::move(other.index.begin(), other.index.end(), std::back_inserter(index));
 }
 
@@ -79,32 +80,37 @@ const SearchResult *SortedKeysIndex::search_key(const std::string &key) const {
 SearchResult SortedKeysIndex::search_keys(const std::vector<std::string> &keys) const {
 
     std::vector<const SearchResult *> results;
-    int cur_min_idx = -1, cur_min_value = 100000000;
     results.reserve(keys.size());
     for (auto &key : keys) {
         if (auto searchresult = search_key(key); searchresult) {
             results.push_back(search_key(key));
-            if (results.back()->size() < cur_min_value) {
-                cur_min_value = results.back()->size();
-                cur_min_idx = results.size() - 1;
-            }
         } else {
             return {};
         }
     }
 
-    std::vector<std::vector<DocumentPositionPointer>::const_iterator> result_idx;
+    auto min_results_vec = std::min_element(results.begin(), results.end(), [](const SearchResult* t1, const SearchResult * t2) {
+        return t1->size() < t2->size();
+    });
+
+    std::vector<SearchResult::const_iterator> result_idx;
     std::transform(results.begin(), results.end(), std::back_inserter(result_idx),
                    [](const auto &elem) { return elem->begin(); });
 
 
     SearchResult match_indexes;
-    for (auto &i : *results[cur_min_idx]) {
+
+    for(const auto& sr : results) {
+        assert(std::is_sorted(sr->begin(), sr->end()));
+    };
+
+    // Implements the multi-finger algorithm to find all matching words.
+    for (auto &i : **min_results_vec) {
         bool matchall = true;
         for (int a = 0; a < results.size(); a++) {
-            auto iter = std::lower_bound(result_idx[a], results[a]->end(), i);
-            result_idx[a] = iter;
-            if (iter == results[a]->end() || iter->document_id != i.document_id) {
+            auto [start, end] = std::equal_range(result_idx[a], results[a]->end(), i);
+            result_idx[a] = start;
+            if (start == results[a]->end() || start->document_id != i.document_id) {
                 matchall = false;
                 break;
             }
@@ -119,9 +125,8 @@ SearchResult SortedKeysIndex::search_keys(const std::vector<std::string> &keys) 
 }
 
 
-void SortedKeysIndex::sort_and_group_all() {
+void SortedKeysIndex::sort_and_group_shallow() {
     std::sort(std::execution::par, index.begin(), index.end());
-    std::size_t unique_elements = 0;
 
     auto it = index.begin();
 
@@ -132,14 +137,16 @@ void SortedKeysIndex::sort_and_group_all() {
         it->files.reserve(it->files.size() *4);
         for (; next < index.end() && next->key == cur_key; next++) {
             std::move(next->files.begin(), next->files.end(), std::back_inserter(it->files));
-            next->files.clear();
         }
-        unique_elements++;
         it = next;
     }
     index.erase(std::remove_if(index.begin(), index.end(), [](const WordIndexEntry &entry) {
         return entry.files.empty(); //if empty, then erase element
     }), index.end());
+
+}
+
+void SortedKeysIndex::sort_and_group_all() {
     for (WordIndexEntry &elem : index) {
         std::sort(elem.files.begin(), elem.files.end());
     }

@@ -1,5 +1,7 @@
+data-file-path = /home/henry/.cache/data-files
+
 clear:
-	fd . data-files/processed -x mv {} data-files/
+	fd . $(data-file-path)/processed -x mv {} $(data-file-path)/ && echo {} a;
 
 clear-all: clear
-	fd . data-files/indices -x trash {}
+	fd . $(data-file-path)/indices -x trash {}

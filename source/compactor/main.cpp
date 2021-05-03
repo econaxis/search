@@ -7,5 +7,7 @@
 
 namespace fs=std::filesystem;
 int main() {
+    initialize_directory_variables();
+
     Compactor::compact_directory(data_files_dir/"indices");
 }

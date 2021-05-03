@@ -6,14 +6,42 @@
 #include "Serializer.h"
 #include <ostream>
 #include <sstream>
+#include <unordered_set>
+#include <map>
+
+struct MultiSearchResult {
+    uint32_t docid;
+    uint32_t score;
+    std::vector<uint32_t> positions;
+
+    MultiSearchResult(uint32_t docid, uint32_t score, std::initializer_list<uint32_t> positions) : docid(docid),
+                                                                                                   score(score),
+                                                                                                   positions(
+                                                                                                           positions) {};
+
+    MultiSearchResult() = default;
+
+    static bool SortScore(const MultiSearchResult& t1, const MultiSearchResult& t2) {
+        return t1.score < t2.score;
+    }
+};
+
+using SearchResult = std::vector<DocumentPositionPointer>;
 
 class SortedKeysIndex {
 private:
+
+
     std::vector<WordIndexEntry> index;
-    const std::vector<DocumentPositionPointer> *search_key(const std::string &key) const;
+
+    std::optional<const SearchResult *>
+    search_key(const std::string &key) const;
+
 public:
 
-    std::vector<WordIndexEntry>& get_index();
+
+    std::vector<WordIndexEntry> &get_index();
+
     friend void Serializer::serialize(std::ostream &stream, const SortedKeysIndex &index);
 
     inline friend std::ostream &operator<<(std::ostream &os, const SortedKeysIndex &a) {
@@ -34,16 +62,14 @@ public:
 
     SortedKeysIndex() = default;
 
-    std::vector<DocumentPositionPointer> search_keys(const std::vector<std::string> &keys) const;
-
     void sort_and_group_shallow();
-    int index_size() const;
 
     void merge_into(SortedKeysIndex &other);
 
-    void reserve_more(size_t len);
-
     void sort_and_group_all();
+
+    std::vector<MultiSearchResult> search_keys(const std::vector<std::string> &keys, std::string type = "AND") const;
+
 };
 
 

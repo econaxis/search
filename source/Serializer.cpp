@@ -1,6 +1,7 @@
 #include "Serializer.h"
 #include "SortedKeysIndex.h"
 #include <memory>
+#include <iostream>
 #include "DocIDFilePair.h"
 
 
@@ -77,13 +78,16 @@ std::string Serializer::read_str(std::istream &stream) {
     }
 }
 
+
 WordIndexEntry Serializer::read_work_index_entry(std::istream &stream) {
     std::string key = read_str(stream);
     auto doc_pointer_len = read_num(stream);
     std::vector<DocumentPositionPointer> docs;
     docs.reserve(doc_pointer_len);
     for (int i = 0; i < doc_pointer_len; i++) {
-        docs.emplace_back(read_num(stream), static_cast<uint16_t>(read_num(stream)));
+        auto document_id = read_num(stream);
+        auto document_position = static_cast<uint16_t>(read_num(stream));
+        docs.emplace_back(document_id, document_position);
     }
     return WordIndexEntry{std::move(key), std::move(docs)};
 }
@@ -95,6 +99,8 @@ SortedKeysIndex Serializer::read_sorted_keys_index(std::istream &stream) {
     index.reserve(num_word_index_entries);
     for (int i = 0; i < num_word_index_entries; i++) {
         index.push_back(read_work_index_entry(stream));
+
+        if(i%100 == 0) std::cout<<int(100.F * i/num_word_index_entries)<<"%\r"<<std::flush;
     }
     return SortedKeysIndex(index);
 }

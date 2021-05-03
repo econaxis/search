@@ -24,7 +24,7 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/compactor/Compactor.cpp"
         "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
         source/Constants.cpp
-        source/Constants.h)
+        source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h)
 target_include_directories(search-share PUBLIC source OleanderStemmingLibrary/include)
 target_link_libraries(search-share tbb)
 

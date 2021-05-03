@@ -9,6 +9,7 @@
 #include <cassert>
 #include "SortedKeysIndex.h"
 #include "Serializer.h"
+#include "Constants.h"
 #include "random_b64_gen.h"
 
 namespace fs = std::filesystem;
@@ -72,8 +73,8 @@ void Compactor::compact_directory(const fs::path &path, int max_merge) {
 
         files_to_move.insert(files_to_move.end(), {index_p, filemap_p});
 
-        auto cur_processed_file = std::ifstream(index_p, std::ios_base::binary);
-        auto cur_processed_filemap = std::ifstream(filemap_p, std::ios_base::binary);
+        auto cur_processed_file = std::ifstream(data_files_dir / index_p, std::ios_base::binary);
+        auto cur_processed_filemap = std::ifstream(data_files_dir / filemap_p, std::ios_base::binary);
         if (!cur_processed_file || !cur_processed_filemap) {
             std::cout << "couldn't open file " << index_p << " " << filemap_p << "!\n";
         } else {
@@ -109,7 +110,8 @@ void Compactor::compact_directory(const fs::path &path, int max_merge) {
 
     // Reopen index_file in append mode.
     index_file = std::fstream(path / "index_files", std::ios_base::app);
-    index_file << master_ssk_path.string() << "\n" << filemap_p.string() << "\n";
+    index_file << fs::relative(master_ssk_path.string(), data_files_dir).string() << "\n"
+               << fs::relative(filemap_p, data_files_dir).string() << "\n";
 
     std::for_each(files_to_move.begin(), files_to_move.end(), [](fs::path &p) {
         fs::remove(p);

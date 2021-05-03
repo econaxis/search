@@ -15,7 +15,7 @@
 // Returns the number of files processed.
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
-constexpr unsigned int MAX_FILES_PER_INDEX = 50;
+constexpr unsigned int MAX_FILES_PER_INDEX = 500;
 
 std::shared_mutex atomic_file_operation_in_progress;
 std::once_flag already_registered_atexit;
@@ -61,6 +61,7 @@ int GeneralIndexer::read_some_files() {
 
     const auto &sortedkeys_reducer = [](SortedKeysIndex op1, SortedKeysIndex op2) {
         op1.merge_into(op2);
+
         return op1;
     };
     children.resize(filepairs.size());
@@ -92,10 +93,11 @@ int GeneralIndexer::read_some_files() {
         // Since indexing was successful, we move the processed files to the processed folder.
         for (const auto &fp : filepairs) {
             auto p = fs::path(fp.file_name);
-            fs::create_directory(data_files_dir / ("processed" + unique_directory_suffix));
-            std::filesystem::rename(p, p.parent_path() / ("processed" + unique_directory_suffix) / p.filename());
+            fs::create_directory(data_files_dir / ("processed"));
+            std::filesystem::rename(p, p.parent_path() / ("processed") / p.filename());
         }
     }
+
 
     return filepairs.size();
 }
@@ -119,6 +121,6 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     std::ofstream index_file(indice_file_path / "index_files", std::ios_base::app);
     Serializer::serialize(filemapstream, filepairs);
     Serializer::serialize(out_index, master);
-    index_file << (indice_file_path / master_index_path).string() << "\n"
-               << (indice_file_path / filemap_path).string() << "\n";
+    index_file << fs::relative(indice_file_path / "processed" / master_index_path, data_files_dir).string() << "\n"
+               << fs::relative(indice_file_path / "processed" / filemap_path, data_files_dir).string() << "\n";
 }

@@ -23,6 +23,9 @@ struct Base26Num {
     }
 };
 
+int string_prefix_compare(const std::string &shorter, const std::string &longer);
+
+
 struct StubIndexEntry {
     Base26Num key;
     uint32_t doc_position;
@@ -53,9 +56,13 @@ public:
 
     std::vector<MultiSearchResult> search_keys(std::vector<std::string> keys, std::string mode = "AND");
 
-    std::optional<SearchResult> search_key(const std::string &term);
 
     void fill_from_file(int interval);
+
+    std::optional<SearchResult> search_key(const std::string &term);
+
+    void
+    search_key_prefix_match(const std::string &term, std::map<uint32_t, MultiSearchResult> &prev_result);
 };
 
 

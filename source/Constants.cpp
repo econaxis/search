@@ -8,10 +8,9 @@
 
 namespace fs=std::filesystem;
 
-extern fs::path data_files_dir = "ERROR!/must-call-initialize-directory-variables-first";
+fs::path data_files_dir = "ERROR!/must-call-initialize-directory-variables-first";
 
-
-extern const std::string unique_directory_suffix = random_b64_str(5);
+const std::string unique_directory_suffix = random_b64_str(5);
 
 void initialize_directory_variables() {
     auto data_files_dir_env =std::getenv("DATA_FILES_DIR");

@@ -25,8 +25,11 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
         source/Constants.cpp
         source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h)
-target_include_directories(search-share PUBLIC source OleanderStemmingLibrary/include)
-target_link_libraries(search-share tbb)
+target_include_directories(search-share PUBLIC source)
+target_include_directories(search-share PUBLIC ${CMAKE_SOURCE_DIR}/porter2_stemmer)
+target_link_libraries(search-share PRIVATE tbb)
+add_subdirectory(porter2_stemmer)
+target_link_libraries(search-share PRIVATE porter2-stemmer)
 
 
 add_executable(search source/main.cpp)

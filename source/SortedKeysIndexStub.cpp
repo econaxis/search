@@ -27,13 +27,58 @@ void SortedKeysIndexStub::fill_from_file(int interval) {
 
 int disk_seeks = 0, searches = 0;
 
+constexpr int MAX_RESULTS_PER_SEARCH = 10;
+
+int string_prefix_compare(const std::string &shorter, const std::string &longer) {
+    // Returns true if shorter is the prefix of longer.
+    // e.g. shorter: "str" and longer: "string" returns true.
+    for (int i = 0; i < shorter.size(); i++) {
+        if (shorter[i] != longer[i]) {
+            return i * i * i/ (longer.size() - shorter.size() + 1);
+        }
+    }
+    return shorter.size() * shorter.size() * shorter.size() / (longer.size() - shorter.size() +1);
+}
+
+
+// DocID, MuiltiSearchResult
+void
+SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
+                                             std::map<uint32_t, MultiSearchResult> &prev_result) {
+    // Merges results from this term onto previous result.
+    auto[file_start, file_end] = std::equal_range(index.begin(), index.end(), term);
+
+    if (file_start == index.end()) { return; }
+    if (file_start > index.begin()) file_start--;
+
+    file.seekg(file_start->doc_position, std::ios_base::beg);
+
+    while (file.tellg() < file_end->doc_position) {
+        disk_seeks++;
+        auto entry = Serializer::read_work_index_entry(file);
+        if(term.size() > entry.key.size()) continue;
+
+        // This uses the normal string-string comparison rather than uint64.
+        // If more than 3 characters match, then we good.
+        if (uint32_t score = string_prefix_compare(term, entry.key); score >= 3) {
+            // Success. We found the key.
+            for (auto &filepointer : entry.files) {
+                auto &pos = prev_result.insert(
+                        {filepointer.document_id, {filepointer.document_id, 0, {}}}).first->second;
+                pos.score += score;
+                pos.positions.emplace_back(score, filepointer.document_position);
+            }
+        }
+    }
+}
+
 
 std::optional<SearchResult> SortedKeysIndexStub::search_key(const std::string &term) {
     searches++;
     auto[file_start, file_end] = std::equal_range(index.begin(), index.end(), term);
 
 
-    if (file_start == index.end()) { return SearchResult(); }
+    if (file_start == index.end()) { return std::nullopt; }
     if (file_start > index.begin()) file_start--;
 
     file.seekg(file_start->doc_position, std::ios_base::beg);
@@ -49,8 +94,8 @@ std::optional<SearchResult> SortedKeysIndexStub::search_key(const std::string &t
         }
     }
     return std::nullopt;
-
 }
+
 
 std::vector<MultiSearchResult> SortedKeysIndexStub::search_keys(std::vector<std::string> keys, std::string mode) {
     // search_key function forces us to own the SearchResult vector.
@@ -62,20 +107,35 @@ std::vector<MultiSearchResult> SortedKeysIndexStub::search_keys(std::vector<std:
     SearchResult empty_result_variable; // Since we have pointers, just make an empty stack variable representing empty array.
     // This variable will never outlive the results vector.
     results_memory_holder.reserve(keys.size());
+    std::map<uint32_t, MultiSearchResult> init;
     for (auto &key : keys) {
-        if (auto searchresult = search_key(key); searchresult) {
-            results_memory_holder.push_back(searchresult.value());
-        } else {
-            results.push_back(&empty_result_variable);
-        }
-        result_terms.push_back(key);
+//        if (auto searchresult = search_key(key); searchresult) {
+//            results_memory_holder.push_back(searchresult.value());
+//        }
+        search_key_prefix_match(key, init);
     }
+    std::vector<MultiSearchResult> vector_form;
 
-    for (const auto &i : results_memory_holder) {
-        results.push_back(&i);
+    vector_form.reserve(init.size());
+    for (auto&[docid, searchresult] : init) {
+        vector_form.push_back(std::move(searchresult));
     }
-    if (mode == "OR") return DocumentsMatcher::OR(results, result_terms);
-    else return DocumentsMatcher::AND(results, result_terms);
+    std::sort(vector_form.rbegin(), vector_form.rend(), [](auto& t1, auto& t2) {
+        return t1.score < t2.score;
+    });
+
+    for(auto& i : vector_form) {
+        std::sort(i.positions.rbegin(), i.positions.rend(), [](auto& t1, auto& t2) {
+            return t1.first < t2.first;
+        });
+    }
+    return vector_form;
+//
+//    for (const auto &i : results_memory_holder) {
+//        results.push_back(&i);
+//    }
+//    if (mode == "OR") return DocumentsMatcher::OR(results, result_terms);
+//    else return DocumentsMatcher::AND(results, result_terms);
 }
 
 

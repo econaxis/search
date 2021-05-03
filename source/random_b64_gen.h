@@ -12,8 +12,8 @@ inline std::mt19937 &randgen() {
     static std::mt19937 gen(rd());
     return gen;
 }
+inline constexpr std::string_view b64chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_";
 inline std::string random_b64_str(int length = 200) {
-    static const std::string b64chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_";
     std::uniform_int_distribution<uint> dist(0, b64chars.size() - 1); // ASCII table codes for normal characters.
 
     std::string output;

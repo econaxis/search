@@ -15,7 +15,7 @@
 // Returns the number of files processed.
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
-constexpr unsigned int MAX_FILES_PER_INDEX = 500;
+constexpr unsigned int MAX_FILES_PER_INDEX = 5000;
 
 std::shared_mutex atomic_file_operation_in_progress;
 std::once_flag already_registered_atexit;
@@ -90,12 +90,6 @@ int GeneralIndexer::read_some_files() {
     {
         std::shared_lock lock(atomic_file_operation_in_progress);
         persist_indices(master, filepairs);
-        // Since indexing was successful, we move the processed files to the processed folder.
-        for (const auto &fp : filepairs) {
-            auto p = fs::path(fp.file_name);
-            fs::create_directory(data_files_dir / ("processed"));
-            std::filesystem::rename(p, p.parent_path() / ("processed") / p.filename());
-        }
     }
 
 
@@ -103,7 +97,7 @@ int GeneralIndexer::read_some_files() {
 }
 
 void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
-                                     const FilePairs &filepairs) {// Multiple indices output possible. Check them.
+                                     FilePairs &filepairs) {// Multiple indices output possible. Check them.
     const auto indice_file_path = data_files_dir / "indices";
 
     std::string suffix = random_b64_str(5);
@@ -111,6 +105,21 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
             fs::path(indice_file_path / ("master_index" + suffix)))) {
         // File already exists. Get a new suffix that's more random.
         suffix += random_b64_str(50);
+    }
+    // Since indexing was successful, we move the processed files to the processed folder.
+    for (const auto &fp : filepairs) {
+        auto p = fs::path(fp.file_name);
+        fs::create_directory(data_files_dir / ("processed"));
+        std::filesystem::rename(p, data_files_dir / "processed" / p.filename());
+    }
+
+
+    for(auto& fp : filepairs) {
+        auto path = fs::path(fp.file_name);
+        path = path.parent_path() / "processed"/path.filename();
+
+        // Output relative path when serializing.
+        fp.file_name = fs::relative(path.string(), data_files_dir);
     }
 
     std::cout << "Persisting files to disk\n";
@@ -121,6 +130,6 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     std::ofstream index_file(indice_file_path / "index_files", std::ios_base::app);
     Serializer::serialize(filemapstream, filepairs);
     Serializer::serialize(out_index, master);
-    index_file << fs::relative(indice_file_path / "processed" / master_index_path, data_files_dir).string() << "\n"
-               << fs::relative(indice_file_path / "processed" / filemap_path, data_files_dir).string() << "\n";
+    index_file << fs::relative(indice_file_path /  master_index_path, data_files_dir).string() << "\n"
+               << fs::relative(indice_file_path /  filemap_path, data_files_dir).string() << "\n";
 }

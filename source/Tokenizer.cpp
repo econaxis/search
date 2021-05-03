@@ -3,15 +3,17 @@
 //
 
 #include "Tokenizer.h"
-#include <fstream>
 #include <iostream>
 #include <string>
-#include <olestem/stemming/english_stem.h>
-#include <codecvt>
 #include <locale>
+#include <fstream>
+
+#include <porter2_stemmer/porter2_stemmer.h>
+#include <unordered_map>
 
 int Tokenizer::clean_token_to_index(std::string &token) {
     remove_punctuation(token);
+    stem_english(token);
     if (token.size() <= 2) return 0; // Token shouldn't be included in index.
     else return 1;
 
@@ -60,14 +62,6 @@ void Tokenizer::remove_punctuation(std::string &a) {
 
 
 void Tokenizer::stem_english(std::string &a) {
-    using convert_type = std::codecvt_utf8<wchar_t>;
-    static stemming::english_stem<> StemEnglish;
-    static std::wstring_convert<convert_type, wchar_t> converter;
-    static auto *UnicodeTextBuffer = new wchar_t[300];
 
-    std::mbstowcs(UnicodeTextBuffer, a.c_str(), a.length());
-    std::wstring word(UnicodeTextBuffer, a.length() + 1);
-    StemEnglish(word);
-    a = converter.to_bytes(word.data(), word.data() + a.length());
-
+    Porter2Stemmer::stem(a);
 }

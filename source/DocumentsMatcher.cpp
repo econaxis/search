@@ -75,14 +75,14 @@ std::vector<MultiSearchResult> DocumentsMatcher::AND(const std::vector<const Sea
                 auto &matching_positions_for_docid = scores_positions.positions;
 
                 std::transform(start, end, std::back_inserter(matching_positions_for_docid),
-                               [](const auto &a) {
-                                   return a.document_position;
+                               [=](const auto &a) {
+                                   return std::pair{score, a.document_position};
                                }); // Copy all document positions into the vector
 
             }
         }
 
-        if(match_scores.size() > MAX_DOCUMENTS_RETURNED_AND) break;
+        if (match_scores.size() > MAX_DOCUMENTS_RETURNED_AND) break;
 
         advance_to_next_unique_value(startit, [](const auto &t) { return t.document_id; });
     }
@@ -100,17 +100,18 @@ std::vector<MultiSearchResult> DocumentsMatcher::OR(const std::vector<const Sear
 
         int cur_documents_processed = 0;
 
-        for(const auto& dp : *r) {
+        for (const auto &dp : *r) {
             auto pos = match_scores.find(dp.document_id);
             auto score = result_terms[i].size();
             if (pos == match_scores.end()) {
                 pos = match_scores.emplace(dp.document_id,
-                                           MultiSearchResult(dp.document_id, score, {dp.document_position})).first;
+                                           MultiSearchResult(dp.document_id, score,
+                                                             {{score, dp.document_position}})).first;
             }
             pos->second.score += score;
-            pos->second.positions.push_back(dp.document_position);
+            pos->second.positions.emplace_back(score, dp.document_position);
 
-            if(cur_documents_processed++ > MAX_DOCUMENTS_PER_TERM) break;
+            if (cur_documents_processed++ > MAX_DOCUMENTS_PER_TERM) break;
         };
     }
 

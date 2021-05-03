@@ -4,6 +4,8 @@ else
     data-file-path :=/mnt/henry-80q7/.cache/data-files
 endif
 
+RSYNC_COMMAND:=rsync -avh --filter=':- .gitignore' --info=progress2
+
 clear:
 	cd $(data-file-path) && \
 	fd -p '$(data-file-path)/processed.*/' -x mv {} $(data-file-path)/  && \
@@ -16,10 +18,12 @@ clear-all: clear
 transferall: transfer-data-files transfer
 
 transfer-data-files:
-	rsync $(data-file-path)/ henry-80q7:$(data-file-path) -a --info=progress2;
+	$(RSYNC_COMMAND) $(data-file-path)/ henry-80q7:$(data-file-path);
 
 transfer:
-	rsync . henry@henry-80q7:~/search -a --info=progress2;
+	$(RSYNC_COMMAND) . henry@henry-80q7:~/search;
+transfer-rev:
+	$(RSYNC_COMMAND) henry@henry-x1:~/search/ ~/search/;
 
 build-debug:
 	cmake --build cmake-build-debug -j 4
@@ -27,6 +31,8 @@ build-debug:
 build:
 	cmake --build cmake-build-release -j 4
 
+remake:
+	(cd cmake-build-release && rm -rf * && cmake -G Ninja .. && cmake --build . -j 4)
 
 index:
 	cmake-build-release/search

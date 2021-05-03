@@ -12,9 +12,9 @@
 struct MultiSearchResult {
     uint32_t docid;
     uint32_t score;
-    std::vector<uint32_t> positions;
+    std::vector<std::pair<uint32_t, uint32_t>> positions;
 
-    MultiSearchResult(uint32_t docid, uint32_t score, std::initializer_list<uint32_t> positions) : docid(docid),
+    MultiSearchResult(uint32_t docid, uint32_t score, std::initializer_list<std::pair<uint32_t, uint32_t>> positions) : docid(docid),
                                                                                                    score(score),
                                                                                                    positions(
                                                                                                            positions) {};

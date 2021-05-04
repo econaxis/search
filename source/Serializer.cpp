@@ -54,28 +54,18 @@ void Serializer::serialize(std::ostream &stream, const WordIndexEntry &ie) {
 }
 
 uint32_t Serializer::read_num(std::istream &stream) {
-//    std::unique_ptr<char[]> buffer(new char[sizeof(uint32_t)]);
-    static uint32_t holder;
+    uint32_t holder;
     stream.read(reinterpret_cast<char *>(&holder), sizeof(uint32_t));
-//    auto value = *(reinterpret_cast<uint32_t*>(get()));
     return holder;
 }
 
 std::string Serializer::read_str(std::istream &stream) {
 //    std::unique_ptr<char[]> buffer(new char[length]);
-    constexpr int default_buffer_len = 500;
-    static std::string buffer(default_buffer_len, ' ');
     auto length = read_num(stream);
-
-    if (length < default_buffer_len) {
-        stream.read(buffer.data(), length);
-        return std::string(buffer.data(), length);
-    } else {
-        // Allocate new string of length size.
-        std::string longer_buffer(length, ' ');
-        stream.read(longer_buffer.data(), length);
-        return std::string(longer_buffer.data(), length);
-    }
+    // Allocate new string of length size.
+    std::string buffer(length, ' ');
+    stream.read(buffer.data(), length);
+    return buffer;
 }
 
 
@@ -83,12 +73,19 @@ WordIndexEntry Serializer::read_work_index_entry(std::istream &stream) {
     std::string key = read_str(stream);
     auto doc_pointer_len = read_num(stream);
     std::vector<DocumentPositionPointer> docs;
-    docs.reserve(doc_pointer_len);
-    for (int i = 0; i < doc_pointer_len; i++) {
-        auto document_id = read_num(stream);
-        auto document_position = static_cast<uint16_t>(read_num(stream));
-        docs.emplace_back(document_id, document_position);
-    }
+    docs.resize(doc_pointer_len, DocumentPositionPointer(0, 0));
+
+    // Very unsafe, but very fast.
+    // Since the memory layout of std::vector and the file is contiguous, we can just read it to memory like this,
+    // assuming consistent uint32 layout. It reads two 32 bit integers per doc_pointer_len directly into the vector buffer.
+    stream.read(reinterpret_cast<char *>(docs.data()), doc_pointer_len * sizeof(DocumentPositionPointer));
+
+    // Previous variant:
+//    for (int i = 0; i < doc_pointer_len; i++) {
+//        auto document_id = read_num(stream);
+//        auto document_position = read_num(stream);
+//        docs.emplace_back(document_id, document_position);
+//    }
     return WordIndexEntry{std::move(key), std::move(docs)};
 }
 
@@ -100,7 +97,7 @@ SortedKeysIndex Serializer::read_sorted_keys_index(std::istream &stream) {
     for (int i = 0; i < num_word_index_entries; i++) {
         index.push_back(read_work_index_entry(stream));
 
-        if(i%100 == 0) std::cout<<int(100.F * i/num_word_index_entries)<<"%\r"<<std::flush;
+        if (i % 100 == 0) std::cout << int(100.F * i / num_word_index_entries) << "%\r" << std::flush;
     }
     return SortedKeysIndex(index);
 }

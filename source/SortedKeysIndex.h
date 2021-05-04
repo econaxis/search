@@ -24,6 +24,10 @@ struct MultiSearchResult {
     static bool SortScore(const MultiSearchResult& t1, const MultiSearchResult& t2) {
         return t1.score < t2.score;
     }
+
+    bool operator==(const MultiSearchResult& other) const {
+        return docid==other.docid;
+    }
 };
 
 using SearchResult = std::vector<DocumentPositionPointer>;

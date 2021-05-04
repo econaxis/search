@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
 
+add_compile_options(-fconcepts)
 
 add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/DocIDFilePair.cpp"
@@ -24,11 +25,12 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/compactor/Compactor.cpp"
         "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
         source/Constants.cpp
-        source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h)
+        source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h source/dict_strings.h)
 target_include_directories(search-share PUBLIC source)
-target_include_directories(search-share PUBLIC ${CMAKE_SOURCE_DIR}/porter2_stemmer)
+target_include_directories(search-share PUBLIC extern/porter2_stemmer extern)
 target_link_libraries(search-share PRIVATE tbb)
-add_subdirectory(porter2_stemmer)
+add_subdirectory(extern/porter2_stemmer)
+
 target_link_libraries(search-share PRIVATE porter2-stemmer)
 
 

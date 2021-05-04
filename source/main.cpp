@@ -1,5 +1,4 @@
 #include "Serializer.h"
-#include "SortedKeysIndex.h"
 #include "Tokenizer.h"
 #include <fstream>
 #include <random>
@@ -11,6 +10,8 @@
 #include "compactor/Compactor.h"
 #include "Constants.h"
 #include "SortedKeysIndexStub.h"
+#include "dict_strings.h"
+#include "random_b64_gen.h"
 
 void check_file_is_sorted(const std::string &fmline, std::vector<DocIDFilePair> &filepairs);
 
@@ -20,6 +21,57 @@ bool compdocid(const DocIDFilePair &t1, const DocIDFilePair &t2) {
     return t1.docid < t2.docid;
 }
 
+void setup_index(SortedKeysIndexStub& index, std::vector<DocIDFilePair>& filepairs) {
+    std::ifstream index_file(data_files_dir / "indices" / "index_files", std::ios_base::in);
+
+    if (!index_file) {
+        std::cerr << "Index file doesn't exist at path: " << data_files_dir / "indices" / "index_files" << "\n";
+        return;
+    }
+
+    auto[statedb, dbline] = Compactor::read_line(index_file);
+    auto[statefm, fmline] = Compactor::read_line(index_file);
+
+
+
+    std::ifstream fpstream(data_files_dir / fmline, std::ios_base::binary);
+    std::ifstream stream(data_files_dir / dbline, std::ios_base::binary);
+
+    std::cout << "Used database file: " << data_files_dir / dbline << "\n";
+    assert(fpstream && stream);
+    assert(statedb == Compactor::ReadState::GOOD && statedb == statefm);
+
+    filepairs = Serializer::read_filepairs(fpstream);
+    check_file_is_sorted(fmline, filepairs);
+    //    SortedKeysIndex index = Serializer::read_sorted_keys_index(stream);
+    index = SortedKeysIndexStub(data_files_dir / dbline);
+}
+
+
+void profile_indexing (SortedKeysIndexStub& index) {
+    using namespace std::chrono;
+
+    constexpr int NUM_SEARCHES=100;
+    std::uniform_int_distribution<uint> dist(0, 515 - 1); // ASCII table codes for normal characters.
+    auto t1 = high_resolution_clock::now();
+    for (int i = 0; i < NUM_SEARCHES; i++) {
+        auto temp =  (std::string) strings[dist(randgen())];
+        auto temp1 = (std::string) strings[dist(randgen())];
+        auto temp2 = (std::string) strings[dist(randgen())];
+
+        Tokenizer::clean_token_to_index(temp);
+        Tokenizer::clean_token_to_index(temp1);
+        Tokenizer::clean_token_to_index(temp2);
+
+        std::vector<std::string> query {temp, temp1};
+        auto result = index.search_keys(query);
+
+        std::cout<<"Matched "<<result.size()<<" files "<<i * 100/NUM_SEARCHES<<"%\n";
+    }
+    auto time = high_resolution_clock::now() - t1;
+    auto timedbl = duration_cast<milliseconds>(time).count();
+    std::cout<<"Time for "<<NUM_SEARCHES<<" queries: "<<timedbl<<"\n";
+}
 
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
@@ -31,39 +83,17 @@ int main(int argc, char *argv[]) {
         return 1;
     };
 
-    std::ifstream index_file(data_files_dir / "indices" / "index_files", std::ios_base::in);
+    SortedKeysIndexStub index;
+    std::vector<DocIDFilePair> filepairs;
+    setup_index(index, filepairs);
 
-    if (!index_file) {
-        std::cerr << "Index file doesn't exist at path: " << data_files_dir / "indices" / "index_files" << "\n";
-        return 1;
-    }
-
-    auto[statedb, dbline] = Compactor::read_line(index_file);
-    auto[statefm, fmline] = Compactor::read_line(index_file);
-
-    std::ifstream fpstream(data_files_dir / fmline, std::ios_base::binary);
-    std::ifstream stream(data_files_dir / dbline, std::ios_base::binary);
-
-    std::cout << "Used database file: " << data_files_dir / dbline << "\n";
-    assert(fpstream && stream);
-    assert(statedb == Compactor::ReadState::GOOD && statedb == statefm);
-
-    std::vector<DocIDFilePair> filepairs = Serializer::read_filepairs(fpstream);
-    //    SortedKeysIndex index = Serializer::read_sorted_keys_index(stream);
-    SortedKeysIndexStub index(data_files_dir / dbline);
-    index.fill_from_file(32);
-
-    fpstream.close();
-    stream.close();
-    index_file.close();
-
-    check_file_is_sorted(fmline, filepairs);
-    auto t1 = high_resolution_clock::now();
+//    profile_indexing(index);
+//    return 1;
 
     std::string inp_line;
     std::cout << "Ready\n>> ";
-    std::ofstream output_stream("/tmp/a.txt", std::ios_base::app);
 
+    auto& output_stream = std::cout;
     while (std::getline(std::cin, inp_line)) {
         if (inp_line == ".exit") break;
         std::vector<std::string> terms;
@@ -80,12 +110,12 @@ int main(int argc, char *argv[]) {
         auto mode = "AND";
         if (inp_line[0] == '/') mode = "OR";
 
-        t1 = high_resolution_clock::now();
+        auto t1 = high_resolution_clock::now();
         auto temp1 = index.search_keys(terms, mode);
         auto time = high_resolution_clock::now() - t1;
 
         std::ifstream matched_file;
-        for (int i = 0; i < std::min(10UL, temp1.size()); i++) {
+        for (int i = std::min(10UL, temp1.size()) - 1; i >= 0; i--) {
             auto &v = temp1[i];
             auto pos = std::lower_bound(filepairs.begin(), filepairs.end(), v.docid, [](auto &a, auto &b) {
                 return a.docid < b;
@@ -112,12 +142,12 @@ int main(int argc, char *argv[]) {
 
                 prebuffer.erase(std::remove(prebuffer.begin(), prebuffer.end(), '\n'), prebuffer.end());
                 postbuffer.erase(std::remove(postbuffer.begin(), postbuffer.end(), '\n'), postbuffer.end());
-                output_stream << prebuffer << " --" << word << "-- " << postbuffer << "\n\n";
+                output_stream <<word<<" ";
             }
-            std::cout << "\n====================\n";
+            std::cout << "\n=================\n";
             matched_file.close();
         }
-        std::cout << "Done search " << duration_cast<microseconds>(time).count()
+        std::cout << "Done search " << duration_cast<microseconds>(time).count()<<" "<<temp1.size()
                   << std::endl;
 
 

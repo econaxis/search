@@ -18,5 +18,6 @@ void initialize_directory_variables() {
         data_files_dir = fs::path(data_files_dir_env);
     } else {
         data_files_dir = fs::path("/mnt/henry-80q7/.cache/data-files");
+//        data_files_dir = fs::path("/home/henry/.cache/data-files");
     }
 }

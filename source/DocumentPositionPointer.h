@@ -9,7 +9,7 @@ struct DocumentPositionPointer {
     uint32_t document_id;
 
 
-    uint16_t document_position;
+    uint32_t document_position;
 
     bool operator< (const DocumentPositionPointer& other) const {
         return document_id < other.document_id;

@@ -15,9 +15,6 @@ namespace DocumentsMatcher {
                const std::vector<std::string> &result_terms);
 
     std::vector<MultiSearchResult>
-    AND(const std::vector<std::vector<MultiSearchResult>>& results);
-
-    std::vector<MultiSearchResult>
     OR(const std::vector<const SearchResult *> &results,
                const std::vector<std::string> &result_terms);
 

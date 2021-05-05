@@ -102,15 +102,7 @@ SortedKeysIndex Serializer::read_sorted_keys_index(std::istream &stream) {
     return SortedKeysIndex(index);
 }
 
-SortedKeysIndex Serializer::read_sorted_keys_index(std::istream &stream, std::streampos start, std::streampos end) {
-    std::vector<WordIndexEntry> index;
 
-    uint32_t num_word_index_entries = read_num(stream);
-    for (int i = 0; i < num_word_index_entries; i++) {
-        index.push_back(read_work_index_entry(stream));
-    }
-    return SortedKeysIndex(index);
-}
 
 std::vector<DocIDFilePair> Serializer::read_filepairs(std::istream &stream) {
     auto sz = read_num(stream);

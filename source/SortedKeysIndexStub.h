@@ -13,7 +13,6 @@
 struct Base26Num {
     uint64_t num; // Represent 3 alphabet letters in uint16_t.
     explicit Base26Num(std::string from);
-
     bool operator<(Base26Num other) const {
         return num < other.num;
     }

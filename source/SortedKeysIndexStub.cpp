@@ -10,9 +10,11 @@
 
 
 namespace fs = std::filesystem;
+
+
 using MultiDocsMultiSearch=robin_hood::unordered_map<uint32_t, MultiSearchResult>;
 
-constexpr auto SCORE_CUTOFF_MAX = (unsigned long) 1 << 20;
+constexpr unsigned long SCORE_CUTOFF_MAX = 1 << 25;
 
 /**
  * Similar to Serializer::read_word_index_entry, except it only reads the keys and consumes the file by an equivalent amount.
@@ -49,6 +51,9 @@ void SortedKeysIndexStub::fill_from_file(int interval) {
 constexpr unsigned int pow4(std::size_t a) {
     return a * a * a * a;
 }
+constexpr unsigned int pow8(std::size_t a) {
+    return pow4(pow4(a));
+}
 /**
  * Compares the shorter string against the longer string, checking if shorter is a prefix of longer.
  *
@@ -59,6 +64,8 @@ int string_prefix_compare(const std::string &shorter, const std::string &longer)
     // e.g. shorter: "str" and longer: "string" returns true.
     auto ls = longer.size();
     auto ss = shorter.size();
+
+    if(ls < ss) return 0;
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
             if (ss - i >= 2) return 0;
@@ -66,8 +73,9 @@ int string_prefix_compare(const std::string &shorter, const std::string &longer)
         }
     }
 
-    if (ss == ls) return SCORE_CUTOFF_MAX * 2;
-    else return pow4(ss) * 100 / (ls - ss + 1);
+    const auto score = pow4(ss) * 100 / (ls - ss + 1);
+    if (ss == ls) return SCORE_CUTOFF_MAX  + score;
+    else return score;
 }
 
 /**
@@ -80,10 +88,14 @@ int string_prefix_compare(const std::string &shorter, const std::string &longer)
  * @return iterator to key in map
  */
 auto insert_or_get(auto &map, auto &key, auto default_value) {
+    static int finds = 0, misses = 0;
     auto pos = map.find(key);
     if (pos == map.end()) {
+        misses++;
         pos = map.emplace(key, std::move(default_value)).first;
+        pos->second.positions.reserve(100);
     }
+    finds++;
     return pos;
 }
 
@@ -101,7 +113,7 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
                                              MultiDocsMultiSearch &before) {
     // Merges results from this term onto previous result.
     MultiDocsMultiSearch prev_result;
-    prev_result.reserve(10000);
+    prev_result.reserve(500);
     auto[file_start, file_end] = std::equal_range(index.begin(), index.end(), Base26Num(term));
 
     if (file_start == index.end()) { return prev_result; }
@@ -110,7 +122,7 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
     file.seekg(file_start->doc_position);
 
     const auto &cached_cutoff = [&]() {
-        return pow4(prev_result.size());
+        return pow8(prev_result.size());
     };
     while (file.tellg() < file_end->doc_position) {
         auto entry_start_pos = file.tellg();
@@ -119,7 +131,7 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
 
         // This uses the normal string-string comparison rather than uint64.
         // If more than 3 characters match, then we good.
-        if (uint32_t score = string_prefix_compare(term, key); score >= 0.1 * cached_cutoff()) {
+        if (uint32_t score = string_prefix_compare(term, key); score >= 0.0001 * cached_cutoff()) {
             // Seek back to original entry start position and actually read the file.
             file.seekg(entry_start_pos);
             auto entry = Serializer::read_work_index_entry(file);
@@ -136,11 +148,11 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
                                          MultiSearchResult(filepointer.document_id, 0, {}));
                 pos->second.score += score;
                 pos->second.positions.emplace_back(score, filepointer.document_position);
-
             }
 
         }
     }
+
     return prev_result;
 }
 
@@ -151,6 +163,7 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
  */
 MultiDocsMultiSearch SortedKeysIndexStub::search_key(const std::string &term) {
     MultiDocsMultiSearch output;
+    output.reserve(200000);
     auto[file_start, file_end] = std::equal_range(index.begin(), index.end(), Base26Num(term));
 
     if (file_start == index.end()) { return output; }
@@ -171,16 +184,15 @@ MultiDocsMultiSearch SortedKeysIndexStub::search_key(const std::string &term) {
             score -= SCORE_CUTOFF_MAX;
             file.seekg(prevpos);
             auto entry = Serializer::read_work_index_entry(file);
-            // Success. We found the key.
-
             for (auto i : entry.files) {
                 auto pos = insert_or_get(output, i.document_id, MultiSearchResult(i.document_id, 0, {}));
                 pos->second.score += score;
                 pos->second.positions.emplace_back(score, i.document_position);
             }
         }
-
     }
+
+    return output;
 }
 
 
@@ -188,7 +200,7 @@ MultiDocsMultiSearch SortedKeysIndexStub::search_key(const std::string &term) {
 std::vector<MultiSearchResult> SortedKeysIndexStub::search_keys(std::vector<std::string> keys, std::string mode) {
     std::vector<MultiDocsMultiSearch> init;
 
-#ifndef PREFIX_SEARCH
+#ifdef PREFIX_SEARCH
     for (auto &key : keys) {
         init.push_back(search_key(key));
     }
@@ -196,7 +208,7 @@ std::vector<MultiSearchResult> SortedKeysIndexStub::search_keys(std::vector<std:
     MultiDocsMultiSearch init1;
     auto prev_init = init.begin();
     for (auto &key : keys) {
-        if(prev_init >= init.begin() + 1) {
+        if(prev_init > init.begin()) {
             init.emplace_back(search_key_prefix_match(key, *(prev_init-1)));
         } else {
             init.emplace_back(search_key_prefix_match(key, init1));

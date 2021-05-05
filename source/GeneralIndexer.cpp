@@ -15,7 +15,7 @@
 // Returns the number of files processed.
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
-constexpr unsigned int MAX_FILES_PER_INDEX = 5000;
+constexpr unsigned int MAX_FILES_PER_INDEX = 20000;
 
 std::shared_mutex atomic_file_operation_in_progress;
 std::once_flag already_registered_atexit;
@@ -75,7 +75,7 @@ int GeneralIndexer::read_some_files() {
 
                                        SortedKeysIndex index1 = Tokenizer::index_istream(file, entry.docid);
 
-                                       if (entry.docid % (MAX_FILES_PER_INDEX / 10) == 0) {
+                                       if (entry.docid % (MAX_FILES_PER_INDEX / 50) == 0) {
                                            std::cout << "Done " << entry.docid << "\n";
                                        }
 

@@ -1,4 +1,5 @@
 #include "Serializer.h"
+#include "ResultsPrinter.h"
 #include "Tokenizer.h"
 #include <fstream>
 #include <random>
@@ -51,7 +52,7 @@ void setup_index(SortedKeysIndexStub& index, std::vector<DocIDFilePair>& filepai
 void profile_indexing (SortedKeysIndexStub& index) {
     using namespace std::chrono;
 
-    constexpr int NUM_SEARCHES=100;
+    constexpr int NUM_SEARCHES=10000;
     std::uniform_int_distribution<uint> dist(0, 515 - 1); // ASCII table codes for normal characters.
     auto t1 = high_resolution_clock::now();
     for (int i = 0; i < NUM_SEARCHES; i++) {
@@ -63,10 +64,10 @@ void profile_indexing (SortedKeysIndexStub& index) {
         Tokenizer::clean_token_to_index(temp1);
         Tokenizer::clean_token_to_index(temp2);
 
-        std::vector<std::string> query {temp, temp1};
+        std::vector<std::string> query {temp, temp1, temp2};
         auto result = index.search_keys(query);
 
-        std::cout<<"Matched "<<result.size()<<" files "<<i * 100/NUM_SEARCHES<<"%\n";
+        if (i% NUM_SEARCHES/100 == 0) std::cout<<"Matched "<<result.size()<<" files "<<i * 100/NUM_SEARCHES<<"%\n";
     }
     auto time = high_resolution_clock::now() - t1;
     auto timedbl = duration_cast<milliseconds>(time).count();
@@ -87,8 +88,8 @@ int main(int argc, char *argv[]) {
     std::vector<DocIDFilePair> filepairs;
     setup_index(index, filepairs);
 
-//    profile_indexing(index);
-//    return 1;
+    profile_indexing(index);
+    return 1;
 
     std::string inp_line;
     std::cout << "Ready\n>> ";
@@ -113,45 +114,9 @@ int main(int argc, char *argv[]) {
         auto t1 = high_resolution_clock::now();
         auto temp1 = index.search_keys(terms, mode);
         auto time = high_resolution_clock::now() - t1;
+        ResultsPrinter::print_results(temp1, filepairs);
+        std::cout<<"Time: "<<duration_cast<milliseconds>(time).count()<<"\n";
 
-        std::ifstream matched_file;
-        for (int i = std::min(10UL, temp1.size()) - 1; i >= 0; i--) {
-            auto &v = temp1[i];
-            auto pos = std::lower_bound(filepairs.begin(), filepairs.end(), v.docid, [](auto &a, auto &b) {
-                return a.docid < b;
-            });
-            if (pos == filepairs.end()) continue;
-
-            std::string prebuffer(100, ' '), word, postbuffer(100, ' ');
-            matched_file.open(data_files_dir / pos->file_name);
-
-            std::cout << pos->file_name << ":\n";
-            for (auto[score, t0] : v.positions) {
-                matched_file.seekg(
-                        t0 > 50 ? t0 - 50 : 0);
-
-                if (t0 < 50) {
-                    matched_file.read(prebuffer.data(), t0);
-                } else {
-                    matched_file.read(prebuffer.data(), 50);
-                }
-
-                matched_file >> word;
-
-                matched_file.read(postbuffer.data(), 50);
-
-                prebuffer.erase(std::remove(prebuffer.begin(), prebuffer.end(), '\n'), prebuffer.end());
-                postbuffer.erase(std::remove(postbuffer.begin(), postbuffer.end(), '\n'), postbuffer.end());
-                output_stream <<word<<" ";
-            }
-            std::cout << "\n=================\n";
-            matched_file.close();
-        }
-        std::cout << "Done search " << duration_cast<microseconds>(time).count()<<" "<<temp1.size()
-                  << std::endl;
-
-
-        std::cout << "\n>> ";
 
     }
 }

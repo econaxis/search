@@ -29,6 +29,80 @@ void advance_to_next_unique_value(Iterator &it, const Callable &value_getter) {
     while (value_getter(*it) == prev_value) { it++; };
 }
 
+/**
+ * Returns all documents that exist in all search results.
+ * @param results a vector that contains the documents matched for each term in the query.
+ *         Thus, for a document to be returned in the query, it has to exist in all elements of the vector.
+ * @return A condensed vector of search results present in all query terms.
+ */
+std::vector<MultiSearchResult>
+DocumentsMatcher::AND(const std::vector<robin_hood::unordered_map<uint32_t, MultiSearchResult>> &results) {
+    // Checks for documents existing in ALL results vec.
+    robin_hood::unordered_map<uint32_t, MultiSearchResult> output;
+//    auto walker = std::vector<
+//            std::pair<
+//                    robin_hood::unordered_map<uint32_t, MultiSearchResult>::const_iterator,
+//                    robin_hood::unordered_map<uint32_t, MultiSearchResult>::const_iterator
+//            >>();
+
+//    for (auto &i : results) walker.emplace_back(i.begin(), i.end());
+
+    const auto min_set = std::min_element(results.begin(), results.end(), [](const auto &t1, const auto &t2) {
+        return t1.size() < t2.size();
+    });
+
+    if(min_set == results.end()) return std::vector<MultiSearchResult>();
+
+    for (const auto &[docid, msr] : *min_set) {
+        bool exists_in_all = true;
+
+        for (auto &other : results) {
+            auto find = other.find(docid);
+
+            if (find == other.end()) {
+                exists_in_all = false;
+                break;
+            }
+        }
+
+        if (exists_in_all) {
+            // Walk vector again to find the positions.
+            auto& pos = output.emplace(msr.docid, MultiSearchResult(msr.docid, 0, {})).first->second;
+            for(auto& other : results) {
+                auto& results_pos = other.at(docid);
+                pos.score += results_pos.score;
+                std::move(results_pos.positions.begin(), results_pos.positions.end(), std::back_inserter(pos.positions));
+            }
+        }
+    }
+
+    std::vector<MultiSearchResult> linear_result;
+    linear_result.reserve(output.size());
+    for (auto&[id, sr] : output) {
+        linear_result.push_back(std::move(sr));
+    }
+    if (linear_result.size() > 30) {
+        std::partial_sort(linear_result.begin(), linear_result.begin() + 20, linear_result.end(),
+                          [](const auto &t1, const auto &t2) {
+                              return t1.score > t2.score;
+                          });
+    } else {
+        std::sort(linear_result.begin(), linear_result.end(),
+                  [](const auto &t1, const auto &t2) {
+                      return t1.score > t2.score;
+                  });
+    }
+    return linear_result;
+
+//    return std::vector<MultiSearchResult>();
+};
+
+/**
+ * Another overload for AND matching.
+ * @param results vector of vector of search results. A document has to be present in all elements of the first vector to
+ *      satisfy AND.
+ * @param result_terms vector of words that were used for query. Length of the word used to determine score.
+ */
 std::vector<MultiSearchResult> DocumentsMatcher::AND(const std::vector<const SearchResult *> &results,
                                                      const std::vector<std::string> &result_terms) {
     std::vector<SearchResult::const_iterator> result_idx;
@@ -118,62 +192,4 @@ std::vector<MultiSearchResult> DocumentsMatcher::OR(const std::vector<const Sear
     return parse_vec_from_map(match_scores);
 }
 
-std::vector<MultiSearchResult>
-DocumentsMatcher::AND(const std::vector<robin_hood::unordered_map<uint32_t, MultiSearchResult>> &results) {
-    // Checks for documents existing in ALL results vec.
-    robin_hood::unordered_map<uint32_t, MultiSearchResult> output;
-//    auto walker = std::vector<
-//            std::pair<
-//                    robin_hood::unordered_map<uint32_t, MultiSearchResult>::const_iterator,
-//                    robin_hood::unordered_map<uint32_t, MultiSearchResult>::const_iterator
-//            >>();
 
-//    for (auto &i : results) walker.emplace_back(i.begin(), i.end());
-
-    const auto min_set = std::min_element(results.begin(), results.end(), [](const auto &t1, const auto &t2) {
-        return t1.size() < t2.size();
-    });
-
-    for (const auto &[docid, msr] : *min_set) {
-        bool exists_in_all = true;
-
-        for (auto &other : results) {
-            auto find = other.find(docid);
-
-            if (find == other.end()) {
-                exists_in_all = false;
-                break;
-            }
-        }
-
-        if (exists_in_all) {
-            // Walk vector again to find the positions.
-            auto pos = output.emplace(msr.docid, MultiSearchResult(msr.docid, 0, {})).first->second;
-            for(auto& other : results) {
-                auto& results_pos = other.at(docid);
-                pos.score += results_pos.score;
-                std::move(results_pos.positions.begin(), results_pos.positions.end(), std::back_inserter(pos.positions));
-            }
-        }
-    }
-
-    std::vector<MultiSearchResult> linear_result;
-    linear_result.reserve(output.size());
-    for (auto&[id, sr] : output) {
-        linear_result.push_back(std::move(sr));
-    }
-    if (linear_result.size() > 30) {
-        std::partial_sort(linear_result.begin(), linear_result.begin() + 20, linear_result.end(),
-                          [](const auto &t1, const auto &t2) {
-                              return t1.score > t2.score;
-                          });
-    } else {
-        std::sort(linear_result.begin(), linear_result.end(),
-                  [](const auto &t1, const auto &t2) {
-                      return t1.score > t2.score;
-                  });
-    }
-    return linear_result;
-
-//    return std::vector<MultiSearchResult>();
-};

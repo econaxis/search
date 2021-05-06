@@ -15,6 +15,8 @@ namespace ResultsPrinter {
     using namespace std::chrono;
 
     void print_results(std::vector<MultiSearchResult> &temp1, std::vector<DocIDFilePair> &filepairs);
+
+    void print_results(std::vector<SafeMultiSearchResult> &temp1, std::vector<DocIDFilePair> &filepairs);
 };
 
 

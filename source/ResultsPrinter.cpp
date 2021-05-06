@@ -4,7 +4,7 @@
 
 #include "ResultsPrinter.h"
 
-void ResultsPrinter::print_results(std::vector<MultiSearchResult> &temp1, std::vector<DocIDFilePair> &filepairs) {
+void ResultsPrinter::print_results(std::vector<SafeMultiSearchResult> &temp1, std::vector<DocIDFilePair> &filepairs) {
     std::ifstream matched_file;
     for (int i = std::min(10UL, temp1.size()) - 1; i >= 0; i--) {
         auto &v = temp1[i];

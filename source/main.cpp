@@ -1,8 +1,6 @@
 #include "Serializer.h"
 #include "ResultsPrinter.h"
 #include "Tokenizer.h"
-#include <fstream>
-#include <random>
 #include <iostream>
 #include <mutex>
 #include <cassert>
@@ -22,7 +20,7 @@ bool compdocid(const DocIDFilePair &t1, const DocIDFilePair &t2) {
     return t1.docid < t2.docid;
 }
 
-void setup_index(SortedKeysIndexStub& index, std::vector<DocIDFilePair>& filepairs) {
+void setup_index(SortedKeysIndexStub &index, std::vector<DocIDFilePair> &filepairs) {
     std::ifstream index_file(data_files_dir / "indices" / "index_files", std::ios_base::in);
 
     if (!index_file) {
@@ -32,7 +30,6 @@ void setup_index(SortedKeysIndexStub& index, std::vector<DocIDFilePair>& filepai
 
     auto[statedb, dbline] = Compactor::read_line(index_file);
     auto[statefm, fmline] = Compactor::read_line(index_file);
-
 
 
     std::ifstream fpstream(data_files_dir / fmline, std::ios_base::binary);
@@ -49,14 +46,14 @@ void setup_index(SortedKeysIndexStub& index, std::vector<DocIDFilePair>& filepai
 }
 
 
-void profile_indexing (SortedKeysIndexStub& index) {
+void profile_indexing(SortedKeysIndexStub &index) {
     using namespace std::chrono;
 
-    constexpr int NUM_SEARCHES=10000;
+    constexpr int NUM_SEARCHES = 100;
     std::uniform_int_distribution<uint> dist(0, 515 - 1); // ASCII table codes for normal characters.
     auto t1 = high_resolution_clock::now();
     for (int i = 0; i < NUM_SEARCHES; i++) {
-        auto temp =  (std::string) strings[dist(randgen())];
+        auto temp = (std::string) strings[dist(randgen())];
         auto temp1 = (std::string) strings[dist(randgen())];
         auto temp2 = (std::string) strings[dist(randgen())];
 
@@ -64,14 +61,16 @@ void profile_indexing (SortedKeysIndexStub& index) {
         Tokenizer::clean_token_to_index(temp1);
         Tokenizer::clean_token_to_index(temp2);
 
-        std::vector<std::string> query {temp, temp1, temp2};
+        std::vector<std::string> query{temp, temp1};
         auto result = index.search_keys(query);
 
-        if (i% NUM_SEARCHES/100 == 0) std::cout<<"Matched "<<result.size()<<" files "<<i * 100/NUM_SEARCHES<<"%\n";
+        if (i % NUM_SEARCHES / 100 == 0)
+            std::cout << "Matched " << result.size() << " files for " << temp1 << " " << temp2 << " " << temp << " "
+                      << i * 100 / NUM_SEARCHES << "%\n";
     }
     auto time = high_resolution_clock::now() - t1;
     auto timedbl = duration_cast<milliseconds>(time).count();
-    std::cout<<"Time for "<<NUM_SEARCHES<<" queries: "<<timedbl<<"\n";
+    std::cout << "Time for " << NUM_SEARCHES << " queries: " << timedbl << "\n";
 }
 
 int main(int argc, char *argv[]) {
@@ -94,7 +93,7 @@ int main(int argc, char *argv[]) {
     std::string inp_line;
     std::cout << "Ready\n>> ";
 
-    auto& output_stream = std::cout;
+    auto &output_stream = std::cout;
     while (std::getline(std::cin, inp_line)) {
         if (inp_line == ".exit") break;
         std::vector<std::string> terms;
@@ -115,7 +114,7 @@ int main(int argc, char *argv[]) {
         auto temp1 = index.search_keys(terms, mode);
         auto time = high_resolution_clock::now() - t1;
         ResultsPrinter::print_results(temp1, filepairs);
-        std::cout<<"Time: "<<duration_cast<milliseconds>(time).count()<<"\n";
+        std::cout << "Time: " << duration_cast<milliseconds>(time).count() << "\n";
 
 
     }

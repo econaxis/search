@@ -3,16 +3,18 @@
 //
 
 #include <fstream>
+#include "ContiguousAllocator.h"
 #include <iostream>
 #include "SortedKeysIndexStub.h"
 #include "DocumentsMatcher.h"
+#include "SortedKeysIndex.h"
 #include "Tokenizer.h"
 
 
 namespace fs = std::filesystem;
 
 
-using MultiDocsMultiSearch=robin_hood::unordered_map<uint32_t, MultiSearchResult>;
+using MultiDocsMultiSearch = robin_hood::unordered_map<uint32_t, MultiSearchResult>;
 
 constexpr unsigned long SCORE_CUTOFF_MAX = 1 << 25;
 
@@ -51,9 +53,11 @@ void SortedKeysIndexStub::fill_from_file(int interval) {
 constexpr unsigned int pow4(std::size_t a) {
     return a * a * a * a;
 }
+
 constexpr unsigned int pow8(std::size_t a) {
     return pow4(pow4(a));
 }
+
 /**
  * Compares the shorter string against the longer string, checking if shorter is a prefix of longer.
  *
@@ -65,7 +69,7 @@ int string_prefix_compare(const std::string &shorter, const std::string &longer)
     auto ls = longer.size();
     auto ss = shorter.size();
 
-    if(ls < ss) return 0;
+    if (ls < ss) return 0;
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
             if (ss - i >= 2) return 0;
@@ -74,7 +78,7 @@ int string_prefix_compare(const std::string &shorter, const std::string &longer)
     }
 
     const auto score = pow4(ss) * 100 / (ls - ss + 1);
-    if (ss == ls) return SCORE_CUTOFF_MAX  + score;
+    if (ss == ls) return SCORE_CUTOFF_MAX + score;
     else return score;
 }
 
@@ -93,7 +97,6 @@ auto insert_or_get(auto &map, auto &key, auto default_value) {
     if (pos == map.end()) {
         misses++;
         pos = map.emplace(key, std::move(default_value)).first;
-        pos->second.positions.reserve(100);
     }
     finds++;
     return pos;
@@ -113,7 +116,7 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
                                              MultiDocsMultiSearch &before) {
     // Merges results from this term onto previous result.
     MultiDocsMultiSearch prev_result;
-    prev_result.reserve(500);
+    prev_result.reserve(1 << 16);
     auto[file_start, file_end] = std::equal_range(index.begin(), index.end(), Base26Num(term));
 
     if (file_start == index.end()) { return prev_result; }
@@ -128,10 +131,11 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
         auto entry_start_pos = file.tellg();
         auto key = read_key_only(file);
         if (term.size() > key.size()) continue;
+        if(prev_result.size() > 500000) break;
 
         // This uses the normal string-string comparison rather than uint64.
         // If more than 3 characters match, then we good.
-        if (uint32_t score = string_prefix_compare(term, key); score >= 0.0001 * cached_cutoff()) {
+        if (uint32_t score = string_prefix_compare(term, key); score >= 0.1 * cached_cutoff()) {
             // Seek back to original entry start position and actually read the file.
             file.seekg(entry_start_pos);
             auto entry = Serializer::read_work_index_entry(file);
@@ -144,11 +148,15 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
                     continue;
                 }
 
-                auto pos = insert_or_get(prev_result, filepointer.document_id,
-                                         MultiSearchResult(filepointer.document_id, 0, {}));
-                pos->second.score += score;
-                pos->second.positions.emplace_back(score, filepointer.document_position);
+                if (auto pos = prev_result.find(filepointer.document_id); pos == prev_result.end()) {
+                    prev_result.emplace(filepointer.document_id,std::move(MultiSearchResult(filepointer.document_id, 0)));
+                } else {
+                    pos->second.score += score;
+                    if(!pos->second.insert_position({score, filepointer.document_position})) continue;
+                }
+
             }
+
 
         }
     }
@@ -161,9 +169,11 @@ SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
  * @param term the term to search for.
  * @return
  */
-MultiDocsMultiSearch SortedKeysIndexStub::search_key(const std::string &term) {
+MultiDocsMultiSearch SortedKeysIndexStub::search_key(std::string term) {
     MultiDocsMultiSearch output;
-    output.reserve(200000);
+    output.reserve(50000);
+
+
     auto[file_start, file_end] = std::equal_range(index.begin(), index.end(), Base26Num(term));
 
     if (file_start == index.end()) { return output; }
@@ -187,17 +197,19 @@ MultiDocsMultiSearch SortedKeysIndexStub::search_key(const std::string &term) {
             for (auto i : entry.files) {
                 auto pos = insert_or_get(output, i.document_id, MultiSearchResult(i.document_id, 0, {}));
                 pos->second.score += score;
-                pos->second.positions.emplace_back(score, i.document_position);
+                pos->second.insert_position({(uint32_t) score, i.document_position});
             }
         }
+
+
     }
 
     return output;
 }
 
 
-
-std::vector<MultiSearchResult> SortedKeysIndexStub::search_keys(std::vector<std::string> keys, std::string mode) {
+std::vector<SafeMultiSearchResult> SortedKeysIndexStub::search_keys(std::vector<std::string> keys, std::string mode) {
+    get_default_allocator(true);
     std::vector<MultiDocsMultiSearch> init;
 
 #ifdef PREFIX_SEARCH
@@ -206,19 +218,22 @@ std::vector<MultiSearchResult> SortedKeysIndexStub::search_keys(std::vector<std:
     }
 #else
     MultiDocsMultiSearch init1;
-    auto prev_init = init.begin();
+    std::sort(keys.rbegin(), keys.rend(), [](auto& a, auto& b) {
+        return a.size() < b.size();
+    });
+    auto prev_init = 0;
     for (auto &key : keys) {
-        if(prev_init > init.begin()) {
-            init.emplace_back(search_key_prefix_match(key, *(prev_init-1)));
+        if (prev_init > 0 ) {
+            init.emplace_back(search_key_prefix_match(key, init[prev_init - 1]));
         } else {
             init.emplace_back(search_key_prefix_match(key, init1));
         }
-
+        std::cout<<init.back().size()<<" ";
         prev_init++;
-
     }
+    std::cout<<"\n";
 #endif
-    return DocumentsMatcher::AND(init);
+    return DocumentsMatcher::AND(std::move(init));
 }
 
 
@@ -242,6 +257,7 @@ constexpr uint64_t LETTER_POW12 = 27 * LETTER_POW11;
 constexpr uint64_t alphabet_pow[] = {LETTER_POW1, LETTER_POW2, LETTER_POW3, LETTER_POW4, LETTER_POW5, LETTER_POW6,
                                      LETTER_POW7, LETTER_POW8, LETTER_POW9, LETTER_POW10, LETTER_POW11, LETTER_POW12};
 constexpr int MAX_CHARS = 10;
+
 /**
  * Used to convert a string to a 64 bit unsigned integer for quicker comparison and easier memory usage.
  * Only the first MAX_CHARS characters are included in the number. All further characters are ignored.

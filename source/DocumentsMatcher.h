@@ -10,17 +10,17 @@
 #include <vector>
 #include <robin_hood/robin_hood.h>
 namespace DocumentsMatcher {
-    std::vector<MultiSearchResult>
+    std::vector<SafeMultiSearchResult>
     AND(const std::vector<const SearchResult *> &results,
                const std::vector<std::string> &result_terms);
 
-    std::vector<MultiSearchResult>
+    std::vector<SafeMultiSearchResult>
     OR(const std::vector<const SearchResult *> &results,
                const std::vector<std::string> &result_terms);
 
 
-    std::vector<MultiSearchResult>
-    AND(const std::vector<robin_hood::unordered_map<uint32_t, MultiSearchResult>> &results);
+
+    std::vector<SafeMultiSearchResult> AND(std::vector<robin_hood::unordered_map<uint32_t, MultiSearchResult>> results);
 };
 
 #endif //GAME_DOCUMENTSMATCHER_H

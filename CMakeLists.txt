@@ -25,7 +25,7 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/compactor/Compactor.cpp"
         "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
         source/Constants.cpp
-        source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h source/dict_strings.h source/ResultsPrinter.cpp source/ResultsPrinter.h)
+        source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h source/dict_strings.h source/ResultsPrinter.cpp source/ResultsPrinter.h source/ContiguousAllocator.cpp source/ContiguousAllocator.h)
 target_include_directories(search-share PUBLIC source)
 target_include_directories(search-share PUBLIC extern/porter2_stemmer extern)
 target_link_libraries(search-share PRIVATE tbb)

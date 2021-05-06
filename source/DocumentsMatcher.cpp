@@ -10,16 +10,14 @@ constexpr int MAX_DOCUMENTS_PER_TERM = 100000;
 constexpr int MAX_DOCUMENTS_RETURNED_AND = 200;
 
 
-std::vector<MultiSearchResult> parse_vec_from_map(std::unordered_map<uint32_t, MultiSearchResult> &match_scores) {
-    std::vector<MultiSearchResult> document_search_results(match_scores.size());
+std::vector<SafeMultiSearchResult> parse_vec_from_map(std::unordered_map<uint32_t, MultiSearchResult> &&match_scores) {
+    std::vector<SafeMultiSearchResult> document_search_results;
 
-    std::transform(std::make_move_iterator(match_scores.begin()), std::make_move_iterator(match_scores.end()),
-                   document_search_results.begin(),
-                   [](auto &&match_scores_pair) {
-                       return match_scores_pair.second;
-                   });
+    for(auto&& [k, v] : match_scores) {
+        document_search_results.emplace_back(std::move(v));
+    }
 
-    std::sort(document_search_results.begin(), document_search_results.end(), MultiSearchResult::SortScore);
+    std::sort(document_search_results.begin(), document_search_results.end(), SafeMultiSearchResult::SortScore);
     return document_search_results;
 }
 
@@ -35,52 +33,48 @@ void advance_to_next_unique_value(Iterator &it, const Callable &value_getter) {
  *         Thus, for a document to be returned in the query, it has to exist in all elements of the vector.
  * @return A condensed vector of search results present in all query terms.
  */
-std::vector<MultiSearchResult>
-DocumentsMatcher::AND(const std::vector<robin_hood::unordered_map<uint32_t, MultiSearchResult>> &results) {
+std::vector<SafeMultiSearchResult>
+DocumentsMatcher::AND(std::vector<robin_hood::unordered_map<uint32_t, MultiSearchResult>> results) {
     // Checks for documents existing in ALL results vec.
-    robin_hood::unordered_map<uint32_t, MultiSearchResult> output;
-//    auto walker = std::vector<
-//            std::pair<
-//                    robin_hood::unordered_map<uint32_t, MultiSearchResult>::const_iterator,
-//                    robin_hood::unordered_map<uint32_t, MultiSearchResult>::const_iterator
-//            >>();
-
-//    for (auto &i : results) walker.emplace_back(i.begin(), i.end());
+    std::vector<SafeMultiSearchResult> linear_result;
 
     const auto min_set = std::min_element(results.begin(), results.end(), [](const auto &t1, const auto &t2) {
         return t1.size() < t2.size();
     });
 
-    if(min_set == results.end()) return std::vector<MultiSearchResult>();
+    if (min_set == results.end()) return linear_result;
+
+    linear_result.reserve(min_set->size() * 0.75);
+
+
+    std::vector<robin_hood::unordered_map<uint32_t, MultiSearchResult>::iterator> walkers(results.size());
 
     for (const auto &[docid, msr] : *min_set) {
         bool exists_in_all = true;
 
-        for (auto &other : results) {
-            auto find = other.find(docid);
+        for (auto other = 0; other < results.size(); other++) {
+            auto find = results[other].find(docid);
 
-            if (find == other.end()) {
+            if (find == results[other].end()) {
                 exists_in_all = false;
                 break;
+            } else {
+                walkers[other] = find;
             }
         }
 
         if (exists_in_all) {
             // Walk vector again to find the positions.
-            auto& pos = output.emplace(msr.docid, MultiSearchResult(msr.docid, 0, {})).first->second;
-            for(auto& other : results) {
-                auto& results_pos = other.at(docid);
-                pos.score += results_pos.score;
-                std::move(results_pos.positions.begin(), results_pos.positions.end(), std::back_inserter(pos.positions));
+            auto &pos = linear_result.emplace_back(results.size() * 5);
+            for (auto other = 0; other < results.size(); other++) {
+                pos.score += walkers[other]->second.score;
+                for (auto i : walkers[other]->second) {
+                    pos.positions.emplace_back(i);
+                }
             }
         }
     }
 
-    std::vector<MultiSearchResult> linear_result;
-    linear_result.reserve(output.size());
-    for (auto&[id, sr] : output) {
-        linear_result.push_back(std::move(sr));
-    }
     if (linear_result.size() > 30) {
         std::partial_sort(linear_result.begin(), linear_result.begin() + 20, linear_result.end(),
                           [](const auto &t1, const auto &t2) {
@@ -103,8 +97,8 @@ DocumentsMatcher::AND(const std::vector<robin_hood::unordered_map<uint32_t, Mult
  *      satisfy AND.
  * @param result_terms vector of words that were used for query. Length of the word used to determine score.
  */
-std::vector<MultiSearchResult> DocumentsMatcher::AND(const std::vector<const SearchResult *> &results,
-                                                     const std::vector<std::string> &result_terms) {
+std::vector<SafeMultiSearchResult> DocumentsMatcher::AND(const std::vector<const SearchResult *> &results,
+                                                         const std::vector<std::string> &result_terms) {
     std::vector<SearchResult::const_iterator> result_idx;
 
     std::unordered_map<uint32_t, MultiSearchResult> match_scores;
@@ -140,19 +134,16 @@ std::vector<MultiSearchResult> DocumentsMatcher::AND(const std::vector<const Sea
                              result_terms[a].size(); // Score is (num occurences) * (character length of term)
                 auto pos = match_scores.find(startit->document_id);
                 if (pos == match_scores.end()) {
-                    match_scores.emplace(startit->document_id, MultiSearchResult(startit->document_id, score, {}));
+                    match_scores.emplace(startit->document_id, MultiSearchResult(startit->document_id, score));
                     pos = match_scores.find(startit->document_id);
                 }
                 auto &scores_positions = pos->second;
                 scores_positions.score += score;
 
-                auto &matching_positions_for_docid = scores_positions.positions;
 
-                std::transform(start, end, std::back_inserter(matching_positions_for_docid),
-                               [=](const auto &a) {
-                                   return std::pair{score, a.document_position};
-                               }); // Copy all document positions into the vector
-
+                for (auto i = start; i < end; i++) {
+                    scores_positions.insert_position({(uint32_t) score, i->document_position});
+                }
             }
         }
 
@@ -161,13 +152,13 @@ std::vector<MultiSearchResult> DocumentsMatcher::AND(const std::vector<const Sea
         advance_to_next_unique_value(startit, [](const auto &t) { return t.document_id; });
     }
 
-    return parse_vec_from_map(match_scores);
+    return parse_vec_from_map(std::move(match_scores));
 
 }
 
 
-std::vector<MultiSearchResult> DocumentsMatcher::OR(const std::vector<const SearchResult *> &results,
-                                                    const std::vector<std::string> &result_terms) {
+std::vector<SafeMultiSearchResult> DocumentsMatcher::OR(const std::vector<const SearchResult *> &results,
+                                                        const std::vector<std::string> &result_terms) {
     std::unordered_map<uint32_t, MultiSearchResult> match_scores;
     for (int i = 0; i < results.size(); i++) {
         const auto *r = results[i];
@@ -180,16 +171,16 @@ std::vector<MultiSearchResult> DocumentsMatcher::OR(const std::vector<const Sear
             if (pos == match_scores.end()) {
                 pos = match_scores.emplace(dp.document_id,
                                            MultiSearchResult(dp.document_id, score,
-                                                             {{score, dp.document_position}})).first;
+                                                             {(uint32_t )score, dp.document_position})).first;
             }
             pos->second.score += score;
-            pos->second.positions.emplace_back(score, dp.document_position);
+            pos->second.insert_position({(uint32_t)score, dp.document_position});
 
             if (cur_documents_processed++ > MAX_DOCUMENTS_PER_TERM) break;
         };
     }
 
-    return parse_vec_from_map(match_scores);
+    return parse_vec_from_map(std::move(match_scores));
 }
 
 

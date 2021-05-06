@@ -47,6 +47,10 @@ void Serializer::serialize(std::ostream &stream, const WordIndexEntry &ie) {
 
     serialize_str(stream, ie.key); // Serialize the "token" associated with list of matching files.
     serialize_num(stream, ie.files.size());
+
+    // Sort the files and group them by document id
+    std::sort(ie.files.begin(), ie.files.end());
+    
     for (const auto &fp:ie.files) {
         serialize_num(stream, fp.document_id);
         serialize_num(stream, fp.document_position);
@@ -69,10 +73,13 @@ std::string Serializer::read_str(std::istream &stream) {
 }
 
 
+// TODO: allow setting buffer for less memory allocations.
 WordIndexEntry Serializer::read_work_index_entry(std::istream &stream) {
     std::string key = read_str(stream);
     auto doc_pointer_len = read_num(stream);
     std::vector<DocumentPositionPointer> docs;
+    int should_advance_more = 0;
+
     docs.resize(doc_pointer_len, DocumentPositionPointer(0, 0));
 
     // Very unsafe, but very fast.
@@ -80,12 +87,8 @@ WordIndexEntry Serializer::read_work_index_entry(std::istream &stream) {
     // assuming consistent uint32 layout. It reads two 32 bit integers per doc_pointer_len directly into the vector buffer.
     stream.read(reinterpret_cast<char *>(docs.data()), doc_pointer_len * sizeof(DocumentPositionPointer));
 
-    // Previous variant:
-//    for (int i = 0; i < doc_pointer_len; i++) {
-//        auto document_id = read_num(stream);
-//        auto document_position = read_num(stream);
-//        docs.emplace_back(document_id, document_position);
-//    }
+    stream.ignore(should_advance_more * sizeof(DocumentPositionPointer));
+
     return WordIndexEntry{std::move(key), std::move(docs)};
 }
 

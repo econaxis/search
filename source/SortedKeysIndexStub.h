@@ -62,19 +62,18 @@ class SortedKeysIndexStub {
 
 public:
     explicit SortedKeysIndexStub(std::filesystem::path path) : file(path, std::ios_base::binary) {
-        fill_from_file(32);
+        fill_from_file(64);
     };
 
     SortedKeysIndexStub() = default;
 
-    std::vector<MultiSearchResult> search_keys(std::vector<std::string> keys, std::string mode = "AND");
-
-
-    robin_hood::unordered_map<uint32_t, MultiSearchResult> search_key(const std::string &term);
+    std::vector<SafeMultiSearchResult> search_keys(std::vector<std::string> keys, std::string mode = "AND");
 
     robin_hood::unordered_map<uint32_t, MultiSearchResult>
     search_key_prefix_match(const std::string &term,
                             robin_hood::unordered_map<uint32_t, MultiSearchResult> &prev_result);
+
+    robin_hood::unordered_map<uint32_t, MultiSearchResult> search_key(std::string term);
 };
 
 

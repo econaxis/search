@@ -9,6 +9,7 @@
 #include "DocumentsMatcher.h"
 #include "WordIndexEntry.h"
 
+#include "ContiguousAllocator.h"
 
 std::vector<WordIndexEntry>::iterator vector_find(std::vector<WordIndexEntry> &vec, const std::string &key) {
     auto it = std::lower_bound(vec.begin(), vec.end(), key, [](const auto &_vec_elem, const auto &_key) {
@@ -75,14 +76,14 @@ SortedKeysIndex::search_key(const std::string &key) const {
 }
 
 
-std::vector<MultiSearchResult>
+std::vector<SafeMultiSearchResult>
 SortedKeysIndex::search_keys(const std::vector<std::string> &keys, std::string type) const {
 
     std::vector<const SearchResult *> results;
     std::vector<std::string> result_terms;
 
     SearchResult empty_result_variable; // Since we have pointers, just make an empty stack variable representing empty array.
-                                        // This variable will never outlive the results vector.
+    // This variable will never outlive the results vector.
     results.reserve(keys.size());
     for (auto &key : keys) {
         if (auto searchresult = search_key(key); searchresult) {
@@ -128,8 +129,53 @@ void SortedKeysIndex::sort_and_group_all() {
     }
 }
 
-
 std::vector<WordIndexEntry> &SortedKeysIndex::get_index() {
     return index;
 }
 
+
+MultiSearchResult::MultiSearchResult(uint32_t docid, uint32_t score,
+                                     PairUint32 init_pos) : docid(docid),
+                                                            score(score) {
+    diff++;
+    positions = get_default_allocator().get_new_block();
+    insert_position(init_pos);
+}
+
+
+MultiSearchResult::MultiSearchResult(uint32_t docid, uint32_t score) : docid(docid),
+                                                                       score(score) {
+    diff++;
+    positions = get_default_allocator().get_new_block();
+}
+
+
+MultiSearchResult::~MultiSearchResult() {
+    diff--;
+    if (positions != nullptr) {
+        get_default_allocator().free_block(positions);
+    }
+}
+
+bool MultiSearchResult::insert_position(PairUint32 elem) {
+    if (cur_index >= ContiguousAllocator<PairUint32>::BLOCK_INTERVAL) return false;
+    positions[cur_index++] = elem;
+    return true;
+}
+
+MultiSearchResult &MultiSearchResult::operator=(MultiSearchResult &&other) noexcept {
+    diff++;
+    docid = other.docid;
+    score = other.score;
+    positions = other.positions;
+    cur_index = other.cur_index;
+    moved_from = false;
+    other.moved_from = true;
+    other.positions = nullptr;
+    return *this;
+}
+
+
+SafeMultiSearchResult::SafeMultiSearchResult(std::size_t suggested) {
+    positions.reserve(suggested);
+}

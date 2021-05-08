@@ -10,10 +10,14 @@
 #include <vector>
 #include "DocumentPositionPointer.h"
 
+struct WordIndexEntry_v2 {
+    std::string key;
+    uint32_t term_pos;
+    std::vector<DocumentPositionPointer_v2> files;
+};
 struct WordIndexEntry {
     std::string key;
     std::vector<DocumentPositionPointer> files;
-
 };
 
 inline bool operator<(const WordIndexEntry &elem1, const WordIndexEntry &elem2) {

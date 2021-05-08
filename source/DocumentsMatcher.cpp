@@ -13,7 +13,7 @@ constexpr int MAX_DOCUMENTS_RETURNED_AND = 200;
 std::vector<SafeMultiSearchResult> parse_vec_from_map(std::unordered_map<uint32_t, MultiSearchResult> &&match_scores) {
     std::vector<SafeMultiSearchResult> document_search_results;
 
-    for(auto&& [k, v] : match_scores) {
+    for (auto&&[k, v] : match_scores) {
         document_search_results.emplace_back(std::move(v));
     }
 
@@ -112,7 +112,7 @@ std::vector<SafeMultiSearchResult> DocumentsMatcher::AND(const std::vector<const
                                            });
 
     std::transform(results.begin(), results.end(), std::back_inserter(result_idx),
-                   [](const auto &elem) { return elem->begin(); });
+                   [](const auto &elem) { return elem->cbegin(); });
 
     if (must_have_term == results.end()) return {};
 
@@ -171,10 +171,10 @@ std::vector<SafeMultiSearchResult> DocumentsMatcher::OR(const std::vector<const 
             if (pos == match_scores.end()) {
                 pos = match_scores.emplace(dp.document_id,
                                            MultiSearchResult(dp.document_id, score,
-                                                             {(uint32_t )score, dp.document_position})).first;
+                                                             {(uint32_t) score, dp.document_position})).first;
             }
             pos->second.score += score;
-            pos->second.insert_position({(uint32_t)score, dp.document_position});
+            pos->second.insert_position({(uint32_t) score, dp.document_position});
 
             if (cur_documents_processed++ > MAX_DOCUMENTS_PER_TERM) break;
         };
@@ -183,4 +183,49 @@ std::vector<SafeMultiSearchResult> DocumentsMatcher::OR(const std::vector<const 
     return parse_vec_from_map(std::move(match_scores));
 }
 
+/**
+ * Expects elements in sorted form.
+ * @param results
+ * @return
+ */
+TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
+    if (results.empty()) return TopDocs(0);
+
+    auto min_set = std::min_element(results.begin(), results.end(), [](const auto &t1, const auto &t2) {
+        return t1.size() < t2.size();
+    });
+    std::vector<decltype(results[0].cbegin())> walkers;
+    for (auto &t: results) walkers.push_back(t.cbegin());
+
+    for (auto &pair : *min_set) {
+        bool exists_in_all = true;
+        auto acculumated_score = 0;
+        for (auto other = 0; other < results.size(); other++) {
+            auto find = std::lower_bound(walkers[other], results[other].cend(), pair);
+            if (find == results[other].cend() || find->document_id != pair.document_id) {
+                exists_in_all = false;
+                break;
+            } else {
+                walkers[other] = find;
+
+                // Multiply the accumulated score by pair frequency.
+                // Therefore, terms are advantaged for having high scores across all queries
+                acculumated_score *= pair.frequency;
+            }
+        }
+
+        if (exists_in_all) {
+            // Walk vector again to find the positions.
+            pair.frequency = acculumated_score;
+        }
+    }
+
+    if (min_set->size() > 30) {
+        std::partial_sort(min_set->begin(), min_set->begin() + 20, min_set->end());
+    } else {
+        std::sort(min_set->begin(), min_set->end());
+    }
+    return *min_set;
+
+}

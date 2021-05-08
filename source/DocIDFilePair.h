@@ -10,5 +10,12 @@ struct DocIDFilePair {
     std::string file_name;
 };
 
+inline bool operator!=(const DocIDFilePair& one, uint32_t two) {
+    return one.docid != two;
+}
+inline bool operator==(const DocIDFilePair& one, uint32_t two) {
+    return one.docid == two;
+}
+
 
 #endif //GAME_DOCIDFILEPAIR_H

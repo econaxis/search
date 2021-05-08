@@ -2,8 +2,6 @@
 // Created by henry on 2021-05-01.
 //
 
-#include <fstream>
-#include "ContiguousAllocator.h"
 #include <iostream>
 #include "SortedKeysIndexStub.h"
 #include "DocumentsMatcher.h"
@@ -13,45 +11,36 @@
 
 namespace fs = std::filesystem;
 
+constexpr unsigned long MATCHALL_BONUS = 100;
+constexpr unsigned long MATCHALL_SHORT_BONUS = 50;
 
-using MultiDocsMultiSearch = robin_hood::unordered_map<uint32_t, MultiSearchResult>;
-
-constexpr unsigned long SCORE_CUTOFF_MAX = 1 << 25;
-
-/**
- * Similar to Serializer::read_word_index_entry, except it only reads the keys and consumes the file by an equivalent amount.
- * @param stream
- * @return the string key that corresponds to the word index entry.
- */
-std::string read_key_only(std::istream &stream) {
-    std::string key = Serializer::read_str(stream);
-    int doc_pointer_len = Serializer::read_num(stream);
-    stream.seekg(doc_pointer_len * sizeof(uint32_t) * 2, std::ios_base::cur);
-    return key;
-}
 
 /**
  * Fills the current index from file specified in constructor.
  * @param interval interval to skip. Higher interval = slower but less memory. Lower interval = faster but more memory.
  *      Basically, the lower the interval, the less disk seeks we require to query a specific key.
  */
-void SortedKeysIndexStub::fill_from_file(int interval) {
-    auto num_entries = Serializer::read_num(file);
-
-    for (int i = 0; i < num_entries; i++) {
-        auto entry_start_pos = file.tellg();
-        auto key = read_key_only(file);
-        if (i % interval == 0 || i == num_entries - 1) {
-            // Read to file
-            index.emplace_back(key, entry_start_pos);
-        }
-    }
-    std::cout << "Short index: " << index.size() << "\n";
-}
-
+//void SortedKeysIndexStub::fill_from_file(int interval) {
+//    auto num_entries = Serializer::read_num(file);
+//
+//    for (int i = 0; i < num_entries; i++) {
+//        auto entry_start_pos = file.tellg();
+//        auto key = read_key_only(file);
+//        if (i % interval == 0 || i == num_entries - 1) {
+//            // Read to file
+//            index.emplace_back(key, entry_start_pos);
+//        }
+//    }
+//    std::cout << "Short index: " << index.size() << "\n";
+//}
+//
 
 constexpr unsigned int pow4(std::size_t a) {
     return a * a * a * a;
+}
+
+constexpr unsigned int pow2(std::size_t a) {
+    return a * a;
 }
 
 constexpr unsigned int pow8(std::size_t a) {
@@ -70,170 +59,16 @@ int string_prefix_compare(const std::string &shorter, const std::string &longer)
     auto ss = shorter.size();
 
     if (ls < ss) return 0;
+
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
-            if (ss - i >= 2) return 0;
-            return pow4(i) / (ls - ss + 1);
+            return pow2(i) / (ls - ss + 1);
         }
     }
 
-    const auto score = pow4(ss) * 100 / (ls - ss + 1);
-    if (ss == ls) return SCORE_CUTOFF_MAX + score;
+    const auto score = pow2(ss) / (ls - ss + 1) + MATCHALL_SHORT_BONUS;
+    if (ss == ls) return MATCHALL_BONUS + score;
     else return score;
-}
-
-/**
- * If key exists in map, then return the iterator to key. Else, insert default_value into the map at position key, and
- * return iterator to that inserted position.
- *
- * @param map any map type, for which to operate on
- * @param key
- * @param default_value object to insert into map if key doesn't exist.
- * @return iterator to key in map
- */
-auto insert_or_get(auto &map, auto &key, auto default_value) {
-    static int finds = 0, misses = 0;
-    auto pos = map.find(key);
-    if (pos == map.end()) {
-        misses++;
-        pos = map.emplace(key, std::move(default_value)).first;
-    }
-    finds++;
-    return pos;
-}
-
-/**
- * Similar to search_key. Supports prefix matching for terms longer than/equal to 3 characters.
- *
- * @param term
- * @param before If we want to do AND query after, then before is a map of results corresponding to a different
- *      term in the larger query. This provides some optimization, as if a document doesn't exist in *before*,
- *      then it will be excluded anyways in the final AND query. We early drop out of processing a document
- *      if it doesn't exist in *before*, as that is expensive.
- */
-MultiDocsMultiSearch
-SortedKeysIndexStub::search_key_prefix_match(const std::string &term,
-                                             MultiDocsMultiSearch &before) {
-    // Merges results from this term onto previous result.
-    MultiDocsMultiSearch prev_result;
-    prev_result.reserve(1 << 16);
-    auto[file_start, file_end] = std::equal_range(index.begin(), index.end(), Base26Num(term));
-
-    if (file_start == index.end()) { return prev_result; }
-    if (file_start > index.begin()) file_start--;
-
-    file.seekg(file_start->doc_position);
-
-    const auto &cached_cutoff = [&]() {
-        return pow8(prev_result.size());
-    };
-    while (file.tellg() < file_end->doc_position) {
-        auto entry_start_pos = file.tellg();
-        auto key = read_key_only(file);
-        if (term.size() > key.size()) continue;
-        if(prev_result.size() > 500000) break;
-
-        // This uses the normal string-string comparison rather than uint64.
-        // If more than 3 characters match, then we good.
-        if (uint32_t score = string_prefix_compare(term, key); score >= 0.1 * cached_cutoff()) {
-            // Seek back to original entry start position and actually read the file.
-            file.seekg(entry_start_pos);
-            auto entry = Serializer::read_work_index_entry(file);
-
-            // Success. We found the key.
-            for (auto &filepointer : entry.files) {
-
-                if (before.find(filepointer.document_id) == before.end() && !before.empty()) {
-                    // Drop out early, since this document is not contained in a previous term's search results.
-                    continue;
-                }
-
-                if (auto pos = prev_result.find(filepointer.document_id); pos == prev_result.end()) {
-                    prev_result.emplace(filepointer.document_id,std::move(MultiSearchResult(filepointer.document_id, 0)));
-                } else {
-                    pos->second.score += score;
-                    if(!pos->second.insert_position({score, filepointer.document_position})) continue;
-                }
-
-            }
-
-
-        }
-    }
-
-    return prev_result;
-}
-
-/**
- * Searches for specific key in the index, without any special features. No prefix matching.
- * @param term the term to search for.
- * @return
- */
-MultiDocsMultiSearch SortedKeysIndexStub::search_key(std::string term) {
-    MultiDocsMultiSearch output;
-    output.reserve(50000);
-
-
-    auto[file_start, file_end] = std::equal_range(index.begin(), index.end(), Base26Num(term));
-
-    if (file_start == index.end()) { return output; }
-    if (file_start > index.begin()) file_start--;
-
-    file.seekg(file_start->doc_position, std::ios_base::beg);
-
-    while (file.tellg() < file_end->doc_position) {
-
-        auto prevpos = file.tellg();
-        auto key = read_key_only(file);
-
-        // This uses the normal string-string comparison rather than Base26Num comparison.
-        // Since the prefix scoring function returns a score larger than SCORE_CUTOFF_MAX if the two strings completely match,
-        // we can reuse this function if we want to check for complete match, but also get a score to how well it matches.
-        // e.g. longer matches should score higher than shorter matches.
-        if (auto score = string_prefix_compare(key, term); score >= SCORE_CUTOFF_MAX) {
-            score -= SCORE_CUTOFF_MAX;
-            file.seekg(prevpos);
-            auto entry = Serializer::read_work_index_entry(file);
-            for (auto i : entry.files) {
-                auto pos = insert_or_get(output, i.document_id, MultiSearchResult(i.document_id, 0, {}));
-                pos->second.score += score;
-                pos->second.insert_position({(uint32_t) score, i.document_position});
-            }
-        }
-
-
-    }
-
-    return output;
-}
-
-
-std::vector<SafeMultiSearchResult> SortedKeysIndexStub::search_keys(std::vector<std::string> keys, std::string mode) {
-    get_default_allocator(true);
-    std::vector<MultiDocsMultiSearch> init;
-
-#ifdef PREFIX_SEARCH
-    for (auto &key : keys) {
-        init.push_back(search_key(key));
-    }
-#else
-    MultiDocsMultiSearch init1;
-    std::sort(keys.rbegin(), keys.rend(), [](auto& a, auto& b) {
-        return a.size() < b.size();
-    });
-    auto prev_init = 0;
-    for (auto &key : keys) {
-        if (prev_init > 0 ) {
-            init.emplace_back(search_key_prefix_match(key, init[prev_init - 1]));
-        } else {
-            init.emplace_back(search_key_prefix_match(key, init1));
-        }
-        std::cout<<init.back().size()<<" ";
-        prev_init++;
-    }
-    std::cout<<"\n";
-#endif
-    return DocumentsMatcher::AND(std::move(init));
 }
 
 
@@ -256,7 +91,8 @@ constexpr uint64_t LETTER_POW11 = 27 * LETTER_POW10;
 constexpr uint64_t LETTER_POW12 = 27 * LETTER_POW11;
 constexpr uint64_t alphabet_pow[] = {LETTER_POW1, LETTER_POW2, LETTER_POW3, LETTER_POW4, LETTER_POW5, LETTER_POW6,
                                      LETTER_POW7, LETTER_POW8, LETTER_POW9, LETTER_POW10, LETTER_POW11, LETTER_POW12};
-constexpr int MAX_CHARS = 10;
+#include <cmath>
+constexpr std::size_t MAX_CHARS = 5;
 
 /**
  * Used to convert a string to a 64 bit unsigned integer for quicker comparison and easier memory usage.
@@ -267,8 +103,63 @@ constexpr int MAX_CHARS = 10;
 Base26Num::Base26Num(std::string from) {
     num = 0;
     Tokenizer::remove_punctuation(from);
-    const int max_iter = std::min((int) from.size(), MAX_CHARS);
+    const int max_iter = std::min(from.size(), MAX_CHARS);
     for (int i = 0; i < max_iter; i++) {
         num += (from[i] - 'A' + 1) * alphabet_pow[MAX_CHARS - i - 1];
     }
 }
+
+TopDocs SortedKeysIndexStub::search_one_term(std::string term) {
+    auto term_after = Base26Num(term);
+    auto term_before = Base26Num(term);
+    term_before.num -= 26;
+    term_after.num += 26;
+
+    auto file_start = std::upper_bound(index.begin(), index.end(), term_before) - 1;
+    auto file_end = std::upper_bound(index.begin(), index.end(), term_after);
+
+    if (file_start == index.end()) { return TopDocs(0); }
+
+
+    frequencies.seekg(file_start->doc_position);
+    terms.seekg(file_start->terms_position);
+
+    TopDocs output((file_end - file_start) * 3UL);
+
+    while (frequencies.tellg() <= file_end->doc_position) {
+        auto wie = Serializer::read_work_index_entry_v2(frequencies, terms);
+
+        // This uses the normal string-string comparison rather than uint64.
+        // If more than 3 characters match, then we good.
+        if (uint32_t score = string_prefix_compare(term, wie.key); score >= 2) {
+            for (auto &f : wie.files) {
+                f.frequency = (f.frequency + 1) * score;
+            }
+            output.append_multi(wie.files);
+        }
+    }
+    return output;
+}
+
+TopDocs SortedKeysIndexStub::search_many_terms(std::vector<std::string> terms) {
+    std::vector<TopDocs> all_outputs(terms.size());
+
+
+    auto transformer = [this](const std::string &term) {
+        auto result = this->search_one_term(term);
+        result.sort_and_score();
+        return result;
+    };
+    std::transform(terms.begin(), terms.end(), all_outputs.begin(), transformer);
+
+    return DocumentsMatcher::AND(all_outputs);
+}
+
+SortedKeysIndexStub::SortedKeysIndexStub(std::filesystem::path frequencies, std::filesystem::path terms) : frequencies(
+        frequencies, std::ios_base::binary),
+                                                                                                           terms(terms,
+                                                                                                                 std::ios_base::binary) {
+    assert(this->frequencies && this->terms);
+    index = Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms);
+}
+

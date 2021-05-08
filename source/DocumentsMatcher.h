@@ -21,6 +21,8 @@ namespace DocumentsMatcher {
 
 
     std::vector<SafeMultiSearchResult> AND(std::vector<robin_hood::unordered_map<uint32_t, MultiSearchResult>> results);
+
+    TopDocs AND(std::vector<TopDocs> &results);
 };
 
 #endif //GAME_DOCUMENTSMATCHER_H

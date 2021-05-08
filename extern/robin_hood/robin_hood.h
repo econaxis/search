@@ -1527,7 +1527,7 @@ public:
         : WHash(h)
         , WKeyEqual(equal) {
         ROBIN_HOOD_TRACE(this)
-        insert(initlist.begin(), initlist.end());
+        insert(initlist.cbegin(), initlist.cend());
     }
 
     Table(Table&& o) noexcept

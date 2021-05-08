@@ -9,7 +9,7 @@
 namespace fs=std::filesystem;
 
 fs::path data_files_dir = "ERROR!/must-call-initialize-directory-variables-first";
-
+fs::path indice_files_dir = "ERROR!/must-call-initialize-directory-variables-first";
 const std::string unique_directory_suffix = random_b64_str(5);
 
 void initialize_directory_variables() {
@@ -17,7 +17,7 @@ void initialize_directory_variables() {
     if(data_files_dir_env) {
         data_files_dir = fs::path(data_files_dir_env);
     } else {
-        data_files_dir = fs::path("/mnt/nfs/henry/.cache/data-files");
-//        data_files_dir = fs::path("/home/henry/.cache/data-files");
+        data_files_dir = fs::path("/mnt/nfs/.cache/data-files");
     }
+    indice_files_dir = data_files_dir / "indices";
 }

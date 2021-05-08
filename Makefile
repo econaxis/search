@@ -8,8 +8,8 @@ RSYNC_COMMAND:=rsync -avh --filter=':- .gitignore' --info=progress2
 
 clear:
 	cd $(data-file-path) && \
-	fd -p '$(data-file-path)/processed.*/' -x mv {} $(data-file-path)/  && \
-	fd -p -t directory '$(data-file-path)/processed.*\S' -X rm -r {};
+	fd -p '$(data-file-path)/processed/' -x mv {} $(data-file-path)/data/  && \
+	(cd data&& fd . > ../total-files-list)
 
 
 clear-all: clear

@@ -124,9 +124,9 @@ void SortedKeysIndex::sort_and_group_shallow() {
 }
 
 void SortedKeysIndex::sort_and_group_all() {
-    for (WordIndexEntry &elem : index) {
+    std::for_each(std::execution::par, index.begin(), index.end(), [](WordIndexEntry &elem) {
         std::sort(elem.files.begin(), elem.files.end());
-    }
+    });
 }
 
 std::vector<WordIndexEntry> &SortedKeysIndex::get_index() {

@@ -55,67 +55,67 @@ std::pair<Compactor::ReadState, std::string> Compactor::read_and_mark_line(std::
 }
 
 void Compactor::compact_directory(const fs::path &path, int max_merge) {
-    Compactor::create_directory(path / "previously-compacted");
-    auto index_file = std::fstream(path / "index_files");
-    index_file.seekg(std::ios_base::beg);
-
-    uint32_t cur_hash = 0, max_doc_id = 0;
-    auto master_ssk = SortedKeysIndex();
-    auto master_filemap = std::vector<DocIDFilePair>();
-
-    std::vector<fs::path> files_to_move;
-    files_to_move.reserve(max_merge * 2);
-
-    while (max_merge--) {
-        auto[read_state, index_p, filemap_p] = read_one_index(index_file);
-
-        if (read_state == ReadState::STREAM_ERROR) break;
-
-        files_to_move.insert(files_to_move.end(), {index_p, filemap_p});
-
-        auto cur_processed_file = std::ifstream(data_files_dir / index_p, std::ios_base::binary);
-        auto cur_processed_filemap = std::ifstream(data_files_dir / filemap_p, std::ios_base::binary);
-        if (!cur_processed_file || !cur_processed_filemap) {
-            std::cout << "couldn't open file " << index_p << " " << filemap_p << "!\n";
-        } else {
-            std::cout << "Merging file " << index_p << "\n";
-            auto cur_processed_ssk = Serializer::read_sorted_keys_index(cur_processed_file);
-            auto filemap = Serializer::read_filepairs(cur_processed_filemap);
-
-            for (auto &i : cur_processed_ssk.get_index()) {
-                for (auto &j : i.files) {
-                    j.document_id += cur_hash;
-                    max_doc_id = std::max(max_doc_id, j.document_id);
-                }
-            }
-            for (auto &i : filemap) {
-                i.docid += cur_hash;
-            }
-
-            cur_hash = max_doc_id + 1;
-            master_ssk.merge_into(cur_processed_ssk);
-            std::copy(filemap.begin(), filemap.end(), std::back_inserter(master_filemap));
-        }
-    }
-
-    master_ssk.sort_and_group_shallow();
-    auto random_suffix = random_b64_str(5);
-    auto master_ssk_path = path / ("master_index" + random_suffix);
-    auto filemap_p = path / ("filemap" + random_suffix);
-    auto master_ssk_f = std::ofstream(master_ssk_path, std::ios_base::binary);
-    auto filemap_f = std::ofstream(filemap_p, std::ios_base::binary);
-
-    Serializer::serialize(master_ssk_f, master_ssk);
-    Serializer::serialize(filemap_f, master_filemap);
-
-    // Reopen index_file in append mode.
-    index_file = std::fstream(path / "index_files", std::ios_base::app);
-    index_file << fs::relative(master_ssk_path.string(), data_files_dir).string() << "\n"
-               << fs::relative(filemap_p, data_files_dir).string() << "\n";
-
-    std::for_each(files_to_move.begin(), files_to_move.end(), [](fs::path &p) {
-        fs::remove(p);
-    });
+//    Compactor::create_directory(path / "previously-compacted");
+//    auto index_file = std::fstream(path / "index_files");
+//    index_file.seekg(std::ios_base::beg);
+//
+//    uint32_t cur_hash = 0, max_doc_id = 0;
+//    auto master_ssk = SortedKeysIndex();
+//    auto master_filemap = std::vector<DocIDFilePair>();
+//
+//    std::vector<fs::path> files_to_move;
+//    files_to_move.reserve(max_merge * 2);
+//
+//    while (max_merge--) {
+//        auto[read_state, index_p, filemap_p] = read_one_index(index_file);
+//
+//        if (read_state == ReadState::STREAM_ERROR) break;
+//
+//        files_to_move.insert(files_to_move.end(), {index_p, filemap_p});
+//
+//        auto cur_processed_file = std::ifstream(data_files_dir / index_p, std::ios_base::binary);
+//        auto cur_processed_filemap = std::ifstream(data_files_dir / filemap_p, std::ios_base::binary);
+//        if (!cur_processed_file || !cur_processed_filemap) {
+//            std::cout << "couldn't open file " << index_p << " " << filemap_p << "!\n";
+//        } else {
+//            std::cout << "Merging file " << index_p << "\n";
+//            auto cur_processed_ssk = Serializer::read_sorted_keys_index_v2(cur_processed_file);
+//            auto filemap = Serializer::read_filepairs(cur_processed_filemap);
+//
+//            for (auto &i : cur_processed_ssk.get_index()) {
+//                for (auto &j : i.files) {
+//                    j.document_id += cur_hash;
+//                    max_doc_id = std::max(max_doc_id, j.document_id);
+//                }
+//            }
+//            for (auto &i : filemap) {
+//                i.docid += cur_hash;
+//            }
+//
+//            cur_hash = max_doc_id + 1;
+//            master_ssk.merge_into(cur_processed_ssk);
+//            std::copy(filemap.begin(), filemap.end(), std::back_inserter(master_filemap));
+//        }
+//    }
+//
+//    master_ssk.sort_and_group_shallow();
+//    auto random_suffix = random_b64_str(5);
+//    auto master_ssk_path = path / ("master_index" + random_suffix);
+//    auto filemap_p = path / ("filemap" + random_suffix);
+//    auto master_ssk_f = std::ofstream(master_ssk_path, std::ios_base::binary);
+//    auto filemap_f = std::ofstream(filemap_p, std::ios_base::binary);
+//
+//    Serializer::serialize(master_ssk_f, master_ssk);
+//    Serializer::serialize(filemap_f, master_filemap);
+//
+//    // Reopen index_file in append mode.
+//    index_file = std::fstream(path / "index_files", std::ios_base::app);
+//    index_file << fs::relative(master_ssk_path.string(), data_files_dir).string() << "\n"
+//               << fs::relative(filemap_p, data_files_dir).string() << "\n";
+//
+//    std::for_each(files_to_move.begin(), files_to_move.end(), [](fs::path &p) {
+//        fs::remove(p);
+//    });
 
 }
 

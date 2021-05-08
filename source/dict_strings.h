@@ -446,7 +446,7 @@ inline constexpr std::string_view strings[] =
          "talk",
          "teach",
          "tell",
-         "test",
+         "test_serialization",
          "than",
          "that",
          "their",

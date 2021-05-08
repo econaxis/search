@@ -17,6 +17,10 @@ namespace GeneralIndexer {
     void register_atexit_handler();
 
     void persist_indices(const SortedKeysIndex &master, std::vector<DocIDFilePair> &filepairs);
+
+    void test_serialization();
+
+    void test_searching();
 }
 
 

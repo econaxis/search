@@ -15,8 +15,8 @@ std::ofstream debug("/tmp/debug.txt", std::ios_base::app);
 
 int Tokenizer::clean_token_to_index(std::string &token) {
     remove_punctuation(token);
-    stem_english(token);
-    remove_punctuation(token);
+//    stem_english(token);
+//    remove_punctuation(token);
     if (token.size() <= 2) return 0; // Token shouldn't be included in index.
     else return 1;
 
@@ -37,7 +37,7 @@ SortedKeysIndex Tokenizer::index_istream(std::ifstream &stream, uint32_t docid) 
             if (auto it = index_temp.find(temp); it == index_temp.end()) {
                 index_temp.insert({temp, {temp, {}}});
             }
-            index_temp.at(temp).files.emplace_back(docid, (uint16_t) prev_pos);
+            index_temp.at(temp).files.emplace_back(docid, prev_pos);
         }
 
     }

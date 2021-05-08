@@ -6,15 +6,26 @@
 #include <cstdint>
 #include <filesystem>
 #include <robin_hood/robin_hood.h>
+#include <fstream>
 #include "DocumentPositionPointer.h"
-#include "SortedKeysIndex.h"
+#include "TopDocs.h"
 
 
 struct Base26Num {
-    uint64_t num; // Represent 3 alphabet letters in uint16_t.
+    uint32_t num; // Represent 3 alphabet letters in uint16_t.
     explicit Base26Num(std::string from);
+    explicit Base26Num(uint32_t num): num(num){};
+
     bool operator<(Base26Num other) const {
         return num < other.num;
+    }
+
+    Base26Num operator+(Base26Num other) {
+        return Base26Num{num + other.num};
+    }
+    Base26Num operator-(Base26Num other) {
+        if (other.num >= num)  return *this;
+        else return Base26Num{num - other.num};
     }
 };
 
@@ -26,17 +37,18 @@ struct Base26Num {
 struct StubIndexEntry {
     Base26Num key;
 
+    uint32_t terms_position;
     // The position on the file that this key resides at.
     // At this position, it's the start of WordIndexEntry for this key.
     uint32_t doc_position;
 
-
-    StubIndexEntry(std::string k, uint32_t d) : key(k), doc_position(d) {};
+    std::string _debugkey;
 
     bool operator<(const StubIndexEntry &other) const {
         return key < other.key;
     }
 };
+
 
 inline bool operator<(const Base26Num &other, const StubIndexEntry &stub) {
     return other < stub.key;
@@ -55,25 +67,37 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
  */
 class SortedKeysIndexStub {
 
-    std::vector<StubIndexEntry> index;
-    std::ifstream file;
+    std::ifstream frequencies, terms;
 
     void fill_from_file(int interval);
 
 public:
-    explicit SortedKeysIndexStub(std::filesystem::path path) : file(path, std::ios_base::binary) {
-        fill_from_file(64);
-    };
+    std::vector<StubIndexEntry> index;
+
+    explicit SortedKeysIndexStub(std::filesystem::path frequencies,
+                                 std::filesystem::path terms);;
+
+    explicit SortedKeysIndexStub(std::vector<StubIndexEntry> index) : index(std::move(index)) {};
+
+    void operator=(SortedKeysIndexStub&& other) {
+        frequencies.swap(other.frequencies);
+        terms.swap(other.terms);
+        index = other.index;
+    }
 
     SortedKeysIndexStub() = default;
 
-    std::vector<SafeMultiSearchResult> search_keys(std::vector<std::string> keys, std::string mode = "AND");
+    TopDocs search_one_term(std::string term);
 
-    robin_hood::unordered_map<uint32_t, MultiSearchResult>
-    search_key_prefix_match(const std::string &term,
-                            robin_hood::unordered_map<uint32_t, MultiSearchResult> &prev_result);
 
-    robin_hood::unordered_map<uint32_t, MultiSearchResult> search_key(std::string term);
+//    std::vector<SafeMultiSearchResult> search_keys(std::vector<std::string> keys, std::string mode = "AND");
+//
+//    robin_hood::unordered_map<uint32_t, MultiSearchResult>
+//    search_key_prefix_match(const std::string &term,
+//                            robin_hood::unordered_map<uint32_t, MultiSearchResult> &prev_result);
+//
+//    robin_hood::unordered_map<uint32_t, MultiSearchResult> search_key(std::string term);
+    TopDocs search_many_terms(std::vector<std::string> terms);
 };
 
 

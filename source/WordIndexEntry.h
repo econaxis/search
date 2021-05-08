@@ -9,11 +9,26 @@
 #include <string>
 #include <vector>
 #include "DocumentPositionPointer.h"
+#include "CustomAllocatedVec.h"
 
 struct WordIndexEntry_v2 {
     std::string key;
     uint32_t term_pos;
+    uint32_t positions_pos;
     std::vector<DocumentPositionPointer_v2> files;
+};
+struct WordIndexEntry_unsafe {
+    CustomAllocatedVec<DocumentPositionPointer> files;
+    std::string key;
+
+    WordIndexEntry_unsafe(std::string key, std::vector<DocumentPositionPointer> f) : key(key), files() {
+        for(auto& i : f) {
+            files.push_back(std::move(i));
+        }
+    }
+    WordIndexEntry_unsafe() : key("a"), files() {};
+
+
 };
 struct WordIndexEntry {
     std::string key;

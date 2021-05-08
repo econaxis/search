@@ -3,28 +3,21 @@
 //
 
 #include "Tokenizer.h"
-#include <iostream>
 #include <string>
-#include <locale>
 #include <fstream>
 
 #include <porter2_stemmer/porter2_stemmer.h>
-#include <unordered_map>
-
-std::ofstream debug("/tmp/debug.txt", std::ios_base::app);
+#include <robin_hood/robin_hood.h>
 
 int Tokenizer::clean_token_to_index(std::string &token) {
     remove_punctuation(token);
-//    stem_english(token);
-//    remove_punctuation(token);
     if (token.size() <= 2) return 0; // Token shouldn't be included in index.
     else return 1;
 
 }
 
-SortedKeysIndex Tokenizer::index_istream(std::ifstream &stream, uint32_t docid) {
-    std::unordered_map<std::string, WordIndexEntry> index_temp;
-    std::string file((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+std::vector<WordIndexEntry_unsafe> Tokenizer::index_string_file(std::string file, uint32_t docid) {
+    robin_hood::unordered_map<std::string, WordIndexEntry_unsafe> index_temp;
     index_temp.reserve(file.length() / 20);
     int prev_pos, cur_pos = -1;
     while (prev_pos = cur_pos + 1, true) {
@@ -35,20 +28,19 @@ SortedKeysIndex Tokenizer::index_istream(std::ifstream &stream, uint32_t docid) 
 
         if (clean_token_to_index(temp)) {
             if (auto it = index_temp.find(temp); it == index_temp.end()) {
-                index_temp.insert({temp, {temp, {}}});
+                index_temp.emplace(temp, WordIndexEntry_unsafe{temp, {}});
             }
-            index_temp.at(temp).files.emplace_back(docid, prev_pos);
+            index_temp.at(temp).files.push_back(DocumentPositionPointer{docid, (uint32_t) prev_pos});
         }
 
     }
-    std::vector<WordIndexEntry> final;
+    std::vector<WordIndexEntry_unsafe> final;
     final.reserve(index_temp.size());
     std::transform(index_temp.begin(), index_temp.end(), std::back_inserter(final),
                    [](auto &pair) {
-                       pair.second.files.shrink_to_fit();
                        return std::move(pair.second);
                    });
-    return SortedKeysIndex(std::move(final));
+    return final;
 }
 
 void Tokenizer::remove_punctuation(std::string &a) {

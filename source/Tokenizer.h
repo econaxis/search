@@ -13,7 +13,7 @@
 #include <set>
 
 namespace Tokenizer {
-    SortedKeysIndex index_istream(std::ifstream &stream, uint32_t docid);
+    std::vector<WordIndexEntry_unsafe> index_string_file(std::string file, uint32_t docid);
 
 
     void stem_english(std::string &a);

@@ -1,7 +1,6 @@
 #include "GeneralIndexer.h"
 #include "SortedKeysIndex.h"
 #include "DocIDFilePair.h"
-#include <execution>
 #include "Tokenizer.h"
 #include "random_b64_gen.h"
 #include <fstream>
@@ -11,12 +10,11 @@
 #include <mutex>
 
 #include <csignal>
-#include <future>
 
 // Returns the number of files processed.
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
-constexpr unsigned int MAX_FILES_PER_INDEX = 100000;
+constexpr unsigned int MAX_FILES_PER_INDEX = 30000;
 
 std::shared_mutex atomic_file_operation_in_progress;
 std::once_flag already_registered_atexit;
@@ -32,57 +30,74 @@ int GeneralIndexer::read_some_files() {
 
     std::string file_line;
     // Consume directory iterator and push into filepairs vector
-    while(std::getline(dir_it,file_line)) {
+    while (std::getline(dir_it, file_line)) {
         // Check that file doesn't exist already.
 //        if (fs::exists(data_files_dir / "processed" / file_line)) continue;
-        if(!fs::exists(data_files_dir / "data"/ file_line)) continue;
+//        if(!fs::exists(data_files_dir / "data"/ file_line)) continue;
 
         if (files_processed++ > MAX_FILES_PER_INDEX) break;
         filepairs.push_back(DocIDFilePair{++doc_id_counter, file_line});
     }
 
     if (filepairs.empty()) {
-        std::cout<<"No files to be processed\n";
+        std::cout << "No files to be processed\n";
         return 0;
     }
-    std::atomic_int progress_counter = 0;
+    int progress_counter = 0;
 
 
-    const auto &sortedkeys_reducer = [](SortedKeysIndex op1, SortedKeysIndex op2) {
-        op1.merge_into(op2);
-
-        return op1;
+    const auto &sortedkeys_reducer = [](std::vector<WordIndexEntry_unsafe> &op1,
+                                        std::vector<WordIndexEntry_unsafe> op2) {
+        for (auto &i : op2) {
+            op1.push_back(std::move(i));
+        }
     };
     const auto &filename_processor = [&](const DocIDFilePair &entry) {
-        std::ifstream file(data_files_dir / "data"/ entry.file_name);
+        std::ifstream file(data_files_dir / "data" / entry.file_name);
         if (!file.is_open()) {
             std::cout << "Couldn't open file " << entry.file_name << "!\n";
         }
-
-        SortedKeysIndex index1 = Tokenizer::index_istream(file, entry.docid);
+        std::string filestr ((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        file.close();
 
         if (entry.docid % (MAX_FILES_PER_INDEX / 100) == 0) {
             progress_counter++;
-            std::cout << "Done " << progress_counter<< "% \n";
+            std::cout << "Done " << progress_counter << "% \n";
         }
 
-        return index1;
+        return Tokenizer::index_string_file(filestr, entry.docid);
     };
 
-    const auto &start_job = [&](auto it_begin, auto it_end) {
-        return std::transform_reduce(std::execution::par_unseq, it_begin, it_end,
-                              SortedKeysIndex(), sortedkeys_reducer, filename_processor);
-    };
-    auto master_first = start_job(filepairs.begin(), filepairs.end());
+    std::vector<WordIndexEntry_unsafe> a0;
+    a0.reserve(110000);
+    SortedKeysIndex a1;
 
+    for (auto i : filepairs) {
+        auto temp = filename_processor(i);
+        sortedkeys_reducer(a0, std::move(temp));
+
+        if (a0.size() > 100000) {
+            std::cout << a0.size() << "\n";
+            if(a0.size() % 10 == 0) a1.sort_and_group_shallow();
+            a1.merge_into(SortedKeysIndex(std::move(a0)));
+            a0.clear();
+            a0.reserve(110000);
+        }
+    }
+//    auto master_first = std::transform_reduce(filepairs.begin(), filepairs.end(),
+//                                              std::vector<WordIndexEntry_unsafe>(), sortedkeys_reducer,
+//                                              filename_processor);
+
+//    auto master = SortedKeysIndex(std::move(master_first));
+    auto master = a1;
     std::cout << "Merging\n";
-    master_first.sort_and_group_shallow();
-    master_first.sort_and_group_all();
+    master.sort_and_group_shallow();
+    master.sort_and_group_all();
 
 
     {
         std::shared_lock lock(atomic_file_operation_in_progress);
-        persist_indices(master_first, filepairs);
+        persist_indices(master, filepairs);
     }
 
 
@@ -101,9 +116,8 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     // Since indexing was successful, we move the processed files to the processed folder.
     fs::create_directory(data_files_dir / ("processed"));
     for (const auto &fp : filepairs) {
-        fs::rename(data_files_dir /"data"/ fp.file_name, data_files_dir / "processed" / fp.file_name);
+//        fs::rename(data_files_dir /"data"/ fp.file_name, data_files_dir / "processed" / fp.file_name);
     }
-
 
 
     std::cout << "Persisting files to disk\n";
@@ -145,7 +159,7 @@ void GeneralIndexer::register_atexit_handler() {
  */
 
 void GeneralIndexer::test_serialization() {
-    std::vector<WordIndexEntry> a;
+    std::vector<WordIndexEntry_unsafe> a;
     std::uniform_int_distribution<uint> dist(0, 10); // ASCII table codes for normal characters.
     for (int i = 0; i < 1000; i++) {
         std::vector<DocumentPositionPointer> t;
@@ -159,8 +173,8 @@ void GeneralIndexer::test_serialization() {
     SortedKeysIndex index(a);
     Serializer::serialize_consume("test_serialization", index);
 
-    std::ifstream frequencies (data_files_dir / "indices" / "frequencies-test_serialization");
-    std::ifstream terms (data_files_dir / "indices" / "terms-test_serialization");
+    std::ifstream frequencies(data_files_dir / "indices" / "frequencies-test_serialization");
+    std::ifstream terms(data_files_dir / "indices" / "terms-test_serialization");
     auto t = Serializer::read_sorted_keys_index_stub_v2(frequencies, terms);
     exit(0);
 }

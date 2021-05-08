@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <string>
+#include <microtar/microtar.h>
 
 struct DocIDFilePair {
     uint32_t docid;

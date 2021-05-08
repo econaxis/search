@@ -135,7 +135,7 @@ TopDocs SortedKeysIndexStub::search_one_term(std::string term) {
             for (auto &f : wie.files) {
                 f.frequency = (f.frequency + 1) * score;
             }
-            output.append_multi(wie.files);
+            output.append_multi(std::move(wie.files));
         }
     }
     return output;

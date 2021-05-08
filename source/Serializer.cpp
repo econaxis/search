@@ -91,11 +91,14 @@ void Serializer::serialize_consume(std::ostream &positions, std::ostream &freque
     serialize_str(terms, ie.key);
 
     serialize_vnum(frequencies, term_pos);
+    serialize_vnum(frequencies, positions.tellp());
     serialize_vnum(positions, term_pos);
 
     std::sort(ie.files.begin(), ie.files.end());
     std::vector<std::pair<uint32_t, uint32_t>> freq_data;
     int prev_same_idx = 0;
+
+    assert(std::is_sorted(ie.files.begin(), ie.files.end()));
 
     serialize_vnum(positions, ie.files.size());
     for (int i = 0; i <= ie.files.size(); i++) {
@@ -121,6 +124,8 @@ void Serializer::serialize_consume(std::ostream &positions, std::ostream &freque
 
 WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
     uint32_t term_pos = read_vnum(frequencies);
+//    uint32_t positions_pos = read_vnum(frequencies);
+    uint32_t positions_pos = 0;
     int num_files = read_vnum(frequencies);
 
     terms.seekg(term_pos);
@@ -129,7 +134,7 @@ WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies
 
     for (char c : key) assert(c < 91 && c > 64);
 
-    WordIndexEntry_v2 out{key, term_pos, {}};
+    WordIndexEntry_v2 out{key, term_pos, positions_pos, {}};
 
     out.files.reserve(num_files);
     for (int i = 0; i < num_files; i++) {
@@ -145,13 +150,13 @@ StubIndexEntry Serializer::read_stub_index_entry_v2(std::istream &frequencies, s
     uint32_t frequencies_position = frequencies.tellg();
     auto wie = read_work_index_entry_v2(frequencies, terms);
     return StubIndexEntry{
-            Base26Num(wie.key), wie.term_pos, frequencies_position, wie.key
+            Base26Num(wie.key), wie.term_pos, wie.positions_pos, frequencies_position, wie.key
     };
 }
 
 
 std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istream &frequencies, std::istream &terms) {
-    constexpr int INTERVAL = 32; // read only every Nth entry.
+    constexpr int INTERVAL = 1; // read only every Nth entry.
 
     auto num_entries = Serializer::read_vnum(frequencies);
 
@@ -162,7 +167,7 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
         if (i % INTERVAL == 0) out.push_back(read_stub_index_entry_v2(frequencies, terms));
         else read_stub_index_entry_v2(frequencies, terms);
     }
-    std::cout<<out.size()<<" stub entries\n";
+    std::cout << out.size() << " stub entries\n";
     return out;
 }
 

@@ -38,6 +38,7 @@ struct StubIndexEntry {
     Base26Num key;
 
     uint32_t terms_position;
+    uint32_t positions_pos;
     // The position on the file that this key resides at.
     // At this position, it's the start of WordIndexEntry for this key.
     uint32_t doc_position;

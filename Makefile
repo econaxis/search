@@ -1,14 +1,14 @@
 ifdef DATA_FILES_DIR
     data-file-path := $(DATA_FILES_DIR)
 else
-    data-file-path :=/mnt/henry-80q7/.cache/data-files
+    data-file-path :=/mnt/nfs/.cache/data-files
 endif
 
 RSYNC_COMMAND:=rsync -avh --filter=':- .gitignore' --info=progress2
 
 clear:
 	cd $(data-file-path) && \
-	fd -p '$(data-file-path)/processed/' -x mv {} $(data-file-path)/data/  && \
+    $(RSYNC_COMMAND) $(data-file-path)/processed/ $(data-file-path)/data/ && \
 	(cd data&& fd . > ../total-files-list)
 
 

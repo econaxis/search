@@ -54,9 +54,9 @@ void profile_indexing(SortedKeysIndexStub &index) {
         Tokenizer::clean_token_to_index(temp1);
         Tokenizer::clean_token_to_index(temp2);
 
-        std::vector<std::string> query{temp, temp1};
+        std::vector<std::string> query{temp, temp1, temp2};
         TopDocs result;
-        if(temp.size() && temp1.size()) result = index.search_many_terms(query);
+        if(temp.size() && temp1.size() && temp2.size()) result = index.search_many_terms(query);
 
         if (i % (NUM_SEARCHES / 100) == 0)
             std::cout << "Matched " << result.size() << " files for " << temp1 << " " << temp << " "

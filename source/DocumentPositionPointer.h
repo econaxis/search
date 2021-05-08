@@ -7,8 +7,6 @@
 
 struct DocumentPositionPointer {
     uint32_t document_id;
-
-
     uint32_t document_position;
 
     bool operator< (const DocumentPositionPointer& other) const {
@@ -19,8 +17,8 @@ struct DocumentPositionPointer {
         return document_id != other.document_id;
     }
 
-
-    DocumentPositionPointer(uint32_t docid, uint16_t docpos) : document_id(docid), document_position(docpos) {};
+    DocumentPositionPointer() = default;
+    DocumentPositionPointer(uint32_t docid, uint32_t docpos) : document_id(docid), document_position(docpos) {};
 };
 
 struct DocumentPositionPointer_v2 {

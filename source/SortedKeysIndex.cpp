@@ -33,10 +33,16 @@ vector_find(const std::vector<WordIndexEntry> &vec, const std::string &key) {
 }
 
 
-SortedKeysIndex::SortedKeysIndex(std::vector<WordIndexEntry> index) : index(std::move(index)) {}
+SortedKeysIndex::SortedKeysIndex(std::vector<WordIndexEntry_unsafe> index)  {
+    this->index.reserve(index.size());
+    for(auto & i : index) {
+        std::vector<DocumentPositionPointer> a (i.files.begin(), i.files.end());
+        this->index.push_back(WordIndexEntry{i.key, std::move(a)});
+    }
+}
 
 
-void SortedKeysIndex::merge_into(SortedKeysIndex &other) {
+void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
 //    auto &this_index = this->index;
 //    auto &other_index = other.index;
 //    auto similar_keys = std::vector<WordIndexEntry>();
@@ -58,46 +64,7 @@ void SortedKeysIndex::merge_into(SortedKeysIndex &other) {
 //
 //    std::merge(index.begin(), index.end(), this->index.begin(), this->index.end(), std::back_inserter(new_index));
 //    this->index = std::move(new_index);
-    index.reserve(index.size() + other.index.size());
     std::move(other.index.begin(), other.index.end(), std::back_inserter(index));
-}
-
-
-std::optional<const SearchResult *>
-SortedKeysIndex::search_key(const std::string &key) const {
-    /*
-     * For a given key, get the vector of DocumentPositionPointers for that key. Empty vector if key not found.
-     */
-    if (auto pos = vector_find(index, key); pos != index.end()) {
-        return &(pos->files);
-    } else {
-        return std::nullopt;
-    }
-}
-
-
-std::vector<SafeMultiSearchResult>
-SortedKeysIndex::search_keys(const std::vector<std::string> &keys, std::string type) const {
-
-    std::vector<const SearchResult *> results;
-    std::vector<std::string> result_terms;
-
-    SearchResult empty_result_variable; // Since we have pointers, just make an empty stack variable representing empty array.
-    // This variable will never outlive the results vector.
-    results.reserve(keys.size());
-    for (auto &key : keys) {
-        if (auto searchresult = search_key(key); searchresult) {
-            results.push_back(*searchresult);
-        } else {
-            results.push_back(&empty_result_variable);
-        }
-        result_terms.push_back(key);
-    }
-    if (type == "OR") return DocumentsMatcher::OR(results, result_terms);
-    if (type == "AND") return DocumentsMatcher::AND(results, result_terms);
-    else {
-        throw std::runtime_error("type must be 'OR' or 'AND'");
-    }
 }
 
 
@@ -110,9 +77,10 @@ void SortedKeysIndex::sort_and_group_shallow() {
     while (it != index.end() && it < index.end() - 1) {
         auto cur_key = it->key;
         auto next = it + 1;
-        it->files.reserve(it->files.size() * 4);
         for (; next < index.end() && next->key == cur_key; next++) {
-            std::move(next->files.begin(), next->files.end(), std::back_inserter(it->files));
+            for (auto& i : next->files) {
+                it->files.push_back(i);
+            }
             next->files.clear();
         }
         it = next;
@@ -134,48 +102,3 @@ std::vector<WordIndexEntry> &SortedKeysIndex::get_index() {
 }
 
 
-MultiSearchResult::MultiSearchResult(uint32_t docid, uint32_t score,
-                                     PairUint32 init_pos) : docid(docid),
-                                                            score(score) {
-    diff++;
-    positions = get_default_allocator().get_new_block();
-    insert_position(init_pos);
-}
-
-
-MultiSearchResult::MultiSearchResult(uint32_t docid, uint32_t score) : docid(docid),
-                                                                       score(score) {
-    diff++;
-    positions = get_default_allocator().get_new_block();
-}
-
-
-MultiSearchResult::~MultiSearchResult() {
-    diff--;
-    if (positions != nullptr) {
-        get_default_allocator().free_block(positions);
-    }
-}
-
-bool MultiSearchResult::insert_position(PairUint32 elem) {
-    if (cur_index >= ContiguousAllocator<PairUint32>::BLOCK_INTERVAL) return false;
-    positions[cur_index++] = elem;
-    return true;
-}
-
-MultiSearchResult &MultiSearchResult::operator=(MultiSearchResult &&other) noexcept {
-    diff++;
-    docid = other.docid;
-    score = other.score;
-    positions = other.positions;
-    cur_index = other.cur_index;
-    moved_from = false;
-    other.moved_from = true;
-    other.positions = nullptr;
-    return *this;
-}
-
-
-SafeMultiSearchResult::SafeMultiSearchResult(std::size_t suggested) {
-    positions.reserve(suggested);
-}

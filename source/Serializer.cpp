@@ -77,43 +77,47 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         byte = byte >> 4; // byte has 4 bits of info.
         // 32 bit number
         holder = (holder << 4) | byte;
+    } else {
+        throw std::runtime_error("Not a valid number");
     }
 
     return holder;
 }
 
-/**
- * Serializes word index entry as a vector of VInt (docid), VInt (num occurences)
- */
 void Serializer::serialize_consume(std::ostream &positions, std::ostream &frequencies, std::ostream &terms,
                                    WordIndexEntry ie) {
+    std::sort(ie.files.begin(), ie.files.end());
     uint32_t term_pos = terms.tellp();
     serialize_str(terms, ie.key);
 
+    /**
+     * The frequencies file should be an array, where each element corresponds to a WordIndexEntry.
+     *      Each element: [term_pos] [number of elements = n]
+     *                     n elements of [document_id][frequency]...
+     */
     serialize_vnum(frequencies, term_pos);
-    serialize_vnum(frequencies, positions.tellp());
+
+    /**
+     * The positions file should be an array, where each element corresponds to a WordIndexEntry.
+     *      Each element: [term_pos] [number of elements = n]
+     *              Then, n repeats of: [document_id] [document_position]
+     *
+     *      The number of elements = sum of all frequencies for this WordIndexEntry in the frequencies file.
+     *      Problem/TODO: There is a lot of duplicated data because we're storing document_id for each position entry.
+     *      For example, document with id = 123 that contains the word "the" in 20 places would require
+     *      20 * 32 bits for the document id (all 123) and 20 * 32 bits for the document position.
+     */
     serialize_vnum(positions, term_pos);
-
-    std::sort(ie.files.begin(), ie.files.end());
-    std::vector<std::pair<uint32_t, uint32_t>> freq_data;
-    int prev_same_idx = 0;
-
-    assert(std::is_sorted(ie.files.begin(), ie.files.end()));
-
     serialize_vnum(positions, ie.files.size());
-    for (int i = 0; i <= ie.files.size(); i++) {
-        if (i == ie.files.size()) {
-            freq_data.emplace_back(ie.files[i - 1].document_id, i - prev_same_idx);
-            break;
-        }
-        if (ie.files[i].document_id != ie.files[prev_same_idx].document_id) {
-            // We reached a different index.
-            auto num_occurences_in_term = i - prev_same_idx;
-            auto docid = ie.files[i].document_id;
-            freq_data.emplace_back(docid, num_occurences_in_term);
-            prev_same_idx = i;
-        }
-        serialize_vnum(positions, ie.files[i].document_position);
+
+
+    // contains <document_id, frequency> for the number of times this word appears in the document.
+    std::vector<std::pair<uint32_t, uint32_t>> freq_data = ie.get_frequencies_vector();
+
+
+    for (auto &i : ie.files) {
+        serialize_vnum(positions, i.document_id);
+        serialize_vnum(positions, i.document_position);
     }
     serialize_vnum(frequencies, freq_data.size());
     for (auto&[a, b] : freq_data) {
@@ -124,8 +128,6 @@ void Serializer::serialize_consume(std::ostream &positions, std::ostream &freque
 
 WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
     uint32_t term_pos = read_vnum(frequencies);
-//    uint32_t positions_pos = read_vnum(frequencies);
-    uint32_t positions_pos = 0;
     int num_files = read_vnum(frequencies);
 
     terms.seekg(term_pos);
@@ -134,7 +136,7 @@ WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies
 
     for (char c : key) assert(c < 91 && c > 64);
 
-    WordIndexEntry_v2 out{key, term_pos, positions_pos, {}};
+    WordIndexEntry_v2 out{key, term_pos, {}};
 
     out.files.reserve(num_files);
     for (int i = 0; i < num_files; i++) {
@@ -150,7 +152,7 @@ StubIndexEntry Serializer::read_stub_index_entry_v2(std::istream &frequencies, s
     uint32_t frequencies_position = frequencies.tellg();
     auto wie = read_work_index_entry_v2(frequencies, terms);
     return StubIndexEntry{
-            Base26Num(wie.key), wie.term_pos, wie.positions_pos, frequencies_position, wie.key
+            Base26Num(wie.key), wie.term_pos, frequencies_position, wie.key
     };
 }
 

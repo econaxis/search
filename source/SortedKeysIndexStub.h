@@ -38,7 +38,6 @@ struct StubIndexEntry {
     Base26Num key;
 
     uint32_t terms_position;
-    uint32_t positions_pos;
     // The position on the file that this key resides at.
     // At this position, it's the start of WordIndexEntry for this key.
     uint32_t doc_position;
@@ -70,15 +69,11 @@ class SortedKeysIndexStub {
 
     std::ifstream frequencies, terms;
 
-    void fill_from_file(int interval);
-
 public:
     std::vector<StubIndexEntry> index;
 
     explicit SortedKeysIndexStub(std::filesystem::path frequencies,
-                                 std::filesystem::path terms);;
-
-    explicit SortedKeysIndexStub(std::vector<StubIndexEntry> index) : index(std::move(index)) {};
+                                 std::filesystem::path terms);
 
     void operator=(SortedKeysIndexStub&& other) {
         frequencies.swap(other.frequencies);
@@ -89,15 +84,6 @@ public:
     SortedKeysIndexStub() = default;
 
     TopDocs search_one_term(std::string term);
-
-
-//    std::vector<SafeMultiSearchResult> search_keys(std::vector<std::string> keys, std::string mode = "AND");
-//
-//    robin_hood::unordered_map<uint32_t, MultiSearchResult>
-//    search_key_prefix_match(const std::string &term,
-//                            robin_hood::unordered_map<uint32_t, MultiSearchResult> &prev_result);
-//
-//    robin_hood::unordered_map<uint32_t, MultiSearchResult> search_key(std::string term);
     TopDocs search_many_terms(std::vector<std::string> terms);
 };
 

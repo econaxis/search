@@ -10,9 +10,12 @@
 #include <map>
 
 
-
-using SearchResult = std::vector<DocumentPositionPointer>;
-
+/**
+ * Represents the contents of an entire index of some files.
+ * This is used only as a container during indexing. When searching, we use SortedKeysIndexStub because we can't load the whole
+ * index into memory. This class only contains the rudimentary information like term positions and document ids, but not higher level
+ * information like frequencies, which we need when searching.
+ */
 class SortedKeysIndex {
 private:
     std::vector<WordIndexEntry> index;
@@ -21,22 +24,6 @@ public:
 
 
     std::vector<WordIndexEntry> &get_index();
-
-    friend void Serializer::serialize(std::ostream &stream, const SortedKeysIndex &index);
-//
-//    inline friend std::ostream &operator<<(std::ostream &os, const SortedKeysIndex &a) {
-//        std::ostringstream buffer;
-//        for (const auto &row : a.index) {
-//            buffer << "\"" << row.key << "\": [";
-//            for (const auto &doc_pointer : row.files) {
-//                buffer << doc_pointer.document_id << ":" << doc_pointer.document_position << ", ";
-//            }
-//            buffer.seekp(-2, std::ios_base::cur);
-//            buffer << "]\n";
-//        }
-//        os << buffer.str();
-//        return os;
-//    }
 
     explicit SortedKeysIndex(std::vector<WordIndexEntry_unsafe> index);
 

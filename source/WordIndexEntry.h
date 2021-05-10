@@ -1,7 +1,3 @@
-//
-// Created by henry on 2021-04-29.
-//
-
 #ifndef GAME_WORDINDEXENTRY_H
 #define GAME_WORDINDEXENTRY_H
 
@@ -14,7 +10,8 @@
 struct WordIndexEntry_v2 {
     std::string key;
     uint32_t term_pos;
-    uint32_t positions_pos;
+
+    // TODO: check if CustomAllocatedVec makes sense for this use case?
     std::vector<DocumentPositionPointer_v2> files;
 };
 struct WordIndexEntry_unsafe {
@@ -30,9 +27,33 @@ struct WordIndexEntry_unsafe {
 
 
 };
+
+/**
+ * Each WordIndexEntry is a list of files that contain the word "key" + where the file has that word.
+ */
 struct WordIndexEntry {
     std::string key;
     std::vector<DocumentPositionPointer> files;
+
+    std::vector<std::pair<uint32_t, uint32_t>> get_frequencies_vector() {
+        std::vector<std::pair<uint32_t, uint32_t>> freq_data;
+        int prev_same_idx =0;
+        for (int i = 0; i <= files.size(); i++) {
+            if (i == files.size()) {
+                freq_data.emplace_back(files[i - 1].document_id, i - prev_same_idx);
+                break;
+            }
+            if (files[i].document_id != files[prev_same_idx].document_id) {
+                // We reached a different index.
+                auto num_occurences_in_term = i - prev_same_idx;
+                auto docid = files[i].document_id;
+                freq_data.emplace_back(docid, num_occurences_in_term);
+                prev_same_idx = i;
+            }
+            serialize_vnum(positions, files[i].document_position);
+        }
+        return freq_data;
+    }
 };
 
 inline bool operator<(const WordIndexEntry &elem1, const WordIndexEntry &elem2) {

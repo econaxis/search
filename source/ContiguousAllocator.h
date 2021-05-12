@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-05-05.
-//
 
 #ifndef GAME_CONTIGUOUSALLOCATOR_H
 #define GAME_CONTIGUOUSALLOCATOR_H
@@ -15,7 +12,7 @@ class ContiguousAllocator {
     std::size_t current_allocated;
     std::unique_ptr<T[]> memory;
 
-    std::vector<T *> free;
+    std::stack<T *> free;
 public:
     static constexpr int BLOCK_INTERVAL = 2; // Each vector should have how many positions?
     static constexpr int TOTAL_BLOCKS = 1000000; // How many vectors needed?
@@ -23,12 +20,11 @@ public:
 
     ContiguousAllocator() {
         memory = std::make_unique<T[]>(TOTAL_SIZE);
-        std::cout << "Allocator created at " << memory.get() << "\n";
         current_allocated = 0;
     }
 
     void free_block(T *what) {
-        free.push_back(what);
+        free.push(what);
     }
 
     T *get_new_block() {
@@ -57,9 +53,6 @@ public:
         return heap;
     }
 
-    ~ ContiguousAllocator() {
-
-    }
 
 };
 

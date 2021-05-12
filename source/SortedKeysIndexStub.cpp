@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-05-01.
-//
 
 #include <iostream>
 #include "SortedKeysIndexStub.h"

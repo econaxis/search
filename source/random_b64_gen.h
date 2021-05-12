@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-04-30.
-//
 
 #ifndef GAME_RANDOM_B64_GEN_H
 #define GAME_RANDOM_B64_GEN_H

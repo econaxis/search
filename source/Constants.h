@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-05-01.
-//
 
 #ifndef GAME_CONSTANTS_H
 #define GAME_CONSTANTS_H

@@ -1,10 +1,8 @@
-//
-// Created by henry on 2021-05-01.
-//
 
 #include <filesystem>
 #include "Constants.h"
 #include "random_b64_gen.h"
+#include <iostream>
 
 namespace fs=std::filesystem;
 
@@ -16,8 +14,9 @@ void initialize_directory_variables() {
     auto data_files_dir_env =std::getenv("DATA_FILES_DIR");
     if(data_files_dir_env) {
         data_files_dir = fs::path(data_files_dir_env);
+        std::cout<<"Using data file dir: "<<data_files_dir_env<<"\n";
     } else {
-        data_files_dir = fs::path("/mnt/nfs/.cache/data-files");
+        data_files_dir = fs::path("/mnt/nfs/extra/data-files");
     }
     indice_files_dir = data_files_dir / "indices";
 }

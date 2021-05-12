@@ -1,14 +1,8 @@
 #include "Serializer.h"
 #include "ResultsPrinter.h"
 #include "Tokenizer.h"
-#include <iostream>
-#include <mutex>
-#include <cassert>
-#include "DocIDFilePair.h"
 #include "GeneralIndexer.h"
 #include "compactor/Compactor.h"
-#include "Constants.h"
-#include "SortedKeysIndexStub.h"
 #include "dict_strings.h"
 #include "random_b64_gen.h"
 
@@ -17,7 +11,7 @@ void check_file_is_sorted(const std::string &fmline, std::vector<DocIDFilePair> 
 namespace fs = std::filesystem;
 
 bool compdocid(const DocIDFilePair &t1, const DocIDFilePair &t2) {
-    return t1.docid < t2.docid;
+    return t1.document_id < t2.document_id;
 }
 
 void setup_index(std::vector<DocIDFilePair> &filepairs, SortedKeysIndexStub& index) {

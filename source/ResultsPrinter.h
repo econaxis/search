@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-05-04.
-//
 
 #ifndef GAME_RESULTSPRINTER_H
 #define GAME_RESULTSPRINTER_H

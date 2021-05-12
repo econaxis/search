@@ -1,7 +1,8 @@
 import dbm
-import sys
 import json
-import  os
+import os
+import sys
+
 for s in sys.argv[1:]:
     d = dbm.open(s)
 

@@ -7,15 +7,18 @@
 #include <microtar/microtar.h>
 
 struct DocIDFilePair {
-    uint32_t docid;
+    uint32_t document_id;
     std::string file_name;
 };
 
 inline bool operator!=(const DocIDFilePair& one, uint32_t two) {
-    return one.docid != two;
+    return one.document_id != two;
 }
 inline bool operator==(const DocIDFilePair& one, uint32_t two) {
-    return one.docid == two;
+    return one.document_id == two;
+}
+inline bool operator<(const DocIDFilePair& one, const DocIDFilePair& two) {
+    return one.document_id < two.document_id;
 }
 
 

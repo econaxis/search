@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-04-29.
-//
 
 #ifndef GAME_TOKENIZER_H
 #define GAME_TOKENIZER_H

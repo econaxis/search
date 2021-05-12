@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-05-06.
-//
 
 #ifndef GAME_TOPDOCS_H
 #define GAME_TOPDOCS_H

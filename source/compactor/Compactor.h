@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-04-30.
-//
 
 #ifndef GAME_COMPACTOR_H
 #define GAME_COMPACTOR_H
@@ -17,13 +14,16 @@ namespace Compactor {
         STREAM_ERROR
     };
     void create_directory(const std::filesystem::path& dirpath);
-    void compact_directory(const std::filesystem::path &path, int max_merge = 100);
 
 
     std::tuple<Compactor::ReadState, fs::path, fs::path> read_one_index(std::fstream &stream);
 
     std::pair<Compactor::ReadState, std::string> read_and_mark_line(std::fstream &stream);
     std::pair<Compactor::ReadState, std::string> read_line(std::ifstream &stream);
+
+    std::optional<std::string> compact_two_files();
+
+    void test_makes_sense(const std::string& suffix);
 };
 
 

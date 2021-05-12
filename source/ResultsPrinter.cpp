@@ -1,15 +1,11 @@
-//
-// Created by henry on 2021-05-04.
-//
 
-#include "ResultsPrinter.h"
-//
+
 //void ResultsPrinter::print_results(std::vector<SafeMultiSearchResult> &temp1, std::vector<DocIDFilePair> &filepairs) {
 //    std::ifstream matched_file;
 //    for (int i = std::min(10UL, temp1.size()) - 1; i >= 0; i--) {
 //        auto &v = temp1[i];
-//        auto pos = std::lower_bound(filepairs.begin(), filepairs.end(), v.docid, [](auto &a, auto &b) {
-//            return a.docid < b;
+//        auto pos = std::lower_bound(filepairs.begin(), filepairs.end(), v.document_id, [](auto &a, auto &b) {
+//            return a.document_id < b;
 //        });
 //        if (pos == filepairs.end()) continue;
 //

@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-05-08.
-//
 
 #ifndef GAME_CUSTOMALLOCATEDVEC_H
 #define GAME_CUSTOMALLOCATEDVEC_H
@@ -27,7 +24,7 @@ public:
         total_size = ContiguousAllocator<T>::BLOCK_INTERVAL;
     }
 
-    void push_back(T &&elem) {
+    void push_back(T elem) {
         if (cur_size < total_size) {
             block[cur_size] = elem;
             cur_size++;
@@ -57,8 +54,7 @@ public:
 
     void reserve(int how_many) {
         T *heap = new T[how_many];
-
-        memcpy(heap, block, cur_size * sizeof(T));
+        std::memcpy(heap, block, cur_size * sizeof(T));
 
         free_mem();
         block = heap;
@@ -66,7 +62,7 @@ public:
         total_size = how_many;
     }
 
-    CustomAllocatedVec &operator=(CustomAllocatedVec<T> &&other) {
+    CustomAllocatedVec &operator=(CustomAllocatedVec<T> &&other) noexcept {
 
         this->block = other.block;
         this->total_size = other.total_size;

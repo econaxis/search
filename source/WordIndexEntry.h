@@ -3,6 +3,7 @@
 
 
 #include <string>
+#include <utility>
 #include <vector>
 #include "DocumentPositionPointer.h"
 #include "CustomAllocatedVec.h"
@@ -10,19 +11,21 @@
 struct WordIndexEntry_v2 {
     std::string key;
     uint32_t term_pos;
-
+    uint32_t positions_pos;
     // TODO: check if CustomAllocatedVec makes sense for this use case?
     std::vector<DocumentPositionPointer_v2> files;
 };
+
 struct WordIndexEntry_unsafe {
     CustomAllocatedVec<DocumentPositionPointer> files;
     std::string key;
 
-    WordIndexEntry_unsafe(std::string key, std::vector<DocumentPositionPointer> f) : key(key), files() {
-        for(auto& i : f) {
-            files.push_back(std::move(i));
+    WordIndexEntry_unsafe(std::string key, const std::vector<DocumentPositionPointer>& f) : key(std::move(key)), files() {
+        for (const auto &i : f) {
+            files.push_back(i);
         }
     }
+
     WordIndexEntry_unsafe() : key("a"), files() {};
 
 
@@ -35,9 +38,9 @@ struct WordIndexEntry {
     std::string key;
     std::vector<DocumentPositionPointer> files;
 
-    std::vector<std::pair<uint32_t, uint32_t>> get_frequencies_vector() {
+    std::vector<std::pair<uint32_t, uint32_t>> get_frequencies_vector() const {
         std::vector<std::pair<uint32_t, uint32_t>> freq_data;
-        int prev_same_idx =0;
+        int prev_same_idx = 0;
         for (int i = 0; i <= files.size(); i++) {
             if (i == files.size()) {
                 freq_data.emplace_back(files[i - 1].document_id, i - prev_same_idx);
@@ -50,10 +53,10 @@ struct WordIndexEntry {
                 freq_data.emplace_back(docid, num_occurences_in_term);
                 prev_same_idx = i;
             }
-            serialize_vnum(positions, files[i].document_position);
         }
         return freq_data;
     }
+
 };
 
 inline bool operator<(const WordIndexEntry &elem1, const WordIndexEntry &elem2) {

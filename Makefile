@@ -1,3 +1,4 @@
+SHELL:=bash
 ifdef DATA_FILES_DIR
     data-file-path := $(DATA_FILES_DIR)
 else
@@ -10,7 +11,7 @@ clear:
 	cd $(data-file-path) && \
     $(RSYNC_COMMAND) $(data-file-path)/processed/ $(data-file-path)/data/ && \
 	(cd data&& fd . > ../total-files-list)
-
+	python source/tarrer.py $(data-file-path)
 
 clear-all: clear
 	fd . $(data-file-path)/indices -x rm -r {}

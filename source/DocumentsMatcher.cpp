@@ -1,6 +1,3 @@
-//
-// Created by henry on 2021-05-02.
-//
 #include <robin_hood/robin_hood.h>
 #include <cassert>
 #include "DocumentsMatcher.h"

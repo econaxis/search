@@ -1,13 +1,7 @@
 #ifndef GAME_SORTEDKEYSINDEX_H
 #define GAME_SORTEDKEYSINDEX_H
 
-#include <set>
 #include "WordIndexEntry.h"
-#include "Serializer.h"
-#include <ostream>
-#include <sstream>
-#include <unordered_set>
-#include <map>
 
 
 /**

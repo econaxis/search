@@ -1,15 +1,5 @@
-//
-// Created by henry on 2021-04-29.
-//
 #include "DocIDFilePair.h"
-#include <thread>
-#include <execution>
-#include <map>
 #include "SortedKeysIndex.h"
-#include "DocumentsMatcher.h"
-#include "WordIndexEntry.h"
-
-#include "ContiguousAllocator.h"
 
 std::vector<WordIndexEntry>::iterator vector_find(std::vector<WordIndexEntry> &vec, const std::string &key) {
     auto it = std::lower_bound(vec.begin(), vec.end(), key, [](const auto &_vec_elem, const auto &_key) {
@@ -69,7 +59,7 @@ void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
 
 
 void SortedKeysIndex::sort_and_group_shallow() {
-    std::sort(std::execution::par, index.begin(), index.end());
+    std::sort(index.begin(), index.end());
 
     auto it = index.begin();
 
@@ -92,7 +82,7 @@ void SortedKeysIndex::sort_and_group_shallow() {
 }
 
 void SortedKeysIndex::sort_and_group_all() {
-    std::for_each(std::execution::par, index.begin(), index.end(), [](WordIndexEntry &elem) {
+    std::for_each(index.begin(), index.end(), [](WordIndexEntry &elem) {
         std::sort(elem.files.begin(), elem.files.end());
     });
 }

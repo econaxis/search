@@ -1,27 +1,6 @@
 #include "DocIDFilePair.h"
 #include "SortedKeysIndex.h"
 
-std::vector<WordIndexEntry>::iterator vector_find(std::vector<WordIndexEntry> &vec, const std::string &key) {
-    auto it = std::lower_bound(vec.begin(), vec.end(), key, [](const auto &_vec_elem, const auto &_key) {
-        return _vec_elem.key < _key;
-    });
-
-    if (it->key != key) {
-        return vec.end();
-    } else return it;
-}
-
-std::vector<WordIndexEntry>::const_iterator
-vector_find(const std::vector<WordIndexEntry> &vec, const std::string &key) {
-    auto it = std::lower_bound(vec.begin(), vec.end(), key, [](const auto &_vec_elem, const auto &_key) {
-        return _vec_elem.key < _key;
-    });
-
-    if (it == vec.end() || it->key != key) {
-        return vec.cend();
-    } else return it;
-}
-
 
 SortedKeysIndex::SortedKeysIndex(std::vector<WordIndexEntry_unsafe> index)  {
     this->index.reserve(index.size());

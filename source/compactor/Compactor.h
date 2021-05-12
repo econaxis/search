@@ -13,10 +13,6 @@ namespace Compactor {
         GOOD,
         STREAM_ERROR
     };
-    void create_directory(const std::filesystem::path& dirpath);
-
-
-    std::tuple<Compactor::ReadState, fs::path, fs::path> read_one_index(std::fstream &stream);
 
     std::pair<Compactor::ReadState, std::string> read_and_mark_line(std::fstream &stream);
     std::pair<Compactor::ReadState, std::string> read_line(std::ifstream &stream);

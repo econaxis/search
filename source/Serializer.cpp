@@ -196,13 +196,13 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
     return out;
 }
 
-void Serializer::serialize(const std::string& suffix,  SortedKeysIndex& index) {
+void Serializer::serialize(const std::string& suffix, const SortedKeysIndex& index) {
     std::ofstream frequencies(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary);
     std::ofstream positions(indice_files_dir / ("positions-" + suffix), std::ios_base::binary);
     std::ofstream terms(indice_files_dir / ("terms-" + suffix), std::ios_base::binary);
 
 
-    std::sort(index.get_index().begin(), index.get_index().end());
+    assert(std::is_sorted(index.get_index().begin(), index.get_index().end()));
 
     serialize_vnum(frequencies, index.get_index().size(), false);
     serialize_vnum(positions, index.get_index().size(), false);

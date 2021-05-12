@@ -12,27 +12,6 @@ SortedKeysIndex::SortedKeysIndex(std::vector<WordIndexEntry_unsafe> index)  {
 
 
 void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
-//    auto &this_index = this->index;
-//    auto &other_index = other.index;
-//    auto similar_keys = std::vector<WordIndexEntry>();
-//    std::set_intersection(this_index.begin(), this_index.end(), other_index.begin(),
-//                          other_index.end(), std::back_inserter(similar_keys));
-//
-//    // For all those with similar keys, we have to merge_into manually
-//    for (const auto &entry : similar_keys) {
-//        auto it = vector_find(this_index, entry.key);
-//        const auto other_it = vector_find(other_index, entry.key);
-//        std::copy(other_it->files.begin(), other_it->files.end(), std::back_inserter(it));
-//
-//        other_index.erase(other_it);
-//    }
-
-//    // Use default merge for all those different
-//    std::vector<WordIndexEntry> new_index;
-//    new_index.reserve(index.size() + this->index.size());
-//
-//    std::merge(index.begin(), index.end(), this->index.begin(), this->index.end(), std::back_inserter(new_index));
-//    this->index = std::move(new_index);
     std::move(other.index.begin(), other.index.end(), std::back_inserter(index));
 }
 
@@ -67,6 +46,9 @@ void SortedKeysIndex::sort_and_group_all() {
 }
 
 std::vector<WordIndexEntry> &SortedKeysIndex::get_index() {
+    return index;
+}
+const std::vector<WordIndexEntry> &SortedKeysIndex::get_index() const {
     return index;
 }
 

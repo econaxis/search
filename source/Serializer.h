@@ -33,7 +33,7 @@ namespace Serializer {
 
     void serialize_vnum(std::ostream &stream, uint32_t number, bool pad32);
 
-    void serialize(const std::string& suffix,  SortedKeysIndex &index);
+    void serialize(const std::string& suffix, const SortedKeysIndex &index);
 
     WordIndexEntry_v2 read_work_index_entry_v2(std::istream &frequencies, std::istream &terms);
 

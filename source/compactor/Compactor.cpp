@@ -1,4 +1,3 @@
-
 #include <filesystem>
 #include "compactor/Compactor.h"
 #include <fstream>
@@ -10,29 +9,7 @@
 
 namespace fs = std::filesystem;
 
-void Compactor::create_directory(const fs::path &dirpath) {
-    fs::create_directory(dirpath);
-}
-
-std::tuple<Compactor::ReadState, fs::path, fs::path> Compactor::read_one_index(std::fstream &stream) {
-    auto[state, index_line] = read_and_mark_line(stream);
-    auto[state1, filemap_line] = read_and_mark_line(stream);
-
-    assert(state == state1);
-
-    if (state == ReadState::GOOD) {
-        return {ReadState::GOOD, fs::path(index_line), fs::path(filemap_line)};
-    } else if (state == ReadState::PROCESSED_ALREADY) {
-        // Recursive call to read again.
-        throw std::runtime_error("Should not happen.");
-//        return read_one_index(stream);
-    } else/* if (state == ReadState::STREAM_ERROR)*/ {
-        return {ReadState::STREAM_ERROR, "", ""};
-    }
-
-}
-
-void insert_string(std::fstream &stream, const std::string& ins) {
+void insert_string(std::fstream &stream, const std::string &ins) {
     static std::unique_ptr<char[]> temp_buf = std::make_unique<char[]>(100000);
     if (stream.read(temp_buf.get(), 100000).good()) {
         throw std::runtime_error("Buffer too small");
@@ -47,16 +24,6 @@ void insert_string(std::fstream &stream, const std::string& ins) {
     stream.seekg(pos);
 }
 
-
-std::string debug_stream(std::fstream &stream) {
-    auto pos = stream.tellg();
-    std::string str(1000, ' ');
-    stream.read(str.data(), 1000);
-    stream.clear();
-    stream.seekg(pos);
-    std::cout << stream.tellg() << "\n";
-    return str;
-}
 
 std::pair<Compactor::ReadState, std::string> Compactor::read_and_mark_line(std::fstream &stream) {
     std::string line;
@@ -76,7 +43,7 @@ std::pair<Compactor::ReadState, std::string> Compactor::read_and_mark_line(std::
     }
 }
 
-fs::path make_path(const std::string& name, const std::string& suffix) {
+fs::path make_path(const std::string &name, const std::string &suffix) {
     return indice_files_dir / (name + "-" + suffix);
 }
 
@@ -96,6 +63,7 @@ struct StreamSet {
     void serialize(const WordIndexEntry &wie) {
         Serializer::serialize_work_index_entry(frequencies, terms, positions, wie);
     }
+
     int getlen() {
         std::vector<int> lengths;
         apply_to_all([&](auto &stream) {
@@ -116,7 +84,7 @@ struct StreamSet {
 };
 
 template<typename T>
-StreamSet<T> open_file_set(const std::string& suffix, bool create = false) {
+StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
     auto inoutbinary = std::ios_base::binary | std::ios_base::out;
     if (!create) inoutbinary |= std::ios_base::in;
     StreamSet<T> set{
@@ -137,7 +105,7 @@ StreamSet<T> open_file_set(const std::string& suffix, bool create = false) {
 }
 
 // Tilde is greater ascii character than all other alphabetical characters.
-const std::string INVALIDATED = "~~-INVALIDATED";
+const std::string INVALIDATED = "~~~INVALIDATED";
 
 bool check_stream_good(std::ifstream &stream) {
     stream.get();
@@ -189,9 +157,12 @@ std::optional<std::string> Compactor::compact_two_files() {
     auto merged_filepair = merge_filepairs(filepairs, filepairs1);
     serialize(ostreamset.filemap, merged_filepair);
 
-    int newsize = 0;
-    int len = streamset.getlen();
-    int len1 = streamset1.getlen();
+    /* newsize: a counter for the size of the merged index
+     * len: size of first index
+     * len1: size of second index. */
+    uint32_t newsize = 0;
+    uint32_t len = streamset.getlen();
+    uint32_t len1 = streamset1.getlen();
 
 
     // Temporarily pad the beginning of the file with the number of elements
@@ -259,7 +230,7 @@ std::optional<std::string> Compactor::compact_two_files() {
     return joined_suffix;
 }
 
-void Compactor::test_makes_sense(const std::string& suffix) {
+void Compactor::test_makes_sense(const std::string &suffix) {
     using namespace Serializer;
     auto streamset = open_file_set<std::ifstream>(suffix);
     int len = streamset.getlen();
@@ -269,7 +240,7 @@ void Compactor::test_makes_sense(const std::string& suffix) {
 
     auto ostreamset = open_file_set<std::fstream>(suffix + "-COPY_DEBUG", true);
     auto&[ofrequencies, oterms, opositions, ofilemap] = ostreamset;
-    ostreamset.apply_to_all([=](auto& stream) {
+    ostreamset.apply_to_all([=](auto &stream) {
         serialize_vnum(stream, len, true);
     });
 

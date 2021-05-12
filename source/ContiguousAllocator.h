@@ -29,8 +29,8 @@ public:
 
     T *get_new_block() {
         if (!free.empty()) {
-            T *temp = free.back();
-            if (!free.empty()) free.pop_back();
+            T *temp = free.top();
+            if (!free.empty()) free.pop();
             return temp;
         } else if (current_allocated < TOTAL_SIZE) {
             T *block_loc = &(memory.get()[current_allocated]);

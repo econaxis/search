@@ -4,6 +4,11 @@
 namespace ffi = Serializer::ffi;
 namespace sr = Serializer;
 
+void abi_error(std::string message) {
+    std::cout << "error: " << message;
+    throw std::runtime_error(message);
+}
+
 ifstream *create_ifstream_from_path(const char *path) {
     return ffi::create_ifstream_from_path(path);
 };
@@ -35,16 +40,10 @@ uint32_t read_vnum(ifstream *stream) {
 
 
 void read_filepairs(ifstream *stream, std::vector<DocIDFilePair> **vecpointer, uint32_t *length) {
-//    auto *vec = new std::vector<DocIDFilePair>();
-//    *vec = sr::read_filepairs(*stream);
-//    *vecpointer = vec;
-//    // 4 bytes for docid, 8 bytes for char*
-//    *length = vec->size() * (4 + sizeof(std::size_t));
     auto *vec = new std::vector<DocIDFilePair>();
-    vec->push_back(DocIDFilePair{1, "one"});
-    vec->push_back(DocIDFilePair{2, "two"});
-    vec->push_back(DocIDFilePair{3, "three"});
+    *vec = sr::read_filepairs(*stream);
     *vecpointer = vec;
+    // 4 bytes for docid, 8 bytes for char*
     *length = vec->size();
 }
 
@@ -54,7 +53,7 @@ struct RustDIFP {
 };
 
 void copy_filepairs_to_buf(std::vector<DocIDFilePair> *vec, RustDIFP *buf, uint32_t max_length) {
-    if (max_length != vec->size()) throw std::runtime_error("Incorrect size");
+    if (max_length != vec->size()) abi_error("Incorrect size");
     for (int i = 0; i < vec->size(); i++) {
         buf[i].docid = vec->at(i).document_id;
         buf[i].name = vec->at(i).file_name.data();
@@ -62,6 +61,5 @@ void copy_filepairs_to_buf(std::vector<DocIDFilePair> *vec, RustDIFP *buf, uint3
 }
 
 void deallocate_vec(std::vector<DocIDFilePair> *ptr) {
-    std::cout<<"Dropping vector\n";
     delete ptr;
 }

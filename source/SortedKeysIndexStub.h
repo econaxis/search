@@ -12,9 +12,9 @@
 
 
 struct Base26Num {
-    uint32_t num; // Represent 3 alphabet letters in uint16_t.
+    uint64_t num; // Represent 3 alphabet letters in uint16_t.
     explicit Base26Num(std::string from);
-    explicit Base26Num(uint32_t num): num(num){};
+    explicit Base26Num(uint64_t num): num(num){};
 
     bool operator<(Base26Num other) const {
         return num < other.num;
@@ -42,8 +42,6 @@ struct StubIndexEntry {
     // At this position, it's the start of WordIndexEntry for this key.
     uint32_t doc_position;
 
-    std::string _debugkey;
-
     bool operator<(const StubIndexEntry &other) const {
         return key < other.key;
     }
@@ -67,7 +65,8 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
  */
 class SortedKeysIndexStub {
 
-    std::ifstream frequencies, terms;
+    mutable std::ifstream frequencies, terms;
+    std::unique_ptr<char[]> buffer;
 
 public:
     std::vector<StubIndexEntry> index;
@@ -75,17 +74,21 @@ public:
     explicit SortedKeysIndexStub(std::filesystem::path frequencies,
                                  std::filesystem::path terms);
 
-    void operator=(SortedKeysIndexStub&& other) {
-        frequencies.swap(other.frequencies);
-        terms.swap(other.terms);
-        index = other.index;
-    }
+//    SortedKeysIndexStub& operator=(SortedKeysIndexStub&& other) {
+//        frequencies.swap(other.frequencies);
+//        terms.swap(other.terms);
+//        index = other.index;
+//        return *this;
+//    }
 
     SortedKeysIndexStub() = default;
 
-    TopDocs search_one_term(std::string term);
-    TopDocs search_many_terms(std::vector<std::string> terms);
+    TopDocs search_one_term(const std::string& term) const;
+    TopDocs search_many_terms(const std::vector<std::string> &terms);
+
+    static TopDocs collection_merge_search(std::vector<SortedKeysIndexStub>& indices, const std::vector<std::string>& search_terms);
 };
+
 
 
 #endif //GAME_SORTEDKEYSINDEXSTUB_H

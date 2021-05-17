@@ -222,7 +222,6 @@ std::optional<std::string> Compactor::compact_two_files() {
         serialize_vnum(stream, newsize, true);
     });
 
-
     index_file.seekp(0, std::ios_base::end);
     index_file << joined_suffix << "\n";
 

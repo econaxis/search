@@ -11,7 +11,6 @@ int main() {
         auto joined_suffix = Compactor::compact_two_files();
         if (joined_suffix) {
             Compactor::test_makes_sense(joined_suffix.value());
-            break;
         } else {
             break;
         }

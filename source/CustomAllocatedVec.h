@@ -6,10 +6,10 @@
 #include "ContiguousAllocator.h"
 #include <mutex>
 
-template<typename T>
+template<typename T, int block_size = 7, int num_blocks = 10000>
 class CustomAllocatedVec {
     static ContiguousAllocator<T> &get_default_allocator() {
-        static ContiguousAllocator<T> def{};
+        static ContiguousAllocator<T> def{block_size, num_blocks};
         return def;
     }
 
@@ -21,7 +21,13 @@ public:
     CustomAllocatedVec() {
         block = get_default_allocator().get_new_block();
         cur_size = 0;
-        total_size = ContiguousAllocator<T>::BLOCK_INTERVAL;
+        total_size = get_default_allocator().BLOCK_INTERVAL;
+    }
+
+    std::vector<T> to_vector() const {
+        std::vector<T> out(cur_size);
+        std::memcpy(out.data(), block, sizeof(T) * cur_size);
+        return out;
     }
 
     void push_back(T elem) {
@@ -30,7 +36,6 @@ public:
             cur_size++;
         } else {
             // Size exceeded. Just not add for now.
-            // TODO
             reserve(total_size * 2);
             push_back(std::move(elem));
         }
@@ -53,6 +58,8 @@ public:
     }
 
     void reserve(int how_many) {
+        if(how_many <= total_size) return;
+
         T *heap = new T[how_many];
         std::memcpy(heap, block, cur_size * sizeof(T));
 
@@ -62,7 +69,7 @@ public:
         total_size = how_many;
     }
 
-    CustomAllocatedVec &operator=(CustomAllocatedVec<T> &&other) noexcept {
+    CustomAllocatedVec &operator=(CustomAllocatedVec<T, block_size, num_blocks> &&other)  {
 
         this->block = other.block;
         this->total_size = other.total_size;
@@ -72,11 +79,11 @@ public:
         return *this;
     }
 
-    CustomAllocatedVec(CustomAllocatedVec<T> &&other) noexcept {
+    CustomAllocatedVec(CustomAllocatedVec<T, block_size, num_blocks> &&other)  {
         operator=(std::move(other));
     }
 
-    CustomAllocatedVec(const CustomAllocatedVec<T> &other) noexcept {
+    CustomAllocatedVec(const CustomAllocatedVec<T, block_size, num_blocks> &other)  {
         if (other.is_heap) {
             block = new T[other.total_size];
             is_heap = true;
@@ -89,15 +96,18 @@ public:
         memcpy(block, other.block, cur_size * sizeof(T));
     };
 
-    void free_mem() noexcept {
-        if (is_heap) delete[]block;
+    void free_mem() {
+        if (is_heap) {
+            delete[]block;
+            block = nullptr;
+        }
         else if (block != nullptr) {
             get_default_allocator().free_block(block);
             block = nullptr;
         }
     }
 
-    ~CustomAllocatedVec() noexcept {
+    ~CustomAllocatedVec() {
         free_mem();
     }
 
@@ -119,8 +129,8 @@ public:
 
 #include <iterator>
 
-template<typename T>
-struct CustomAllocatedVec<T>::iterator {
+template<typename T, int block_size, int num_blocks>
+struct CustomAllocatedVec<T, block_size, num_blocks>::iterator {
     using iterator_category = std::forward_iterator_tag;
     using difference_type = int;
     using pointer = T *;

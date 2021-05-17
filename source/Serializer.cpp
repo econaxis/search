@@ -73,7 +73,10 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         // 32 bit number
         holder = (holder << 4) | byte;
     } else {
-        throw std::runtime_error("Not a valid number");
+        int a = stream.tellg();
+        int b = stream.good();
+        int c = stream.eof();
+        std::cout << "Error: not a valid number; " << a << b << c;
     }
 
     return holder;
@@ -91,16 +94,16 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
      *      Each element: [term_pos] [positions_pos] [number of elements = n]
      *                     n elements of [document_id][frequency]...
      */
-    serialize_vnum(frequencies, term_pos, false);
-    serialize_vnum(frequencies, positions.tellp(), false);
+    serialize_vnum(frequencies, term_pos, true);
+    serialize_vnum(frequencies, positions.tellp(), true);
 
 
     // contains <document_id, frequency> for the number of times this word appears in the document.
     std::vector<std::pair<uint32_t, uint32_t>> freq_data = ie.get_frequencies_vector();
-    serialize_vnum(frequencies, freq_data.size(), false);
+    serialize_vnum(frequencies, freq_data.size(), true);
     for (auto&[a, b] : freq_data) {
-        serialize_vnum(frequencies, a, false);
-        serialize_vnum(frequencies, b, false);
+        serialize_vnum(frequencies, a, true);
+        serialize_vnum(frequencies, b, true);
     }
 
 
@@ -122,14 +125,17 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
 
 }
 
-WordIndexEntry Serializer::read_work_index_entry(std::istream& frequencies, std::istream& terms, std::istream& positions) {
+
+WordIndexEntry
+Serializer::read_work_index_entry(std::istream &frequencies, std::istream &terms, std::istream &positions) {
     // Frequencies data is useles, so we just use this function to consume the stream.
     WordIndexEntry_v2 wie2 = read_work_index_entry_v2(frequencies, terms);
 
-    int num_positions = read_vnum (positions);
-    WordIndexEntry wie {wie2.key, {}};
+    int num_positions = read_vnum(positions);
+    WordIndexEntry wie{wie2.key, {}};
+    wie.files.reserve(num_positions);
 
-    while(num_positions--) {
+    while (num_positions--) {
         int docid = read_vnum(positions);
         int position = read_vnum(positions);
         wie.files.emplace_back(docid, position);
@@ -139,28 +145,53 @@ WordIndexEntry Serializer::read_work_index_entry(std::istream& frequencies, std:
 }
 
 
-WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
-    uint32_t term_pos = read_vnum(frequencies);
-    uint32_t positions_pos = read_vnum(frequencies);
-    uint32_t num_files = read_vnum(frequencies);
+PreviewResult Serializer::preview_work_index_entry(std::istream &frequencies, std::istream &terms) {
+    uint32_t frequencies_off = 0;
+    uint32_t terms_off = 0;
+    uint32_t buf1[3];
+    frequencies.read(reinterpret_cast<char *>(buf1), sizeof(uint32_t) * 3);
 
-    terms.seekg(term_pos);
+    frequencies_off += frequencies.gcount();
+    buf1[0] >>= 4; // Rightshift by 4. This is term position.
+    buf1[2] >>= 4; // Rightshift number by 4 bits. This is the number of files.
+    frequencies.ignore(buf1[2] * 2 * sizeof(uint32_t));
+    frequencies_off += frequencies.gcount();
 
-    auto key = read_str(terms);
+    std::string key = read_str(terms);
+    terms_off += terms.gcount();
 
-    for (char& c : key){
-        if(c > 91 || c < 64) {
+
+    return {frequencies_off, terms_off, std::move(key)};
+}
+
+void to_alphabetical(std::string& key) {
+    for (char &c : key) {
+        if (c > 91 || c < 64) {
             c = 'Z';
         }
     }
 
-    WordIndexEntry_v2 out{key, term_pos, positions_pos,  {}};
+}
 
-    out.files.reserve(num_files);
-    for (int i = 0; i < num_files; i++) {
-        uint32_t docid = read_vnum(frequencies);
-        uint32_t freq = read_vnum(frequencies);
-        out.files.emplace_back(docid, freq);
+WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
+    uint32_t buf1[3]; // term_pos, positions_pos, num_files
+    frequencies.read(reinterpret_cast<char *>(buf1), sizeof(uint32_t) * 3);
+
+    terms.seekg(buf1[0]);
+
+    auto key = read_str(terms);
+    to_alphabetical(key);
+
+    WordIndexEntry_v2 out{key, buf1[0], {}};
+    out.files.reserve(buf1[2]);
+
+    auto a = std::make_unique<uint32_t[]>(buf1[2] * 2);
+    auto a_raw = a.get();
+
+    // These VInts are padded to 4 bytes, so we can do this.
+    frequencies.read(reinterpret_cast<char*>(a.get()), buf1[2] * 2 * sizeof(uint32_t));
+    for (int i = 0; i < buf1[2]; i++) {
+        out.files.push_back(DocumentPositionPointer_v2{a_raw[i*2], a_raw[i*2+1]});
     }
 
     return out;
@@ -170,13 +201,13 @@ StubIndexEntry Serializer::read_stub_index_entry_v2(std::istream &frequencies, s
     uint32_t frequencies_position = frequencies.tellg();
     auto wie = read_work_index_entry_v2(frequencies, terms);
     return StubIndexEntry{
-            Base26Num(wie.key), wie.term_pos, frequencies_position, wie.key
+            Base26Num(wie.key), wie.term_pos, frequencies_position
     };
 }
 
 
 std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istream &frequencies, std::istream &terms) {
-    constexpr int INTERVAL = 1; // read only every Nth entry.
+    constexpr int INTERVAL = 128; // read only every Nth entry.
     assert(frequencies.tellg() == 0 && terms.tellg() == 0);
 
     auto num_entries = Serializer::read_vnum(frequencies);
@@ -190,13 +221,13 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
 
     for (int i = 0; i < num_entries; i++) {
         if (i % INTERVAL == 0) out.push_back(read_stub_index_entry_v2(frequencies, terms));
-        else read_stub_index_entry_v2(frequencies, terms);
+        else preview_work_index_entry(frequencies, terms);
     }
     std::cout << out.size() << " stub entries\n";
     return out;
 }
 
-void Serializer::serialize(const std::string& suffix, const SortedKeysIndex& index) {
+void Serializer::serialize(const std::string &suffix, const SortedKeysIndex &index) {
     std::ofstream frequencies(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary);
     std::ofstream positions(indice_files_dir / ("positions-" + suffix), std::ios_base::binary);
     std::ofstream terms(indice_files_dir / ("terms-" + suffix), std::ios_base::binary);
@@ -221,7 +252,7 @@ std::string Serializer::read_str(std::istream &stream) {
 }
 
 std::vector<DocIDFilePair> Serializer::read_filepairs(std::istream &stream) {
-    auto sz = read_vnum(stream);
+    int sz = read_vnum(stream);
     std::vector<DocIDFilePair> out;
 
     while (sz--) {
@@ -239,12 +270,10 @@ DocIDFilePair Serializer::read_pair(std::istream &stream) {
 std::ifstream *Serializer::ffi::create_ifstream_from_path(const char *path) {
     fs::path fspath(path);
     auto *stream = new std::ifstream(fspath, std::ios_base::binary);
-    std::cout << "Creating ifstream from: " << path << " " << stream << "\n";
     return stream;
 }
 
 void Serializer::ffi::deallocate(std::ifstream *stream) {
-    std::cout << "Deallocated ifstream!";
     delete stream;
 }
 

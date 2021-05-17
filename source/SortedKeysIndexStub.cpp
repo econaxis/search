@@ -8,8 +8,8 @@
 
 namespace fs = std::filesystem;
 
-constexpr unsigned long MATCHALL_BONUS = 100;
-constexpr unsigned long MATCHALL_SHORT_BONUS = 50;
+constexpr unsigned long MATCHALL_BONUS = 50;
+constexpr unsigned long MATCHALL_SHORT_BONUS = 20;
 
 
 /**
@@ -89,7 +89,9 @@ constexpr uint64_t LETTER_POW12 = 27 * LETTER_POW11;
 constexpr uint64_t alphabet_pow[] = {LETTER_POW1, LETTER_POW2, LETTER_POW3, LETTER_POW4, LETTER_POW5, LETTER_POW6,
                                      LETTER_POW7, LETTER_POW8, LETTER_POW9, LETTER_POW10, LETTER_POW11, LETTER_POW12};
 #include <cmath>
-constexpr std::size_t MAX_CHARS = 5;
+#include <numeric>
+
+constexpr std::size_t MAX_CHARS = 8;
 
 /**
  * Used to convert a string to a 64 bit unsigned integer for quicker comparison and easier memory usage.
@@ -106,7 +108,9 @@ Base26Num::Base26Num(std::string from) {
     }
 }
 
-TopDocs SortedKeysIndexStub::search_one_term(std::string term) {
+int hits = 0, misses =0;
+
+TopDocs SortedKeysIndexStub::search_one_term(const std::string &term)const  {
     auto term_after = Base26Num(term);
     auto term_before = Base26Num(term);
     term_before.num -= 26;
@@ -121,33 +125,43 @@ TopDocs SortedKeysIndexStub::search_one_term(std::string term) {
     frequencies.seekg(file_start->doc_position);
     terms.seekg(file_start->terms_position);
 
+    auto frequencies_pos = frequencies.tellg();
+
     TopDocs output((file_end - file_start) * 3UL);
 
-    while (frequencies.tellg() <= file_end->doc_position) {
-        auto wie = Serializer::read_work_index_entry_v2(frequencies, terms);
+    while (frequencies_pos <= file_end->doc_position) {
+        // Preview the WIE without loading everything into memory.
+        auto [freq_initial_off, terms_initial_off, key] = Serializer::preview_work_index_entry(frequencies, terms);
 
+        // The number of bytes advanced = the offset amount.
+        frequencies_pos += freq_initial_off;
         // This uses the normal string-string comparison rather than uint64.
         // If more than 3 characters match, then we good.
-        if (uint32_t score = string_prefix_compare(term, wie.key); score >= 2) {
+        if (uint32_t score = string_prefix_compare(term, key); score >= output.size() * 5) {
+            // Seek back to original previewed position.
+            frequencies.seekg(-freq_initial_off, std::ios_base::cur);
+            terms.seekg(-terms_initial_off, std::ios_base::cur);
+            auto wie = Serializer::read_work_index_entry_v2(frequencies, terms);
             for (auto &f : wie.files) {
                 f.frequency = (f.frequency + 1) * score;
             }
-            output.append_multi(std::move(wie.files));
+
+            output.append_multi(wie.files.to_vector());
         }
     }
     return output;
 }
 
-TopDocs SortedKeysIndexStub::search_many_terms(std::vector<std::string> terms) {
-    std::vector<TopDocs> all_outputs(terms.size());
+TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &terms) {
+    std::vector<TopDocs> all_outputs;
+    all_outputs.reserve(terms.size());
 
-
-    auto transformer = [this](const std::string &term) {
-        auto result = this->search_one_term(term);
-        result.sort_and_score();
-        return result;
+    for(int i = 0; i < terms.size(); i++) {
+        auto result = this->search_one_term(terms[i]);
+        result.sort_by_ids();
+        for(auto& j : result) j.unique_identifier = i;
+        all_outputs.push_back(std::move(result));
     };
-    std::transform(terms.begin(), terms.end(), all_outputs.begin(), transformer);
 
     return DocumentsMatcher::AND(all_outputs);
 }
@@ -157,6 +171,30 @@ SortedKeysIndexStub::SortedKeysIndexStub(std::filesystem::path frequencies, std:
                                                                                                            terms(terms,
                                                                                                                  std::ios_base::binary) {
     assert(this->frequencies && this->terms);
+    buffer = std::make_unique<char[]>(2048);
+    this->frequencies.rdbuf()->pubsetbuf(buffer.get(), 2048);
     index = Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms);
 }
 
+
+
+ TopDocs SortedKeysIndexStub::collection_merge_search(std::vector<SortedKeysIndexStub> &indices, const std::vector<std::string> &search_terms) {
+    std::vector<TopDocs> results;
+    int incrementing = 0;
+    std::transform(indices.begin(), indices.end(), std::back_inserter(results), [&](auto& index) {
+        auto temp = index.search_many_terms(search_terms);
+        for (DocumentPositionPointer_v2 &d : temp) {
+            d.unique_identifier = incrementing;
+        }
+        incrementing++;
+        return temp;
+    });
+
+
+    TopDocs joined = std::reduce(results.begin(), results.end(), TopDocs{}, [](TopDocs one, TopDocs two) {
+        one.append_multi(std::move(two));
+        return one;
+    });
+//    joined.sort_by_ids();
+    return joined;
+}

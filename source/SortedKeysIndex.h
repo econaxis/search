@@ -12,9 +12,9 @@
  */
 class SortedKeysIndex {
 private:
-    std::vector<WordIndexEntry> index;
 
 public:
+    std::vector<WordIndexEntry> index;
 
 
     std::vector<WordIndexEntry> &get_index();

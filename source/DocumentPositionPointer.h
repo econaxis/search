@@ -24,14 +24,19 @@ struct DocumentPositionPointer {
 struct DocumentPositionPointer_v2 {
     uint32_t document_id;
     uint32_t frequency;
+    uint8_t unique_identifier = 0;
+
+//    std::string searched, matched;
 
     bool operator<(const DocumentPositionPointer_v2& other) const {
         return frequency < other.frequency;
     }
     bool operator==(const DocumentPositionPointer_v2& other) const {
-        return document_id == other.document_id;
+        return (document_id == other.document_id);
     }
-    DocumentPositionPointer_v2(uint32_t a, uint32_t b) : document_id(a), frequency(b){};
+
+    DocumentPositionPointer_v2(uint32_t a, uint32_t b) : document_id(a), frequency(b) {};
+    DocumentPositionPointer_v2() = default;
 };
 std::ostream &operator<<(std::ostream &os, std::vector<DocumentPositionPointer> vec);
 

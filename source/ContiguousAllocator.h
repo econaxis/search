@@ -14,12 +14,11 @@ class ContiguousAllocator {
 
     std::stack<T *> free;
 public:
-    static constexpr int BLOCK_INTERVAL = 2; // Each vector should have how many positions?
-    static constexpr int TOTAL_BLOCKS = 1000000; // How many vectors needed?
-    static constexpr int TOTAL_SIZE = BLOCK_INTERVAL * TOTAL_BLOCKS;
+    int BLOCK_INTERVAL; // Each vector should have how many positions?
+    int TOTAL_BLOCKS; // How many vectors needed?
 
-    ContiguousAllocator() {
-        memory = std::make_unique<T[]>(TOTAL_SIZE);
+    ContiguousAllocator(int block_interval = 4, int total_blocks = 300000): BLOCK_INTERVAL(block_interval), TOTAL_BLOCKS(total_blocks) {
+        memory = std::make_unique<T[]>(BLOCK_INTERVAL * TOTAL_BLOCKS);
         current_allocated = 0;
     }
 
@@ -32,7 +31,7 @@ public:
             T *temp = free.top();
             if (!free.empty()) free.pop();
             return temp;
-        } else if (current_allocated < TOTAL_SIZE) {
+        } else if (current_allocated < BLOCK_INTERVAL * TOTAL_BLOCKS) {
             T *block_loc = &(memory.get()[current_allocated]);
             current_allocated += BLOCK_INTERVAL;
             return block_loc;

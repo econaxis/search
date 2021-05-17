@@ -18,6 +18,5 @@ uint32_t read_vnum(ifstream *stream);
 void read_filepairs(ifstream *stream, std::vector<DocIDFilePair> **vecpointer, uint32_t *length);
 void deallocate_vec(std::vector<DocIDFilePair> *ptr);
 void copy_filepairs_to_buf(std::vector<DocIDFilePair> *vec, RustDIFP *buf, uint32_t max_length);
+};
 
-
-}

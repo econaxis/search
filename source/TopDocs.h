@@ -2,9 +2,11 @@
 #ifndef GAME_TOPDOCS_H
 #define GAME_TOPDOCS_H
 
+#include <cstring>
 #include <vector>
 #include <cassert>
 #include "DocumentPositionPointer.h"
+
 
 class TopDocs {
     std::vector<DocumentPositionPointer_v2> docs;
@@ -15,23 +17,45 @@ public:
     };
 
     void append_multi(std::vector<DocumentPositionPointer_v2> other) {
-        std::move(other.begin(), other.end(), std::back_inserter(docs));
+#ifndef MERGE_SORT
+        auto begin = other.begin();
+        auto end = other.end();
+
+        auto my_begin = docs.begin();
+        auto my_end = docs.end();
+
+        std::vector<DocumentPositionPointer_v2> new_merged;
+        new_merged.reserve(other.size() + docs.size());
+
+        std::merge(begin, end, my_begin, my_end, std::back_inserter(new_merged));
+
+        docs = std::move(new_merged);
+#else
+        auto prev_doc_size = docs.size();
+        docs.resize(docs.size() + other.size());
+        memcpy(docs.data() + prev_doc_size, other.data(), other.size() * sizeof (DocumentPositionPointer_v2));
+#endif
     }
 
-    void sort_and_score() {
-        if (is_sorted) return;
-        auto search_max = docs.begin() + 100;
-        if (docs.size() < search_max - docs.begin()) search_max = docs.end();
+    void append_multi(TopDocs other) {
+        append_multi(std::move(other.docs));
+    }
 
-        std::partial_sort(docs.begin(), search_max, docs.end(), [](const auto &t, const auto &t1) {
+    void sort_by_ids() {
+#ifndef MERGE_SORT
+#else
+        std::sort(docs.begin(), docs.end(), [](const auto &t, const auto &t1) {
             return t.document_id < t1.document_id;
         });
-        is_sorted = true;
+#endif
+    }
 
-
+    void merge_similar_docs() {
         auto prev_doc = docs.begin();
         auto collected_score = 0;
-        for (auto doc = docs.begin(); doc != search_max; doc++) {
+
+        // Merge similar docs.
+        for (auto doc = docs.begin(); doc != docs.end(); doc++) {
             if (doc->document_id != prev_doc->document_id || docs.end() - doc == 1) {
                 prev_doc->frequency = collected_score;
                 prev_doc = doc;
@@ -42,14 +66,13 @@ public:
             }
         }
 
-        docs.erase(std::remove_if(docs.begin(), search_max, [](const auto &t) {
+        docs.erase(std::remove_if(docs.begin(), docs.end(), [](const auto &t) {
             return !(t.frequency || t.document_id);
         }), docs.end());
 
-        std::partial_sort(docs.begin(), search_max, docs.end(), [](auto &t, auto &t1) {
+        std::sort(docs.begin(), docs.end(), [](auto &t, auto &t1) {
             return t.frequency < t1.frequency;
         });
-
     }
 
     auto cbegin() const {
@@ -67,7 +90,6 @@ public:
     auto end() { return docs.end(); }
 
     auto size() const { return docs.size(); }
-
 
 };
 

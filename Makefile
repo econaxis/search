@@ -2,7 +2,7 @@ SHELL:=bash
 ifdef DATA_FILES_DIR
     data-file-path := $(DATA_FILES_DIR)
 else
-    data-file-path :=/mnt/nfs/.cache/data-files
+    data-file-path :=/mnt/nfs/extra/data-files
 endif
 
 RSYNC_COMMAND:=rsync -avh --filter=':- .gitignore' --info=progress2
@@ -27,13 +27,14 @@ transfer-rev:
 	$(RSYNC_COMMAND) henry@henry-x1:~/search/ ~/search/;
 
 build-debug:
-	cmake --build cmake-build-debug -j 4
+	cmake --build cmake-build-debug -j 8
+FORCE: ;
 
-build:
-	cmake --build cmake-build-release -j 4
+build: FORCE
+	cmake --build cmake-build-release -j 8
 
 remake:
-	(cd cmake-build-release && rm -rf * && cmake -G Ninja .. && cmake --build . -j 4)
+	(cd cmake-build-release && rm -rf * && cmake -G Ninja .. && cmake --build . -j 8)
 
 index:
 	cmake-build-release/search

@@ -39,12 +39,12 @@ for line in tfl:
         print(e)
 
 
-    if linesi > 50000:
+    if linesi > 100000:
         linesi = 0
         curfile += 1
         tar.close()
         tar = tarfile.open(f'tar-{curfile}.tar', 'w')
         tarlist = tar.getnames()
 
-    if linesi % 50 == 0:
+    if linesi % 5000 == 0:
         print(linesi)

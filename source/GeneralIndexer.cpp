@@ -5,15 +5,11 @@
 #include "Constants.h"
 
 #include <thread>
-
+#include "FileListGenerator.h"
 #include <atomic>
-
 //#define READ_TAR
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
-constexpr unsigned int MAX_FILES_PER_INDEX = 500;
-std::condition_variable cv;
-std::mutex mutex;
 
 struct SyncedQueue {
     std::queue<std::pair<std::string, DocIDFilePair>> queue;
@@ -49,6 +45,7 @@ struct SyncedQueue {
     }
 };
 
+
 void queue_produce_file_contents_tar(std::vector<std::string> tarnames, SyncedQueue &contents,
                                      std::atomic_bool &done_flag) {
     uint32_t docid = 1;
@@ -77,24 +74,20 @@ void queue_produce_file_contents_tar(std::vector<std::string> tarnames, SyncedQu
 
 void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
                                  std::atomic_bool &done_flag) {
-
     for (auto &entry : filepairs) {
+        auto len = fs::file_size(data_files_dir / "data" / entry.file_name);
         std::ifstream file(data_files_dir / "data" / entry.file_name);
         if (!file.is_open()) {
             std::cout << "Couldn't open file " << entry.file_name << "!\n";
         }
-        std::string filestr(10000, ' ');
-        file.read(filestr.data(), 10000);
+        std::string filestr(len, ' ');
+        file.read(filestr.data(), len);
 
         if (!file.eof() && !file.fail()) {
-            // 10000 bytes was not enough for this file. We allocate some extra memory and read more.
             filestr.append((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        } else {
-            // Delete the unused memory.
-            filestr.erase(file.gcount(), filestr.size() - file.gcount());
         }
         contents.wait_for([&] {
-            return contents.size() < 1000;
+            return contents.size() < 300;
         });
 
         contents.push({std::move(filestr), entry});
@@ -103,74 +96,26 @@ void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
     contents.cv.notify_all();
 }
 
-constexpr std::string_view LOCKFILE = ".total-files-list.lock";
 
-bool acquire_lock_file() {
-    using namespace std::chrono;
-    if (fs::exists(data_files_dir / ".total-files-list.lock")) {
-        return false;
-    } else {
-        std::ofstream ofs(data_files_dir / LOCKFILE);
-        auto now = system_clock::now();
-        auto now1 = system_clock::to_time_t(now);
-        ofs << std::put_time(std::localtime(&now1), "%c");
+void reduce_word_index_entries(std::vector<WordIndexEntry_unsafe> &op1,
+                               std::vector<WordIndexEntry_unsafe> op2) {
+    for (auto &i : op2) {
+        op1.push_back(std::move(i));
     }
-    return true;
 }
 
+template<typename T>
+std::vector<T> remake_vector() {
+    auto a = std::vector<T>();
+    a.reserve(110000);
+    return a;
+}
+
+
 int GeneralIndexer::read_some_files() {
-    FilePairs filepairs;
-    filepairs.reserve(MAX_FILES_PER_INDEX);
-    auto dir_it = std::fstream(data_files_dir / "total-files-list");
+    FilePairs fp = FileListGenerator::from_file();
 
-
-#ifndef READ_TAR
-    if (!acquire_lock_file()) {
-        std::cerr << "Lock file exists\n";
-        return 0;
-    }
-    uint32_t doc_id_counter = 1, files_processed = 0;
-    std::string file_line;
-    // Consume directory iterator and push into filepairs vector
-    while (std::getline(dir_it, file_line)) {
-        if (file_line[0] == '#') {
-            // File has already / is currently processed
-            continue;
-        }
-
-        dir_it.seekg(-file_line.size() - 1, std::ios_base::cur);
-        dir_it.put('#');
-        dir_it.seekg(file_line.size(), std::ios_base::cur);
-
-        if (files_processed++ > MAX_FILES_PER_INDEX) break;
-        filepairs.push_back(DocIDFilePair{doc_id_counter++, file_line});
-    }
-    // Release the lock file.
-    fs::remove(data_files_dir / LOCKFILE);
-
-
-    dir_it.close(); // flush all our writes
-    if (filepairs.empty()) {
-        std::cout << "No files to be processed\n";
-        return 0;
-    }
-#endif
     uint32_t progress_counter = 0;
-
-    const auto &sortedkeys_reducer = [](std::vector<WordIndexEntry_unsafe> &op1,
-                                        std::vector<WordIndexEntry_unsafe> op2) {
-        for (auto &i : op2) {
-            op1.push_back(std::move(i));
-        }
-    };
-
-    const auto &file_processor = [&](const std::string &filestr, uint32_t docid) {
-        if (progress_counter++ % (MAX_FILES_PER_INDEX / 1000 + 1) == 0) {
-            std::cout << "Done " << progress_counter * 100 / MAX_FILES_PER_INDEX << "% \r" << std::flush;
-        }
-
-        return Tokenizer::index_string_file(filestr, docid);
-    };
 
     // Vector of arrays with custom allocator.
     SortedKeysIndex a1;
@@ -181,28 +126,31 @@ int GeneralIndexer::read_some_files() {
     std::thread filecontentproducer(queue_produce_file_contents, std::ref(tarnames), std::ref(file_contents),
                                     std::ref(done_flag));
 #else
-    std::thread filecontentproducer(queue_produce_file_contents, std::ref(file_contents), std::ref(filepairs),
+    std::thread filecontentproducer(queue_produce_file_contents, std::ref(file_contents), std::ref(fp),
                                     std::ref(done_flag));
 #endif
 
-    std::vector<WordIndexEntry_unsafe> a0;
+    auto a0 = remake_vector<WordIndexEntry_unsafe>();
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
             file_contents.wait_for([&]() {
-                return file_contents.size() > 500 || done_flag;
+                return file_contents.size() > 3 || done_flag;
             });
         }
         if (!file_contents.size() && done_flag) continue;
         auto[contents, docidfilepair] = file_contents.pop();
 
-        auto temp = file_processor(contents, docidfilepair.document_id);
-        sortedkeys_reducer(a0, std::move(temp));
+        if (progress_counter++ % (MAX_FILES_PER_INDEX / 5000 + 1) == 0) {
+            std::cout << "Done " << progress_counter * 100 / MAX_FILES_PER_INDEX << "% "<<progress_counter<<"\r"<< std::flush;
+        }
+
+        auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
+        reduce_word_index_entries(a0, std::move(temp));
 
         if (a0.size() > 100000) {
             if (a0.size() % 10 == 0) a1.sort_and_group_shallow();
             a1.merge_into(SortedKeysIndex(std::move(a0)));
-            a0 = std::vector<WordIndexEntry_unsafe>();
-            a0.reserve(110000);
+            a0 = remake_vector<WordIndexEntry_unsafe>();
         }
     }
     a1.merge_into(SortedKeysIndex(std::move(a0)));
@@ -215,14 +163,14 @@ int GeneralIndexer::read_some_files() {
     a1.sort_and_group_all();
 
 
-    persist_indices(a1, filepairs);
+    persist_indices(a1, fp);
 
 
     return 1;
 }
 
 void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
-                                     FilePairs &filepairs) {// Multiple indices output possible. Check them.
+                                     const FilePairs &filepairs) {// Multiple indices output possible. Check them.
 
     std::string suffix = random_b64_str(5);
     if (std::filesystem::is_regular_file(
@@ -232,17 +180,15 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     }
     // Since indexing was successful, we move the processed files to the processed folder.
     fs::create_directory(data_files_dir / ("processed"));
-    for (const auto &fp : filepairs) {
-//        fs::rename(data_files_dir /"data"/ fp.file_name, data_files_dir / "processed" / fp.file_name);
-    }
-
 
     std::cout << "Persisting files to disk - " << suffix << "\n";
     auto filemap_path = "filemap-" + suffix;
     std::ofstream filemapstream(indice_files_dir / filemap_path, std::ios_base::binary);
-    std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
     Serializer::serialize(filemapstream, filepairs);
     Serializer::serialize(suffix, master);
+
+    // Put these new indices to the index_files list
+    std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
     index_file << suffix << "\n";
 }
 

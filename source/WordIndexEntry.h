@@ -4,20 +4,26 @@
 
 #include <string>
 #include <vector>
+#include <cassert>
 #include "DocumentPositionPointer.h"
 #include "CustomAllocatedVec.h"
+
+struct PreviewResult {
+    std::streamoff freq_off;
+    std::streamoff term_off;
+    std::string key;
+};
 
 struct WordIndexEntry_v2 {
     std::string key;
     uint32_t term_pos;
-    uint32_t positions_pos;
-    // TODO: check if CustomAllocatedVec makes sense for this use case?
-    std::vector<DocumentPositionPointer_v2> files;
+
+    CustomAllocatedVec<DocumentPositionPointer_v2, 50, 10> files;
 };
 
 struct WordIndexEntry_unsafe {
-    CustomAllocatedVec<DocumentPositionPointer> files;
     std::string key;
+    CustomAllocatedVec<DocumentPositionPointer, 7, 100000> files;
 
     WordIndexEntry_unsafe(std::string key, const std::vector<DocumentPositionPointer>& f) : key(std::move(key)), files() {
         for (const auto &i : f) {
@@ -38,6 +44,7 @@ struct WordIndexEntry {
     std::vector<DocumentPositionPointer> files;
 
     std::vector<std::pair<uint32_t, uint32_t>> get_frequencies_vector() const {
+        assert(std::is_sorted(files.begin(), files.end()));
         std::vector<std::pair<uint32_t, uint32_t>> freq_data;
         int prev_same_idx = 0;
         for (int i = 0; i <= files.size(); i++) {
@@ -48,7 +55,7 @@ struct WordIndexEntry {
             if (files[i].document_id != files[prev_same_idx].document_id) {
                 // We reached a different index.
                 auto num_occurences_in_term = i - prev_same_idx;
-                auto docid = files[i].document_id;
+                auto docid = files[prev_same_idx].document_id;
                 freq_data.emplace_back(docid, num_occurences_in_term);
                 prev_same_idx = i;
             }

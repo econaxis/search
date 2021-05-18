@@ -5,6 +5,7 @@
 #include "TopDocs.h"
 #include <vector>
 namespace DocumentsMatcher {
+
     TopDocs AND(std::vector<TopDocs> &results);
 };
 

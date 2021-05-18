@@ -18,7 +18,7 @@ struct WordIndexEntry_v2 {
     std::string key;
     uint32_t term_pos;
 
-    CustomAllocatedVec<DocumentPositionPointer_v2, 50, 10> files;
+    std::vector<DocumentPositionPointer_v2> files;
 };
 
 struct WordIndexEntry_unsafe {

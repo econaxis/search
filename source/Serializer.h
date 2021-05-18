@@ -47,6 +47,9 @@ namespace Serializer {
     WordIndexEntry read_work_index_entry(std::istream &frequencies, std::istream &terms, std::istream &positions);
 
     PreviewResult preview_work_index_entry(std::istream &frequencies, std::istream &terms);
+
+    std::string
+    read_work_index_entry_v2_optimized(std::istream &frequencies, std::istream &terms, std::vector<DocumentPositionPointer_v2> &buffer);
 };
 
 namespace Serializer::ffi {

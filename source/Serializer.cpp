@@ -173,25 +173,52 @@ void to_alphabetical(std::string& key) {
 
 }
 
-WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
-    uint32_t buf1[3]; // term_pos, positions_pos, num_files
-    frequencies.read(reinterpret_cast<char *>(buf1), sizeof(uint32_t) * 3);
+std::string Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies, std::istream &terms, std::vector<DocumentPositionPointer_v2>& buffer) {
+//    auto term_pos = read_vnum(frequencies);
+//    auto positions_pos = read_vnum(frequencies);
+//    auto num_files = read_vnum(frequencies);
 
-    terms.seekg(buf1[0]);
+    uint32_t num_buffers[3];
+//
+    frequencies.read(reinterpret_cast<char *>(num_buffers), 3 * sizeof(uint32_t));
+    auto term_pos = num_buffers[0]>>4;
+    auto num_files = num_buffers[2]>>4;
+    terms.seekg(term_pos);
+    auto key = read_str(terms);
+    to_alphabetical(key);
+
+    buffer.resize(num_files);
+
+
+    // These VInts are padded to 4 bytes, so we can do this.
+    frequencies.read(reinterpret_cast<char*>(buffer.data()), num_files * sizeof(DocumentPositionPointer_v2));
+    for (auto& i : buffer) {
+        i.document_id>>=4;
+        i.frequency>>=4;
+    }
+    return key;
+//    return out;
+}
+
+WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
+    auto term_pos = read_vnum(frequencies);
+    auto positions_pos = read_vnum(frequencies);
+    auto num_files = read_vnum(frequencies);
+    terms.seekg(term_pos);
 
     auto key = read_str(terms);
     to_alphabetical(key);
 
-    WordIndexEntry_v2 out{key, buf1[0], {}};
-    out.files.reserve(buf1[2]);
+    WordIndexEntry_v2 out{key, term_pos, {}};
+//    out.files.resize(num_files);
 
-    auto a = std::make_unique<uint32_t[]>(buf1[2] * 2);
-    auto a_raw = a.get();
 
     // These VInts are padded to 4 bytes, so we can do this.
-    frequencies.read(reinterpret_cast<char*>(a.get()), buf1[2] * 2 * sizeof(uint32_t));
-    for (int i = 0; i < buf1[2]; i++) {
-        out.files.push_back(DocumentPositionPointer_v2{a_raw[i*2], a_raw[i*2+1]});
+//    frequencies.read(reinterpret_cast<char*>(out.files.data()), num_files * 2 * sizeof(uint32_t));
+    frequencies.ignore(num_files * 2 * sizeof(uint32_t));
+    for (auto& i : out.files) {
+        i.frequency >>= 4;
+        i.document_id >>= 4;
     }
 
     return out;
@@ -201,13 +228,13 @@ StubIndexEntry Serializer::read_stub_index_entry_v2(std::istream &frequencies, s
     uint32_t frequencies_position = frequencies.tellg();
     auto wie = read_work_index_entry_v2(frequencies, terms);
     return StubIndexEntry{
-            Base26Num(wie.key), wie.term_pos, frequencies_position
+            Base26Num(wie.key),  frequencies_position
     };
 }
 
 
 std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istream &frequencies, std::istream &terms) {
-    constexpr int INTERVAL = 128; // read only every Nth entry.
+    constexpr int INTERVAL = 32; // read only every Nth entry.
     assert(frequencies.tellg() == 0 && terms.tellg() == 0);
 
     auto num_entries = Serializer::read_vnum(frequencies);

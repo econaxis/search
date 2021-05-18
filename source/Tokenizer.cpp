@@ -3,7 +3,6 @@
 #include <string>
 #include <fstream>
 
-#include <porter2_stemmer/porter2_stemmer.h>
 #include <robin_hood/robin_hood.h>
 
 int Tokenizer::clean_token_to_index(std::string &token) {
@@ -21,16 +20,17 @@ void clean_string(std::string& file) {
     }
 }
 
+
 std::vector<WordIndexEntry_unsafe> Tokenizer::index_string_file(std::string file, uint32_t docid) {
     clean_string(file);
     robin_hood::unordered_map<std::string, WordIndexEntry_unsafe> index_temp;
-    index_temp.reserve(file.length() / 20);
+    index_temp.reserve(file.length() / 5);
     int prev_pos, cur_pos = -1;
     while (prev_pos = cur_pos + 1, true) {
-        cur_pos = file.find_first_of(" ,.;-{}()[]#?/;!\t\n'\"", prev_pos);
+        cur_pos = file.find_first_of(" ", prev_pos);
         if (cur_pos == std::string::npos) break;
 
-        std::string temp = file.substr(prev_pos, cur_pos - prev_pos);
+        auto temp = file.substr(prev_pos, cur_pos - prev_pos);
 
         if (clean_token_to_index(temp)) {
             if (auto it = index_temp.find(temp); it == index_temp.end()) {
@@ -59,10 +59,4 @@ void Tokenizer::remove_punctuation(std::string &a) {
     for (auto &c : a) {
         c = (char) std::toupper(c);
     }
-}
-
-
-void Tokenizer::stem_english(std::string &a) {
-
-    Porter2Stemmer::stem(a);
 }

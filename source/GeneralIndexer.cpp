@@ -225,10 +225,3 @@ void GeneralIndexer::test_serialization() {
     std::ifstream terms(data_files_dir / "indices" / "terms-test_serialization");
     auto t = Serializer::read_sorted_keys_index_stub_v2(frequencies, terms);
 }
-
-void GeneralIndexer::test_searching() {
-    auto stub = SortedKeysIndexStub(indice_files_dir / "frequencies-test", indice_files_dir / "terms-test");
-    TopDocs t = stub.search_many_terms({"AIR", "TEST", "UNITED", "THEIR", "THEM", "THE"});
-
-    stub.search_one_term("AIR");
-}

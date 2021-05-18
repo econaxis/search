@@ -6,39 +6,53 @@
 #include <vector>
 #include <cassert>
 #include "DocumentPositionPointer.h"
+#include "CustomAllocatedVec.h"
 
 
 class TopDocs {
-    std::vector<DocumentPositionPointer_v2> docs;
-    bool is_sorted = false;
 public:
+    std::vector<DocumentPositionPointer_v2> docs;
     TopDocs(int reservation = 50) {
-        docs.reserve(reservation);
+//        if (reservation != 0) docs.reserve(reservation);
+        docs.reserve(50);
     };
 
-    void append_multi(std::vector<DocumentPositionPointer_v2> other) {
-#ifndef MERGE_SORT
-        auto begin = other.begin();
-        auto end = other.end();
 
-        auto my_begin = docs.begin();
-        auto my_end = docs.end();
-
-        std::vector<DocumentPositionPointer_v2> new_merged;
-        new_merged.reserve(other.size() + docs.size());
-
-        std::merge(begin, end, my_begin, my_end, std::back_inserter(new_merged));
-
-        docs = std::move(new_merged);
-#else
-        auto prev_doc_size = docs.size();
-        docs.resize(docs.size() + other.size());
-        memcpy(docs.data() + prev_doc_size, other.data(), other.size() * sizeof (DocumentPositionPointer_v2));
-#endif
+    auto begin() const {
+        return docs.begin();
     }
 
-    void append_multi(TopDocs other) {
-        append_multi(std::move(other.docs));
+    auto end() const { return docs.end(); }
+
+    auto begin() { return docs.begin(); }
+
+    auto end() { return docs.end(); }
+
+    auto size() const { return docs.size(); }
+
+    template<typename Iterator>
+    void append_multi(Iterator ibegin, Iterator iend) {
+//        assert(cur_size < docs.size());
+//
+//        if(iend - ibegin + cur_size < docs.size()) {
+//            docs.resize(iend-ibegin + cur_size * 1.5F);
+//        }
+//        auto prevsize = cur_size;
+//
+//        std::memcpy(docs.data() + cur_size, ibegin.base(), (iend - ibegin) * sizeof(typename Iterator::value_type));
+//
+//        cur_size += iend - ibegin;
+        auto prevsize = docs.size();
+        docs.resize(iend - ibegin + prevsize);
+        std::memcpy(docs.data() + prevsize, ibegin.base(), (iend - ibegin) * sizeof(typename Iterator::value_type));
+//        std::copy(ibegin, iend, std::back_inserter(docs));
+//
+//        cur_size += new_size;
+//        std::memcpy(reinterpret_cast<char *>(my_end.base()), ibegin.base(),
+//                    new_size * sizeof(DocumentPositionPointer_v2));
+
+        std::inplace_merge(begin(), begin() + prevsize, end());
+
     }
 
     void sort_by_ids() {
@@ -51,45 +65,38 @@ public:
     }
 
     void merge_similar_docs() {
-        auto prev_doc = docs.begin();
+        if(docs.empty()) return;
+//        assert(cur_size <= docs.size());
+//        assert(std::is_sorted(begin(), end()));
+
+        auto &prev_doc = *begin();
         auto collected_score = 0;
 
         // Merge similar docs.
-        for (auto doc = docs.begin(); doc != docs.end(); doc++) {
-            if (doc->document_id != prev_doc->document_id || docs.end() - doc == 1) {
-                prev_doc->frequency = collected_score;
+        for (int i = 0; i < docs.size(); i++) {
+            auto &doc = docs[i];
+            if (doc.document_id != prev_doc.document_id) {
+                prev_doc.frequency += collected_score;
                 prev_doc = doc;
+                collected_score = 0;
             } else {
-                collected_score += doc->frequency;
-                doc->frequency = 0;
-                doc->document_id = 0;
+                collected_score += doc.frequency;
+                doc.frequency = 0;
+                doc.document_id = 0;
             }
+            prev_doc = doc;
         }
+        prev_doc.frequency = collected_score;
 
-        docs.erase(std::remove_if(docs.begin(), docs.end(), [](const auto &t) {
-            return !(t.frequency || t.document_id);
-        }), docs.end());
+//        docs.erase(std::remove_if(docs.begin(), docs.end(), [](const auto &t) {
+//            return !(t.frequency && t.document_id);
+//        }), docs.end());
 
-        std::sort(docs.begin(), docs.end(), [](auto &t, auto &t1) {
+        std::sort(begin(), end(), [](auto &t, auto &t1) {
             return t.frequency < t1.frequency;
         });
     }
 
-    auto cbegin() const {
-        return docs.cbegin();
-    }
-
-    auto cend() const {
-        return docs.cend();
-    }
-
-    auto begin() {
-        return docs.begin();
-    }
-
-    auto end() { return docs.end(); }
-
-    auto size() const { return docs.size(); }
 
 };
 

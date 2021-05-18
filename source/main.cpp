@@ -11,10 +11,10 @@
 namespace fs = std::filesystem;
 
 
-void profile_indexing(std::vector<SortedKeysIndexStub> &index) {
+void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::vector<DocIDFilePair>>& filemap) {
     using namespace std::chrono;
 
-    constexpr int NUM_SEARCHES = 100000;
+    constexpr int NUM_SEARCHES = 10000;
     std::uniform_int_distribution<uint> dist(0, 514); // ASCII table codes for normal characters.
     auto t1 = high_resolution_clock::now();
     for (int i = 0; i < NUM_SEARCHES; i++) {
@@ -34,10 +34,11 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index) {
             result = SortedKeysIndexStub::collection_merge_search(index, query);
 //            result = index[0].search_many_terms(query);
         }
+//        ResultsPrinter::print_results(result, filemap, query);
 
-        if (i % 1000 == 0)
+        if (i % 50 == 0)
             std::cout << "Matched " << result.size() << " files for " << temp1 << " " << temp << " "
-                      << i * 100 / NUM_SEARCHES << "%\r"<<std::flush;
+                      << i * 100 / NUM_SEARCHES << "%\n"<<std::flush;
     }
     auto time = high_resolution_clock::now() - t1;
     auto timedbl = duration_cast<milliseconds>(time).count();
@@ -65,17 +66,15 @@ load_all_indices() {
         std::cout << "Used database file: " << line << "\n";
 
         std::ifstream filepairstream(indice_files_dir / ("filemap-" + line), std::ios_base::binary);
-//        auto temp = Serializer::read_filepairs(filepairstream);
-//        filepairs.push_back(temp);
+        auto temp = Serializer::read_filepairs(filepairstream);
+        filepairs.push_back(temp);
         indices.emplace_back(indice_files_dir / ("frequencies-" + line),
                                     indice_files_dir / ("terms-" + line));
 
-        if(indices.size() > 3) break;
+        if(indices.size() >= 10) break;
     }
 
 
-    // DEBUG - clear filepairs, we don't need it.
-    filepairs.clear();
     return {std::move(indices), std::move(filepairs)};
 }
 
@@ -106,8 +105,7 @@ int main(int argc, char *argv[]) {
 
 
     auto [indices, filemap] = load_all_indices();
-    profile_indexing(indices);
-
+    profile_indexing(indices, filemap);
     std::string inp_line;
     std::cout << "Ready\n>> ";
 
@@ -125,6 +123,6 @@ int main(int argc, char *argv[]) {
             }
         }
         auto temp1 = SortedKeysIndexStub::collection_merge_search(indices, terms);
-        ResultsPrinter::print_results(temp1, filemap);
+//        ResultsPrinter::print_results(temp1, filemap, terms);
     }
 }

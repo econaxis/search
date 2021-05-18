@@ -36,8 +36,8 @@ public:
             current_allocated += BLOCK_INTERVAL;
             return block_loc;
         } else {
-            throw std::runtime_error("Memory of contiguous allocator exceeded");
-//            return nullptr;
+            throw std::runtime_error("Mem contiguous alloc. exceeded");
+            //            return nullptr;
         }
     }
 

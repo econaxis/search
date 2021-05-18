@@ -58,10 +58,11 @@ public:
     }
 
     void reserve(int how_many) {
-        if(how_many <= total_size) return;
+        if (how_many <= total_size && block) return;
 
         T *heap = new T[how_many];
-        std::memcpy(heap, block, cur_size * sizeof(T));
+
+        if (block) std::memcpy(heap, block, cur_size * sizeof(T));
 
         free_mem();
         block = heap;
@@ -69,7 +70,7 @@ public:
         total_size = how_many;
     }
 
-    CustomAllocatedVec &operator=(CustomAllocatedVec<T, block_size, num_blocks> &&other)  {
+    CustomAllocatedVec &operator=(CustomAllocatedVec<T, block_size, num_blocks> &&other) {
 
         this->block = other.block;
         this->total_size = other.total_size;
@@ -79,11 +80,11 @@ public:
         return *this;
     }
 
-    CustomAllocatedVec(CustomAllocatedVec<T, block_size, num_blocks> &&other)  {
+    CustomAllocatedVec(CustomAllocatedVec<T, block_size, num_blocks> &&other) {
         operator=(std::move(other));
     }
 
-    CustomAllocatedVec(const CustomAllocatedVec<T, block_size, num_blocks> &other)  {
+    CustomAllocatedVec(const CustomAllocatedVec<T, block_size, num_blocks> &other) {
         if (other.is_heap) {
             block = new T[other.total_size];
             is_heap = true;
@@ -111,6 +112,10 @@ public:
         free_mem();
     }
 
+    std::size_t size() const {
+        return cur_size;
+    }
+
     struct iterator;
 
 
@@ -119,6 +124,14 @@ public:
     }
 
     iterator end() {
+        return iterator{block + cur_size};
+    }
+
+    iterator begin() const {
+        return iterator{block};
+    }
+
+    iterator end() const {
         return iterator{block + cur_size};
     }
 
@@ -144,6 +157,14 @@ struct CustomAllocatedVec<T, block_size, num_blocks>::iterator {
 
     bool operator==(const iterator &other) {
         return where == other.where;
+    }
+
+    value_type *base() {
+        return where;
+    }
+
+    value_type *operator->() {
+        return where;
     }
 
     iterator &operator++() {

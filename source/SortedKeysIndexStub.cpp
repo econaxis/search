@@ -8,8 +8,8 @@
 
 namespace fs = std::filesystem;
 
-constexpr unsigned long MATCHALL_BONUS = 50;
-constexpr unsigned long MATCHALL_SHORT_BONUS = 20;
+constexpr unsigned long MATCHALL_BONUS = 20;
+constexpr unsigned long MATCHALL_SHORT_BONUS = 8;
 
 
 /**
@@ -32,18 +32,6 @@ constexpr unsigned long MATCHALL_SHORT_BONUS = 20;
 //}
 //
 
-constexpr unsigned int pow4(std::size_t a) {
-    return a * a * a * a;
-}
-
-constexpr unsigned int pow2(std::size_t a) {
-    return a * a;
-}
-
-constexpr unsigned int pow8(std::size_t a) {
-    return pow4(pow4(a));
-}
-
 /**
  * Compares the shorter string against the longer string, checking if shorter is a prefix of longer.
  *
@@ -59,11 +47,11 @@ int string_prefix_compare(const std::string &shorter, const std::string &longer)
 
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
-            return pow2(i) / (ls - ss + 1);
+            return i/ (ls - ss + 1);
         }
     }
 
-    const auto score = pow2(ss) / (ls - ss + 1) + MATCHALL_SHORT_BONUS;
+    const auto score = ss / (ls - ss + 1) + MATCHALL_SHORT_BONUS;
     if (ss == ls) return MATCHALL_BONUS + score;
     else return score;
 }
@@ -91,7 +79,7 @@ constexpr uint64_t alphabet_pow[] = {LETTER_POW1, LETTER_POW2, LETTER_POW3, LETT
 #include <cmath>
 #include <numeric>
 
-constexpr std::size_t MAX_CHARS = 8;
+constexpr std::size_t MAX_CHARS = 10;
 
 /**
  * Used to convert a string to a 64 bit unsigned integer for quicker comparison and easier memory usage.
@@ -108,27 +96,31 @@ Base26Num::Base26Num(std::string from) {
     }
 }
 
-int hits = 0, misses =0;
+std::vector<DocumentPositionPointer_v2> wiebuffer;
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term)const  {
     auto term_after = Base26Num(term);
     auto term_before = Base26Num(term);
-    term_before.num -= 26;
-    term_after.num += 26;
 
-    auto file_start = std::upper_bound(index.begin(), index.end(), term_before) - 1;
-    auto file_end = std::upper_bound(index.begin(), index.end(), term_after);
+    auto file_start = std::lower_bound(index.begin(), index.end(), term_before) - 1;
+    auto file_end = std::upper_bound(index.begin(), index.end(), term_after) + 1;
 
-    if (file_start == index.end()) { return TopDocs(0); }
+    file_start = std::clamp(file_start, index.begin(), index.end());
+    file_end = std::clamp(file_end, index.begin(), index.end());
+
+    if (file_start == index.end()) { return TopDocs{}; }
 
 
     frequencies.seekg(file_start->doc_position);
-    terms.seekg(file_start->terms_position);
+
+    // Peek the term position.
+    auto term_pos = Serializer::read_vnum(frequencies);
+    frequencies.seekg(file_start->doc_position);
+    terms.seekg(term_pos);
 
     auto frequencies_pos = frequencies.tellg();
 
-    TopDocs output((file_end - file_start) * 3UL);
-
+    TopDocs output, shorter;
     while (frequencies_pos <= file_end->doc_position) {
         // Preview the WIE without loading everything into memory.
         auto [freq_initial_off, terms_initial_off, key] = Serializer::preview_work_index_entry(frequencies, terms);
@@ -137,18 +129,27 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term)const  {
         frequencies_pos += freq_initial_off;
         // This uses the normal string-string comparison rather than uint64.
         // If more than 3 characters match, then we good.
-        if (uint32_t score = string_prefix_compare(term, key); score >= output.size() * 5) {
+        if (uint32_t score = string_prefix_compare(term, key); score >= std::min(output.size(), 5UL) + 5) {
             // Seek back to original previewed position.
             frequencies.seekg(-freq_initial_off, std::ios_base::cur);
             terms.seekg(-terms_initial_off, std::ios_base::cur);
-            auto wie = Serializer::read_work_index_entry_v2(frequencies, terms);
-            for (auto &f : wie.files) {
-                f.frequency = (f.frequency + 1) * score;
+            auto key = Serializer::read_work_index_entry_v2_optimized(frequencies, terms, wiebuffer);
+
+            for (auto &f : wiebuffer) {
+                float coefficient = (float) (f.frequency - 1) / 3.F + 1;
+                f.frequency = coefficient * (float) score;
             }
 
-            output.append_multi(wie.files.to_vector());
+            shorter.append_multi(wiebuffer.begin(), wiebuffer.end());
+
+            if(shorter.size() > output.size() / 3 + 20) {
+                output.append_multi(shorter.begin(), shorter.end());
+                shorter.docs.clear();
+            }
         }
     }
+    output.append_multi(shorter.begin(), shorter.end());
+
     return output;
 }
 
@@ -159,10 +160,9 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
     for(int i = 0; i < terms.size(); i++) {
         auto result = this->search_one_term(terms[i]);
         result.sort_by_ids();
-        for(auto& j : result) j.unique_identifier = i;
+//        for(auto& j : result) j.id = i;
         all_outputs.push_back(std::move(result));
     };
-
     return DocumentsMatcher::AND(all_outputs);
 }
 
@@ -181,20 +181,22 @@ SortedKeysIndexStub::SortedKeysIndexStub(std::filesystem::path frequencies, std:
  TopDocs SortedKeysIndexStub::collection_merge_search(std::vector<SortedKeysIndexStub> &indices, const std::vector<std::string> &search_terms) {
     std::vector<TopDocs> results;
     int incrementing = 0;
-    std::transform(indices.begin(), indices.end(), std::back_inserter(results), [&](auto& index) {
+    for (auto& index : indices) {
         auto temp = index.search_many_terms(search_terms);
         for (DocumentPositionPointer_v2 &d : temp) {
-            d.unique_identifier = incrementing;
+//            d.unique_identifier = incrementing;
         }
         incrementing++;
-        return temp;
-    });
+        results.push_back(temp);
+    };
 
 
-    TopDocs joined = std::reduce(results.begin(), results.end(), TopDocs{}, [](TopDocs one, TopDocs two) {
-        one.append_multi(std::move(two));
-        return one;
+    TopDocs joined = std::reduce(results.begin(), results.end(), TopDocs{}, [&](auto r1, auto r2) {
+        r1.append_multi(r2.begin(), r2.end());
+        return r1;
     });
-//    joined.sort_by_ids();
-    return joined;
+
+    joined.merge_similar_docs();
+
+     return joined;
 }

@@ -5,29 +5,10 @@
 #include <vector>
 #include <cstdint>
 #include <filesystem>
-#include <robin_hood/robin_hood.h>
 #include <fstream>
-#include "DocumentPositionPointer.h"
 #include "TopDocs.h"
+#include "Base26Num.h"
 
-
-struct Base26Num {
-    uint64_t num; // Represent 3 alphabet letters in uint16_t.
-    explicit Base26Num(std::string from);
-    explicit Base26Num(uint64_t num): num(num){};
-
-    bool operator<(Base26Num other) const {
-        return num < other.num;
-    }
-
-    Base26Num operator+(Base26Num other) {
-        return Base26Num{num + other.num};
-    }
-    Base26Num operator-(Base26Num other) {
-        if (other.num >= num)  return *this;
-        else return Base26Num{num - other.num};
-    }
-};
 
 
 /**
@@ -63,22 +44,20 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
  * array and seeks to that location on disk to lookup the specific key and associated documents.
  */
 class SortedKeysIndexStub {
+public:
+    using FilterFunc = int (const std::string&, const std::string&) const;
+private:
 
     mutable std::ifstream frequencies, terms;
     std::unique_ptr<char[]> buffer;
-
+    int(&filterfunc)(const std::string&, const std::string&);
 public:
+
+    static constexpr int MAX_FILES_PER_TERM = 30000;
     std::vector<StubIndexEntry> index;
 
     explicit SortedKeysIndexStub(std::filesystem::path frequencies,
                                  std::filesystem::path terms);
-
-//    SortedKeysIndexStub& operator=(SortedKeysIndexStub&& other) {
-//        frequencies.swap(other.frequencies);
-//        terms.swap(other.terms);
-//        index = other.index;
-//        return *this;
-//    }
 
     SortedKeysIndexStub() = default;
 

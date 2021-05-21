@@ -23,7 +23,7 @@ struct WordIndexEntry_v2 {
 
 struct WordIndexEntry_unsafe {
     std::string key;
-    CustomAllocatedVec<DocumentPositionPointer, 7, 100000> files;
+    CustomAllocatedVec<DocumentPositionPointer, 3, 100000> files;
 
     WordIndexEntry_unsafe(std::string key, const std::vector<DocumentPositionPointer>& f) : key(std::move(key)), files() {
         for (const auto &i : f) {
@@ -46,8 +46,8 @@ struct WordIndexEntry {
     std::vector<std::pair<uint32_t, uint32_t>> get_frequencies_vector() const {
         assert(std::is_sorted(files.begin(), files.end()));
         std::vector<std::pair<uint32_t, uint32_t>> freq_data;
-        int prev_same_idx = 0;
-        for (int i = 0; i <= files.size(); i++) {
+        std::size_t prev_same_idx = 0;
+        for (std::size_t i = 0; i <= files.size(); i++) {
             if (i == files.size()) {
                 freq_data.emplace_back(files[i - 1].document_id, i - prev_same_idx);
                 break;

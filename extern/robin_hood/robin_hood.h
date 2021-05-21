@@ -2206,7 +2206,7 @@ private:
 
         const size_t oldMaxElementsWithBuffer = calcNumElementsWithBuffer(mMask + 1);
 
-        // resize operation: move stuff
+        // resize_realloc operation: move stuff
         initData(numBuckets);
         if (oldMaxElementsWithBuffer > 1) {
             for (size_t i = 0; i < oldMaxElementsWithBuffer; ++i) {
@@ -2408,7 +2408,7 @@ private:
         return true;
     }
 
-    // True if resize was possible, false otherwise
+    // True if resize_realloc was possible, false otherwise
     bool increase_size() {
         // nothing allocated yet? just allocate InitialNumElements
         if (0 == mMask) {
@@ -2428,12 +2428,12 @@ private:
 
         nextHashMultiplier();
         if (mNumElements * 2 < calcMaxNumElementsAllowed(mMask + 1)) {
-            // we have to resize, even though there would still be plenty of space left!
+            // we have to resize_realloc, even though there would still be plenty of space left!
             // Try to rehash instead. Delete freed memory so we don't steadyily increase mem in case
             // we have to rehash a few times
             rehashPowerOfTwo(mMask + 1, true);
         } else {
-            // Each resize use a different hash so we don't so easily overflow.
+            // Each resize_realloc use a different hash so we don't so easily overflow.
             // Make sure we only have odd numbers, so that the multiplication is reversible!
             rehashPowerOfTwo((mMask + 1) * 2, false);
         }

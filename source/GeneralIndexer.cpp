@@ -75,8 +75,14 @@ void queue_produce_file_contents_tar(std::vector<std::string> tarnames, SyncedQu
 void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
                                  std::atomic_bool &done_flag) {
     for (auto &entry : filepairs) {
-        auto len = fs::file_size(data_files_dir / "data" / entry.file_name);
-        std::ifstream file(data_files_dir / "data" / entry.file_name);
+        auto abspath = data_files_dir / "data" / entry.file_name;
+        if(!fs::exists(abspath)) {
+            std::cerr<<"Path "<<abspath.c_str()<<" nonexistent\n";
+            continue;
+        }
+
+        auto len = fs::file_size(abspath);
+        std::ifstream file(abspath);
         if (!file.is_open()) {
             std::cout << "Couldn't open file " << entry.file_name << "!\n";
         }
@@ -107,7 +113,7 @@ void reduce_word_index_entries(std::vector<WordIndexEntry_unsafe> &op1,
 template<typename T>
 std::vector<T> remake_vector() {
     auto a = std::vector<T>();
-    a.reserve(110000);
+    a.reserve(11000);
     return a;
 }
 
@@ -147,7 +153,7 @@ int GeneralIndexer::read_some_files() {
         auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
         reduce_word_index_entries(a0, std::move(temp));
 
-        if (a0.size() > 100000) {
+        if (a0.size() > 10000) {
             if (a0.size() % 10 == 0) a1.sort_and_group_shallow();
             a1.merge_into(SortedKeysIndex(std::move(a0)));
             a0 = remake_vector<WordIndexEntry_unsafe>();

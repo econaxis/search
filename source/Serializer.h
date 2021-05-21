@@ -8,7 +8,7 @@
 #include "SortedKeysIndexStub.h"
 #include <filesystem>
 #include <memory_resource>
-
+#include <immintrin.h>
 
 class SortedKeysIndex;
 
@@ -48,8 +48,16 @@ namespace Serializer {
 
     PreviewResult preview_work_index_entry(std::istream &frequencies, std::istream &terms);
 
-    std::string
-    read_work_index_entry_v2_optimized(std::istream &frequencies, std::istream &terms, std::vector<DocumentPositionPointer_v2> &buffer);
+    int
+    read_work_index_entry_v2_optimized(std::istream &frequencies,
+                                       __m256 *buffer);
+
+    std::pair<std::string, uint32_t> read_work_index_entry_v2_mmap(const char **frequencies, std::ifstream &terms,
+                                                                   std::vector<DocumentPositionPointer_v2> &buffer);
+
+    int read_work_index_entry_v2_optimized(std::istream &frequencies, __m256 *buffer);
+
+    int read_work_index_entry_v2_optimized(std::istream &frequencies, __m256 *buffer);
 };
 
 namespace Serializer::ffi {

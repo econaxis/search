@@ -29,6 +29,9 @@ struct DocumentPositionPointer_v2 {
     bool operator<(const DocumentPositionPointer_v2& other) const {
         return document_id < other.document_id;
     }
+    bool operator<=(const DocumentPositionPointer_v2& other) const {
+        return document_id <= other.document_id;
+    }
     bool operator==(const DocumentPositionPointer_v2& other) const {
         return (document_id == other.document_id);
     }

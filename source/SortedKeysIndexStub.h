@@ -36,7 +36,7 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
     return stub.key < other;
 }
 
-
+#include <immintrin.h>
 /**
  * Similar to SortedKeysIndex, but it only loads a specific subset of the index into memory.
  * For example, it loads only every 64th term into memory. The string is converted to a base26 number (as the string
@@ -47,7 +47,7 @@ class SortedKeysIndexStub {
 public:
     using FilterFunc = int (const std::string&, const std::string&) const;
 private:
-
+    mutable std::unique_ptr<__m256[]> alignedbuf;
     mutable std::ifstream frequencies, terms;
     std::unique_ptr<char[]> buffer;
     int(&filterfunc)(const std::string&, const std::string&);

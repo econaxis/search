@@ -22,13 +22,15 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
         auto temp1 = (std::string) strings[dist(randgen())];
         auto temp2 = (std::string) strings[dist(randgen())];
         auto temp3 = (std::string) strings[dist(randgen())];
+        auto temp4 = (std::string) strings[dist(randgen())];
 
         Tokenizer::clean_token_to_index(temp);
         Tokenizer::clean_token_to_index(temp1);
         Tokenizer::clean_token_to_index(temp2);
         Tokenizer::clean_token_to_index(temp3);
+        Tokenizer::clean_token_to_index(temp4);
 
-        std::vector<std::string> query{temp, temp1, temp2, temp3};
+        std::vector<std::string> query{temp, temp1, temp2};
         TopDocs result;
         if (temp.size() && temp1.size() && temp2.size() && temp3.size()) {
             result = SortedKeysIndexStub::collection_merge_search(index, query);
@@ -71,7 +73,7 @@ load_all_indices() {
         indices.emplace_back(indice_files_dir / ("frequencies-" + line),
                              indice_files_dir / ("terms-" + line));
 
-        if (indices.size() >= 10000) break;
+        if (indices.size() >= 10) break;
     }
 
 
@@ -90,61 +92,83 @@ load_all_indices() {
 }
 
 void test() {
-    auto t = std::unique_ptr<DocumentPositionPointer_v2[]>(new (std::align_val_t(64)) DocumentPositionPointer_v2[500000000]);
+    constexpr int numelem = 500000;
+    auto t = std::unique_ptr<DocumentPositionPointer_v2[]>(new (std::align_val_t(64)) DocumentPositionPointer_v2[numelem]);
+    auto t32 = std::unique_ptr<uint16_t []>(new (std::align_val_t(64)) uint16_t[numelem]);
     auto titer = t.get();
+    auto titer32 = t32.get();
 
-    for(;titer - t.get() < 500000000; titer++) {
+
+    for(;titer - t.get() < numelem; titer++) {
         *titer = DocumentPositionPointer_v2{static_cast<uint32_t>((titer - t.get())%65500), 17};
+        *titer32 = static_cast<uint16_t>((titer - t.get())%65500);
+        titer32++;
     }
 
-    std::vector<__m256i> buf16(50000000);
-
-    auto *cur_iterator = buf16.data();
-    auto beg = (uint32_t *) t.get();
-    auto end = (uint32_t *) t.get() + 500000000;
-
-    uint32_t selector = 0x0000FFFF;
-    __m256i select = _mm256_set1_epi32(selector);
-    measure();
-    for (auto i = beg; i + 32 < end; i += 32) {
-        __m256i first = _mm256_load_si256((__m256i *) i);
-        __m256i second = _mm256_load_si256((__m256i *) (i + 8));
-        __m256i third = _mm256_load_si256((__m256i *) (i + 16));
-        __m256i fourth = _mm256_load_si256((__m256i *) (i + 24));
-        __m256i packed = _mm256_packus_epi32(first, second);
-        packed = _mm256_permute4x64_epi64(packed, 0b11011000);
-        packed = _mm256_and_si256(packed, select);
 
 
-        __m256i packed1 = _mm256_packus_epi32(third, fourth);
-        packed1 = _mm256_permute4x64_epi64(packed1, 0b11011000);
-        packed1 = _mm256_and_si256(packed1, select);
+//    auto *cur_iterator = buf16.data();
+//    auto beg = (uint32_t *) t.get();
+//    auto end = (uint32_t *)(t.get() + numelem );
 
 
+//    uint32_t selector = 0x0000FFFF;
+//    __m256i select = _mm256_set1_epi32(selector);
+//    measure();
+//    for (auto i = beg; i + 32 < end; i += 32) {
+//        __m256i first = _mm256_load_si256((__m256i *) i);
+//        __m256i second = _mm256_load_si256((__m256i *) (i + 8));
+//        __m256i third = _mm256_load_si256((__m256i *) (i + 16));
+//        __m256i fourth = _mm256_load_si256((__m256i *) (i + 24));
+//        __m256i packed = _mm256_packus_epi32(first, second);
+//        packed = _mm256_permute4x64_epi64(packed, 0b11011000);
+//        packed = _mm256_and_si256(packed, select);
+//
+//
+//        __m256i packed1 = _mm256_packus_epi32(third, fourth);
+//        packed1 = _mm256_permute4x64_epi64(packed1, 0b11011000);
+//        packed1 = _mm256_and_si256(packed1, select);
+//
+//
+//
+//        __m256i joined_all = _mm256_packus_epi32(packed, packed1);
+//
+//        __m256i reordered = _mm256_permute4x64_epi64(joined_all, 0b11011000);
+//        _mm256_storeu_si256((__m256i *) cur_iterator, reordered);
+//        cur_iterator+=16;
+//    }
 
-        __m256i joined_all = _mm256_packus_epi32(packed, packed1);
-
-        __m256i reordered = _mm256_permute4x64_epi64(joined_all, 0b11011000);
-        _mm256_store_si256((__m256i *) cur_iterator, reordered);
-        cur_iterator++;
-    }
-
-    int timea = measure() / 1000;
-    cur_iterator = buf16.data();
-    measure();
 //    for(auto &p : t) {
 //        *cur_iterator = (uint16_t) p.document_id;
 //        cur_iterator++;
 //    }
-    int timeb = measure() / 1000;
 
-    std::cout<<timea<<" "<<timeb<<"\n";
+    int counter1 = 0, counter2 = 0;
+    measure();
+    for(int i =0; i < 100000; i++) {
+        auto a  = std::upper_bound(t.get(), t.get() + numelem, 18320,[&](auto& t1, auto& t2) {
+            counter1++;
+            return t1 < t2.document_id;
+        }) - 1;
+        if (a->document_id != 18320) {
+            throw std::runtime_error("fdsa");
+        }
+    }
+    std::cout<<measure()<<"\n";
+    measure();
+    for(int i =0; i < 100000; i++) {
+        auto a = std::upper_bound(t32.get(), t32.get() + numelem, 18320) - 1;
+        if (*a != 18320) {
+            throw std::runtime_error("ffdsadsa");
+        }
+    }
+    int b = measure();
+    std::cout<<b<<"\n"<<counter1<<" "<<counter2<<"\n";
     bool dummy = false;
 }
 
 
 int main(int argc, char *argv[]) {
-    test();
     using namespace std::chrono;
     initialize_directory_variables();
 

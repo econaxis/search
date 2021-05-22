@@ -73,20 +73,29 @@ using namespace std::chrono;
 
 using DPP = DocumentPositionPointer_v2;
 
-static const DPP *run_prediction(const DPP *start, const DPP *end, const DPP *value) {
+static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *value) {
     auto prediction = end;
-//
-//    auto difference = end - start;
-//    if (difference > 3 && *value < *(start + 2)) {
-//        prediction = start + 2;
-//    } else if (difference > 65 && *value < *(start + 64)) {
-//        prediction = start + 64;
-//    }
+
+    auto difference = end - start;
+
+    if (difference > 3 && *value < *(start + 2)) {
+        prediction = start + 2;
+    } else if (difference > 65 && *value < *(start + 64)) {
+        prediction = start + 64;
+    } else if (difference > 129 && *value < *(start + 128)) {
+        prediction = start + 128;
+    } else if (difference > 513 && *value < *(start + 512)) {
+        prediction = start + 512;
+    } else if (difference > 1025 && *value < *(start + 1024)) {
+        prediction = start + 1024;
+    } else if (difference > 4097 && *value < *(start + 4096)) {
+        prediction = start + 4096;
+    }
 
     return prediction;
 }
 
-bool unroll_binary_search_find(const DocumentPositionPointer_v2 *begin, const DocumentPositionPointer_v2 *end,
+bool unroll_binary_search_find(const DocumentPositionPointer_v2 *&begin, const DocumentPositionPointer_v2 *end,
                                const DocumentPositionPointer_v2 *value) {
     auto *optfind = begin;
 
@@ -95,7 +104,7 @@ bool unroll_binary_search_find(const DocumentPositionPointer_v2 *begin, const Do
     } else {
         auto *optimized_end = run_prediction(begin, end, value);
         optfind =
-                std::upper_bound(begin, end, value, [](const auto *t1, const auto &t2) {
+                std::upper_bound(begin, optimized_end, value, [](const auto *t1, const auto &t2) {
                     return t1->document_id < t2.document_id;
                 }) - 1;
 
@@ -118,8 +127,6 @@ TopDocs backup(std::vector<TopDocs> &results) {
     results[0].sort_by_frequencies();
     return results[0];
 }
-
-#include <immintrin.h>
 
 /**
  * Expects elements in sorted form.
@@ -145,25 +152,24 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
 
     std::vector<const TopDocs::value_type *> walkers, enders;
-    auto *cur_iterator = docidbuf.data();
     for (auto &t: results) {
-        auto beg = (uint32_t *) t.begin().base();
-        auto end = (uint32_t *) t.end().base();
-        for (auto i = beg; i < end; i += 32) {
-            __m256i first = _mm256_loadu_si256((__m256i *) i);
-            __m256i second = _mm256_loadu_si256((__m256i *) (i+8));
-            __m256i third = _mm256_loadu_si256((__m256i *) (i + 16));
-            __m256i fourth = _mm256_loadu_si256((__m256i *) (i+24));
-            __m256i packed = _mm256_packus_epi32(first, second);
-            __m256i packed1 = _mm256_packus_epi32(third, fourth);
-            __m256i permuted = _mm256_permute4x64_epi64(packed, 0b00100111);
-            __m256i permuted1 = _mm256_permute4x64_epi64(packed1, 0b00100111);
-            __m256i joined_all = _mm256_packus_epi32(permuted, permuted1);
-            __m256i reordered = _mm256_permute4x64_epi64(joined_all, 0b00100111);
-
-            _mm256_store_si256(cur_iterator, reordered);
-            cur_iterator++;
-        }
+//        auto beg = (uint32_t *) t.begin().base();
+//        auto end = (uint32_t *) t.end().base();
+//        for (auto i = beg; i < end; i += 32) {
+//            __m256i first = _mm256_loadu_si256((__m256i *) i);
+//            __m256i second = _mm256_loadu_si256((__m256i *) (i+8));
+//            __m256i third = _mm256_loadu_si256((__m256i *) (i + 16));
+//            __m256i fourth = _mm256_loadu_si256((__m256i *) (i+24));
+//            __m256i packed = _mm256_packus_epi32(first, second);
+//            __m256i packed1 = _mm256_packus_epi32(third, fourth);
+//            __m256i permuted = _mm256_permute4x64_epi64(packed, 0b00100111);
+//            __m256i permuted1 = _mm256_permute4x64_epi64(packed1, 0b00100111);
+//            __m256i joined_all = _mm256_packus_epi32(permuted, permuted1);
+//            __m256i reordered = _mm256_permute4x64_epi64(joined_all, 0b00100111);
+//
+//            _mm256_store_si256(cur_iterator, reordered);
+//            cur_iterator++;
+//        }
 
         walkers.push_back(t.begin().base());
         enders.push_back(t.end().base());
@@ -173,7 +179,7 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
     if (!min_docs.size()) return TopDocs();
 
     uint64_t score_cutoff = 0;
-    if (min_docs.size() > 1000) {
+    if (min_docs.size() > 700) {
         for (auto &td: min_docs) score_cutoff += td.frequency;
         score_cutoff /= min_docs.size();
     }
@@ -197,7 +203,9 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
                 if (unroll_binary_search_find(walkers[idx], enders[idx], pair.base())) {
                     // Multiply the accumulated score by pair frequency.
                     // Therefore, terms are advantaged for having high scores across all queries
-                    acculumated_score += pair->frequency;
+
+                    // Add the frequency of the found term.
+                    acculumated_score += (walkers[idx] - 1)->frequency;
                 } else {
                     exists_in_all = false;
                     break;
@@ -222,9 +230,10 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
     auto _t = measure();
 
-    deb << sorted_sizes[0].first << " " << _t << "\n";
+    deb << sorted_sizes[0].first << " " << _t << " " << min_docs.size() << "\n";
 
     if (min_docs.size() < 5) {
+        return min_docs;
         return backup(results);
     } else {
         return min_docs;

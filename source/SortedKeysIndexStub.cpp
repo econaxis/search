@@ -46,10 +46,6 @@ std::ofstream deb("/tmp/debug");
 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
-//    std::vector<DocumentPositionPointer_v2> wiebuffer(8000);
-    std::unique_ptr<__m256[]> alignedbuf = std::make_unique<__m256[]>(MAX_FILES_PER_TERM * 2 / 8);
-
-
     auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term)) - 1;
     auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term)) + 1;
 
@@ -70,20 +66,21 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
     TopDocs output;
     std::vector<TopDocs> outputs;
+    outputs.reserve(50);
     while (frequencies_pos <= file_end->doc_position) {
         // Preview the WIE without loading everything into memory.
         auto[freq_initial_off, terms_initial_off, key] = Serializer::preview_work_index_entry(frequencies, terms);
 
         // The number of bytes advanced = the offset amount.
         frequencies_pos += freq_initial_off;
-        if (auto score = filterfunc(term, key); score >= std::min(output.size() / 50, 5UL) + 2) {
+        if (auto score = filterfunc(term, key); score >= std::min(output.size() / 200, 5UL) + 2) {
             // Seek back to original previewed position.
             frequencies.seekg(-freq_initial_off, std::ios_base::cur);
             auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
 
             auto init = (DocumentPositionPointer_v2 *) alignedbuf.get();
             for (auto i = init; i < init + size; i++) {
-                float coefficient = (float) (i->frequency - 1) / 3.F + 1;
+                float coefficient = (float) (i->frequency - 1) / 10.F + 1;
                 i->frequency = coefficient * score;
             }
             outputs.emplace_back(init, init+size);
@@ -122,6 +119,8 @@ int default_filter_function(const std::string &search_term, const std::string &t
     return (search_term == tested_term) * (search_term.size());
 }
 
+constexpr std::size_t BUFLEN = 100000;
+
 SortedKeysIndexStub::SortedKeysIndexStub(std::filesystem::path frequencies, std::filesystem::path terms) : frequencies(
         frequencies, std::ios_base::binary),
                                                                                                            terms(terms,
@@ -129,9 +128,10 @@ SortedKeysIndexStub::SortedKeysIndexStub(std::filesystem::path frequencies, std:
                                                                                                            filterfunc(
                                                                                                                    default_prefix_filter_function) {
     assert(this->frequencies && this->terms);
-    buffer = std::make_unique<char[]>(4096);
-    this->frequencies.rdbuf()->pubsetbuf(buffer.get(), 4096);
+    buffer = std::make_unique<char[]>(BUFLEN);
+    this->frequencies.rdbuf()->pubsetbuf(buffer.get(), BUFLEN);
     index = Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms);
+    alignedbuf = std::make_unique<__m256[]>(MAX_FILES_PER_TERM * 2 / 8);
 }
 
 

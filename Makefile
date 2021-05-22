@@ -40,4 +40,4 @@ index:
 	cmake-build-release/search
 
 search:
-	cmake-build-release/search 1
+	cmake-build-release/search 10000

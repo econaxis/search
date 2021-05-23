@@ -12,5 +12,8 @@ pub mod NameDatabase;
 mod cffi;
 
 pub mod dir_finder;
+pub mod RustVecInterface;
+
 pub use dir_finder::*;
+pub use RustVecInterface::*;
 pub use crate::NameDatabase::*;

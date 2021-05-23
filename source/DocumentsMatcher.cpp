@@ -73,6 +73,8 @@ using namespace std::chrono;
 
 using DPP = DocumentPositionPointer_v2;
 
+int stats[7] = {0, 0, 0, 0, 0, 0, 0};
+
 static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *value) {
     auto prediction = end;
 
@@ -91,6 +93,7 @@ static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *v
     } else if (difference > 4097 && *value < *(start + 4096)) {
         prediction = start + 4096;
     }
+
 
     return prediction;
 }
@@ -118,7 +121,6 @@ bool unroll_binary_search_find(const DocumentPositionPointer_v2 *&begin, const D
     return true;
 }
 
-static std::ofstream deb("/tmp/deb");
 
 TopDocs backup(std::vector<TopDocs> &results) {
     for (int i = 1; i < results.size(); i++) {
@@ -184,14 +186,10 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
         score_cutoff /= min_docs.size();
     }
 
-
-    measure();
-
     // Cutoff must be above the average score.
     for (auto pair = min_docs.begin(); pair != min_docs.end(); pair++) {
         bool exists_in_all = true;
         auto acculumated_score = 1UL;
-
 
         if (pair->frequency > score_cutoff) {
             for (auto &[_result_size, idx] : sorted_sizes) {
@@ -204,8 +202,9 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
                     // Multiply the accumulated score by pair frequency.
                     // Therefore, terms are advantaged for having high scores across all queries
 
+                    // Add a bonus for document matching more than one query term.
                     // Add the frequency of the found term.
-                    acculumated_score += (walkers[idx] - 1)->frequency;
+                    acculumated_score += (walkers[idx] - 1)->frequency + 30;
                 } else {
                     exists_in_all = false;
                     break;
@@ -224,16 +223,12 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
     exit_loop:;
 
-    min_docs.docs.erase(std::remove_if(min_docs.begin(), min_docs.end(), [](auto &elem) {
-        return (elem.frequency == 0) || (elem.document_id) == 0;
-    }), min_docs.docs.end());
-
-    auto _t = measure();
-
-    deb << sorted_sizes[0].first << " " << _t << " " << min_docs.size() << "\n";
+    min_docs.docs.erase(std::remove(min_docs.begin(), min_docs.end(), DocumentPositionPointer_v2{0, 0}),
+                        min_docs.docs.end());
 
     if (min_docs.size() < 5) {
-        return min_docs;
+//        return min_docs;
+        std::cout<<"Using backup\n";
         return backup(results);
     } else {
         return min_docs;

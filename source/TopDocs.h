@@ -18,16 +18,10 @@ class TopDocs {
     static OutputIt merge_combine(InputIt1 first1, InputIt1 last1,
                                   InputIt1 first2, InputIt1 last2,
                                   OutputIt d_first, bool should_limit_top30 = false) {
-        std::array<uint32_t, 200> score_heap {};
-
-        auto reverse_comp = [](auto t1, auto t2) { return t1 > t2; };
-
         auto initial_dfirst = d_first;
 
-        // Make a reverse heap (min-heap)
-        std::make_heap(score_heap.begin(), score_heap.end(), reverse_comp);
-        while(first1 != last1) {
-            if(should_limit_top30 && d_first - initial_dfirst > 500) {
+        while (first1 != last1) {
+            if (should_limit_top30 && d_first - initial_dfirst > 500) {
                 return d_first;
             }
 
@@ -37,44 +31,20 @@ class TopDocs {
             }
             if (*first2 < *first1) {
 
-                if (should_limit_top30 && score_heap[0] < first2->frequency) {
-                    std::pop_heap(score_heap.begin(), score_heap.end(), reverse_comp);
-                    *d_first = *first2;
-                    d_first++;
-                    score_heap.back() = first2->frequency;
-                    std::push_heap(score_heap.begin(), score_heap.end(), reverse_comp);
-                } else if (!should_limit_top30) {
-                    *d_first = *first2;
-                    d_first++;
-                }
+                *d_first = *first2;
+                d_first++;
                 ++first2;
             } else if (*first1 < *first2) {
-                if (should_limit_top30 && score_heap[0] < first1->frequency) {
-                    std::pop_heap(score_heap.begin(), score_heap.end(), reverse_comp);
-                    *d_first = *first1;
-                    d_first++;
-                    score_heap.back() = first1->frequency;
-                    std::push_heap(score_heap.begin(), score_heap.end(), reverse_comp);
-                } else if (!should_limit_top30) {
-                    *d_first = *first1;
-                    d_first++;
-                }
+                *d_first = *first1;
+                d_first++;
                 ++first1;
             } else {
                 // They are equals.
                 DocumentPositionPointer_v2 merged = *first1;
                 merged.frequency += (*first2).frequency;
 
-                if (should_limit_top30 && score_heap[0] < merged.frequency) {
-                    std::pop_heap(score_heap.begin(), score_heap.end(), reverse_comp);
-                    *d_first = merged;
-                    d_first++;
-                    score_heap.back() = first2->frequency;
-                    std::push_heap(score_heap.begin(), score_heap.end(), reverse_comp);
-                } else  if (!should_limit_top30){
-                    *d_first = merged;
-                    d_first++;
-                }
+                *d_first = merged;
+                d_first++;
                 ++first1;
                 ++first2;
             }
@@ -167,18 +137,9 @@ public:
     }
 
     void sort_by_frequencies() {
-
-        if (size() > 30) {
-            std::partial_sort(begin(), begin() + 30, end(), [](auto &t, auto &t1) {
-                return t.frequency < t1.frequency;
-            });
-        } else {
-            std::sort(begin(), end(), [](auto &t, auto &t1) {
-                return t.frequency < t1.frequency;
-            });
-
-        }
-
+        std::sort(begin(), end(), [](auto &t, auto &t1) {
+            return t.frequency < t1.frequency;
+        });
     }
 
 };

@@ -35,7 +35,7 @@ inline bool operator<(const Base26Num &other, const StubIndexEntry &stub) {
 inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
     return stub.key < other;
 }
-
+#include "DocIDFilePair.h"
 #include <immintrin.h>
 /**
  * Similar to SortedKeysIndex, but it only loads a specific subset of the index into memory.
@@ -44,21 +44,27 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
  * array and seeks to that location on disk to lookup the specific key and associated documents.
  */
 class SortedKeysIndexStub {
-public:
-    using FilterFunc = int (const std::string&, const std::string&) const;
 private:
+
     mutable std::unique_ptr<__m256[]> alignedbuf;
     mutable std::ifstream frequencies, terms;
+
+
+    std::vector<DocIDFilePair> filemap;
     std::unique_ptr<char[]> buffer;
     int(&filterfunc)(const std::string&, const std::string&);
 public:
 
+    SortedKeysIndexStub(std::string suffix);
     static constexpr int MAX_FILES_PER_TERM = 30000;
     std::vector<StubIndexEntry> index;
 
-    explicit SortedKeysIndexStub(std::filesystem::path frequencies,
-                                 std::filesystem::path terms);
 
+    std::string query_filemap(uint32_t docid) {
+        auto find = std::find(filemap.begin(), filemap.end(), docid);
+        if (find == filemap.end()) return "File not found";
+        else return find->file_name;
+    }
     SortedKeysIndexStub() = default;
 
     TopDocs search_one_term(const std::string& term) const;

@@ -30,7 +30,7 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
         Tokenizer::clean_token_to_index(temp3);
         Tokenizer::clean_token_to_index(temp4);
 
-        std::vector<std::string> query{temp, temp1, temp2};
+        std::vector<std::string> query{temp, temp1, temp2, temp3};
         TopDocs result;
         if (temp.size() && temp1.size() && temp2.size() && temp3.size()) {
             result = SortedKeysIndexStub::collection_merge_search(index, query);
@@ -70,10 +70,9 @@ load_all_indices() {
 //        auto temp = Serializer::read_filepairs(filepairstream);
 //        temp.clear();
 //        filepairs.push_back(temp);
-        indices.emplace_back(indice_files_dir / ("frequencies-" + line),
-                             indice_files_dir / ("terms-" + line));
+        indices.emplace_back(line);
 
-        if (indices.size() >= 10) break;
+        if (indices.size() >= 3) break;
     }
 
 
@@ -164,7 +163,6 @@ void test() {
     }
     int b = measure();
     std::cout<<b<<"\n"<<counter1<<" "<<counter2<<"\n";
-    bool dummy = false;
 }
 
 

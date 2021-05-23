@@ -5,6 +5,7 @@
 #include "SortedKeysIndex.h"
 #include "Tokenizer.h"
 #include "Base26Num.h"
+#include <cmath>
 
 namespace fs = std::filesystem;
 
@@ -67,32 +68,31 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     TopDocs output;
     std::vector<TopDocs> outputs;
     outputs.reserve(50);
+
+    int score_cutoff_booster = 5;
     while (frequencies_pos <= file_end->doc_position) {
         // Preview the WIE without loading everything into memory.
         auto[freq_initial_off, terms_initial_off, key] = Serializer::preview_work_index_entry(frequencies, terms);
 
         // The number of bytes advanced = the offset amount.
         frequencies_pos += freq_initial_off;
-        if (auto score = filterfunc(term, key); score >= std::min(output.size() / 200, 5UL) + 2) {
+        if (auto score = filterfunc(term, key); score >= std::min(output.size() / 200, 5UL) + score_cutoff_booster) {
             // Seek back to original previewed position.
             frequencies.seekg(-freq_initial_off, std::ios_base::cur);
             auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
 
             auto init = (DocumentPositionPointer_v2 *) alignedbuf.get();
             for (auto i = init; i < init + size; i++) {
-                float coefficient = (float) (i->frequency - 1) / 10.F + 1;
+                float coefficient = std::log10(i->frequency) + 1;
                 i->frequency = coefficient * score;
             }
-            outputs.emplace_back(init, init+size);
+            outputs.emplace_back(init, init + size);
 
-            if (key == term) {
-                return outputs.back();
-            }
         }
     }
 
-    for(int i = 0; i < outputs.size(); i++) {
-        outputs[0].append_multi(outputs[i].begin(), outputs[i].end(), true);
+    for (int i = 1; i < outputs.size(); i++) {
+        outputs[0].append_multi(outputs[i].begin(), outputs[i].end(), false);
     }
     return outputs[0];
 
@@ -115,33 +115,39 @@ int default_prefix_filter_function(const std::string &search_term, const std::st
     int score = string_prefix_compare(search_term, tested_term);
     return score;
 }
+
 int default_filter_function(const std::string &search_term, const std::string &tested_term) {
     return (search_term == tested_term) * (search_term.size());
 }
 
 constexpr std::size_t BUFLEN = 100000;
 
-SortedKeysIndexStub::SortedKeysIndexStub(std::filesystem::path frequencies, std::filesystem::path terms) : frequencies(
-        frequencies, std::ios_base::binary),
-                                                                                                           terms(terms,
-                                                                                                                 std::ios_base::binary),
-                                                                                                           filterfunc(
-                                                                                                                   default_prefix_filter_function) {
+#include "Constants.h"
+
+SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : filterfunc(default_prefix_filter_function) {
+    frequencies = std::ifstream(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary);
+    terms = std::ifstream(indice_files_dir / ("terms-" + suffix), std::ios_base::binary);
     assert(this->frequencies && this->terms);
+
+    auto filemap_f = std::ifstream(indice_files_dir / ("filemap-" + suffix), std::ios_base::binary);
+    filemap = Serializer::read_filepairs(filemap_f);
+
+    // Setup read cache buffer
     buffer = std::make_unique<char[]>(BUFLEN);
     this->frequencies.rdbuf()->pubsetbuf(buffer.get(), BUFLEN);
-    index = Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms);
+
+    // Setup documents holding location buffer (aligned).
     alignedbuf = std::make_unique<__m256[]>(MAX_FILES_PER_TERM * 2 / 8);
+
+    index = Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms);
 }
 
 
 TopDocs SortedKeysIndexStub::collection_merge_search(std::vector<SortedKeysIndexStub> &indices,
                                                      const std::vector<std::string> &search_terms) {
     TopDocs joined;
-    int incrementing = 0;
     for (auto &index : indices) {
         auto temp = index.search_many_terms(search_terms);
-        incrementing++;
 
         if (temp.size()) joined.append_multi(temp.begin(), temp.end());
     };

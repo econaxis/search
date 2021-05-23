@@ -1,4 +1,5 @@
-use crate::data_file_dir;
+use crate::{data_file_dir};
+use super::RustVecInterface::{VecDPP, DocumentPositionPointer_v3};
 use regex;
 
 use std::ffi;
@@ -17,10 +18,11 @@ use serde::ser::SerializeTuple;
 use std::str::FromStr;
 
 
-mod ctypes {
+pub mod ctypes {
     extern {
-        pub type vector; // std::vector<DocIDFilePair> type
+        pub type vector; // std::vector<DocIDFilePair> type.
     pub type ifstream; // ifstream type
+    pub type SortedKeysIndexStub;
     }
 }
 
@@ -130,6 +132,21 @@ extern "C" {
     fn read_filepairs(stream: *const ctypes::ifstream, vecpointer: *const *const ctypes::vector, length: *const u32);
     fn deallocate_vec(ptr: *const ctypes::vector);
     fn copy_filepairs_to_buf(vec: *const ctypes::vector, buf: *const C_DocIDFilePair, max_length: u32);
+
+    pub fn load_one_index(suffix_name: *const c_char) -> *mut ctypes::SortedKeysIndexStub;
+
+    #[allow(improper_ctypes)]
+    pub fn search_index_top_n(index: *const ctypes::SortedKeysIndexStub, output_buffer: *const VecDPP,
+                              term_num: i32, query_terms: *const *const c_char);
+    pub fn delete_one_index(ssk: *const ctypes::SortedKeysIndexStub);
+
+    #[allow(improper_ctypes)]
+    pub fn search_multi_indices(num_indices: i32, indices: *const *const ctypes::SortedKeysIndexStub, num_terms: i32, query_terms: *const *const c_char,
+                                output_buffer: *const VecDPP);
+
+    pub fn initialize_dir_vars();
+
+    pub fn query_for_filename(index: *const ctypes::SortedKeysIndexStub, docid: u32, buffer: *const c_char, bufferlen: u32) -> u32;
 }
 
 

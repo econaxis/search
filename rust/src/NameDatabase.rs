@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use crate::cffi;
+use crate::{cffi};
+use crate::RustVecInterface::DocumentPositionPointer_v3;
 use std::borrow::Borrow;
 use std::hash::Hash;
 use std::ffi::OsStr;
@@ -49,6 +50,11 @@ use super::cffi::os_str_to_str;
 use serde::Serialize;
 use rmp_serde::Deserializer;
 
+fn pretty_serialize(d: &HashSet<DocIDFilePair>) {
+    let outfile = fs::File::create("file_metadata.pretty.json").unwrap();
+    serde_json::to_writer_pretty(outfile, &d);
+}
+
 impl NamesDatabase {
     pub fn new(metadata_path: &Path) -> Self {
         let json_path = metadata_path.join("file_metadata.msgpack");
@@ -73,6 +79,7 @@ impl NamesDatabase {
         let mut serializer = rmp_serde::Serializer::new(&binary_outfile);
         processed_data.serialize(&mut serializer);
 
+        pretty_serialize(&processed_data);
         Self {
             set: HashSet::from_iter(processed_data.into_iter())
         }

@@ -10,7 +10,9 @@ use std::future::Future;
 use std::task::{Context, Poll};
 use std::pin::Pin;
 use std::io::Read;
+use std::time::Duration;
 use std::sync::mpsc::TrySendError::Full;
+use tracing::{info, span, debug, Level, event};
 
 struct SharedState {
     pub data: Option<Vec<String>>,
@@ -54,14 +56,13 @@ fn str_to_char_char(a: &Vec<String>) -> Vec<CString> {
 }
 
 impl IndexWorker {
-    pub fn new(suffices: &[String]) -> Self {
+    pub fn new<T: AsRef<str>>(suffices: &[T]) -> Self {
         let (sender, receiver) = mpsc::channel();
 
         let indices: Vec<C_SSK> = suffices.iter().map(|suffix| {
-            C_SSK::from_file_suffix(suffix)
+            let _sp = event!(Level::DEBUG, index_name = suffix.as_ref(), "loading file index");
+            C_SSK::from_file_suffix(suffix.as_ref())
         }).collect();
-
-        println!("Finished loading indices");
 
         let indices = Arc::new(Mutex::new(indices));
 
@@ -70,27 +71,28 @@ impl IndexWorker {
             loop {
                 let received: Option<(Vec<String>, Arc<Mutex<SharedState>>)> = receiver.recv().unwrap();
                 if let Some((query, mut sharedstate)) = received {
-                    println!("Sending query: {:?}", query);
+                    info!("Sending query: {:?}", query);
                     let chars = str_to_char_char(&query);
 
                     let chars: Vec<*const c_char> = chars.iter().map(|x| x.as_ptr()).collect();
                     let chars: *const *const c_char = chars.as_ptr();
 
-
                     let outputvec = VecDPP::new();
                     let lockguard = thread_indices.lock().unwrap();
                     let indices_ptrptr: Vec<*const cffi::ctypes::SortedKeysIndexStub> = lockguard.iter().map(|x| *x.as_ref()).collect();
 
-                    println!("Starting search");
+
                     unsafe {
+                        let _sp = span!(Level::INFO, "Search multi index").entered();
                         cffi::search_multi_indices(lockguard.len() as i32, indices_ptrptr.as_ptr(), query.len() as i32,
                                                    chars, &outputvec as *const VecDPP)
                     };
-                    println!("Ending search");
+                    event!(Level::DEBUG, "Matched {} files. Max score: {}", outputvec.len(), max_score = outputvec.first().unwrap().1);
 
-                    let buf = [0u8; 1000];
+                    let buf = [0u8; 700];
 
                     let mut filenames: Vec<String> = Vec::new();
+                    let _sp = span!(Level::INFO, "Get filenames").entered();
                     for i in &*outputvec {
                         let len = unsafe {
                             cffi::query_for_filename(*lockguard[i.2 as usize].as_ref(), i.0 as u32, buf.as_ptr() as *const c_char, buf.len() as u32)
@@ -103,9 +105,11 @@ impl IndexWorker {
                         let str = CStr::from_bytes_with_nul(&buf[0..len]).unwrap();
                         filenames.push(str.to_string_lossy().into_owned());
                     }
+                    std::mem::drop(_sp);
+
                     let mut sharedstate = sharedstate.lock().unwrap();
                     sharedstate.data.replace(filenames);
-                    sharedstate.waker.as_ref().unwrap().wake_by_ref();
+                    sharedstate.waker.take().unwrap().wake();
                 } else {
                     // Option is none, so we exit the loop and close the thread.
                     break;
@@ -119,17 +123,6 @@ impl IndexWorker {
         }
     }
 
-    pub fn send_query(&mut self, query: Vec<String>) -> FutureTask {
-        let ss = SharedState {
-            data: Default::default(),
-            waker: None,
-        };
-
-        let ss = Arc::new(Mutex::new(ss));
-        self.sender.send(Some((query, ss.clone())));
-
-        return FutureTask { ss };
-    }
 
     pub async fn send_query_async(&mut self, query: &Vec<String>) -> Vec<String> {
         // Returns list of filenames.

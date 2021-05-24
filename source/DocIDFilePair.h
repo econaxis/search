@@ -17,6 +17,9 @@ inline bool operator!=(const DocIDFilePair& one, uint32_t two) {
 inline bool operator==(const DocIDFilePair& one, uint32_t two) {
     return one.document_id == two;
 }
+inline bool operator<(const DocIDFilePair& one, uint32_t two) {
+    return one.document_id < two;
+}
 inline bool operator<(const DocIDFilePair& one, const DocIDFilePair& two) {
     return one.document_id < two.document_id;
 }

@@ -91,6 +91,8 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         }
     }
 
+    if(outputs.empty()) return TopDocs{};
+
     for (int i = 1; i < outputs.size(); i++) {
         outputs[0].append_multi(outputs[i].begin(), outputs[i].end(), false);
     }
@@ -104,7 +106,6 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
 
     for (int i = 0; i < terms.size(); i++) {
         auto result = this->search_one_term(terms[i]);
-        //        for(auto& j : result) j.id = i;
         all_outputs.push_back(std::move(result));
     };
     return DocumentsMatcher::AND(all_outputs);

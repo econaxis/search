@@ -2,7 +2,7 @@
 #include "Serializer.h"
 #include "Constants.h"
 #include "rust-interface.h"
-
+#include "Tokenizer.h"
 namespace ffi = Serializer::ffi;
 namespace sr = Serializer;
 
@@ -87,21 +87,20 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
 
     assert(num_indices < 16);
     std::vector<std::string> query(num_terms);
-    for (int i = 0; i < num_terms; i++) query[i] = std::string(query_terms[i]);
-
-    std::cout << "Starting search" << std::endl;
+    for (int i = 0; i < num_terms; i++) {
+        query[i] = std::string(query_terms[i]);
+        Tokenizer::clean_token_to_index(query[i]);
+    }
 
     TopDocs joined;
     for (int i = 0; i < num_indices; i++) {
         auto temp = indices[i]->search_many_terms(query);
 
-        std::cout << "Found " << temp.size() << std::endl;
-
         uint32_t curtag = i << 28;
 
         // Imbue top 4 bits of docid with tag (which index we are using)
         for (auto &pair: temp) {
-            assert(pair.document_id < 1 << 27);
+            assert(pair.document_id < 1 << 28);
             pair.document_id |= curtag;
         }
         if (temp.size()) joined.append_multi(temp.begin(), temp.end());
@@ -118,8 +117,8 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
     for (auto &i : joined) {
         imbued.push_back({i.document_id & tag_remover, i.frequency, static_cast<uint8_t>(i.document_id >> 28)});
     }
-    if (joined.size() > 100) {
-        fill_rust_vec(output_buffer, imbued.begin().base(), 100 * sizeof(DocumentPositionPointer_v2_imbued));
+    if (joined.size() > 500) {
+        fill_rust_vec(output_buffer, imbued.begin().base(), 500 * sizeof(DocumentPositionPointer_v2_imbued));
     } else {
         fill_rust_vec(output_buffer, imbued.begin().base(), joined.size() * sizeof(DocumentPositionPointer_v2_imbued));
     }

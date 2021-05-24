@@ -10,7 +10,6 @@
 #include "Base26Num.h"
 
 
-
 /**
  * Makes up every nth element of the larger index. The key is stored as a Base26Number (uint64_t) for memory efficiency.
  * Equivalent to WordIndexEntry if we were to load the whole index to memory with SortedKeysIndex.
@@ -35,8 +34,10 @@ inline bool operator<(const Base26Num &other, const StubIndexEntry &stub) {
 inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
     return stub.key < other;
 }
+
 #include "DocIDFilePair.h"
 #include <immintrin.h>
+
 /**
  * Similar to SortedKeysIndex, but it only loads a specific subset of the index into memory.
  * For example, it loads only every 64th term into memory. The string is converted to a base26 number (as the string
@@ -52,27 +53,35 @@ private:
 
     std::vector<DocIDFilePair> filemap;
     std::unique_ptr<char[]> buffer;
-    int(&filterfunc)(const std::string&, const std::string&);
+
+    int (&filterfunc)(const std::string &, const std::string &);
+
 public:
 
     SortedKeysIndexStub(std::string suffix);
+
     static constexpr int MAX_FILES_PER_TERM = 30000;
     std::vector<StubIndexEntry> index;
 
 
     std::string query_filemap(uint32_t docid) {
-        auto find = std::find(filemap.begin(), filemap.end(), docid);
-        if (find == filemap.end()) return "File not found";
-        else return find->file_name;
+        auto find = std::lower_bound(filemap.begin(), filemap.end(), docid);
+        if (find->document_id == docid) {
+            return find->file_name;
+        } else {
+            return "File not found";
+        }
     }
+
     SortedKeysIndexStub() = default;
 
-    TopDocs search_one_term(const std::string& term) const;
+    TopDocs search_one_term(const std::string &term) const;
+
     TopDocs search_many_terms(const std::vector<std::string> &terms);
 
-    static TopDocs collection_merge_search(std::vector<SortedKeysIndexStub>& indices, const std::vector<std::string>& search_terms);
+    static TopDocs
+    collection_merge_search(std::vector<SortedKeysIndexStub> &indices, const std::vector<std::string> &search_terms);
 };
-
 
 
 #endif //GAME_SORTEDKEYSINDEXSTUB_H

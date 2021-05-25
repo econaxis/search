@@ -30,6 +30,7 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
 uint32_t query_for_filename(SortedKeysIndexStub *index, uint32_t docid, char *buffer, uint32_t bufferlen);
 
 void initialize_dir_vars();
+SortedKeysIndexStub* clone_one_index(SortedKeysIndexStub* other);
 
 SortedKeysIndexStub *load_one_index(const char* suffix_name);
 

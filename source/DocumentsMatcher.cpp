@@ -136,7 +136,6 @@ TopDocs backup(std::vector<TopDocs> &results) {
  * @return
  */
 TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
-    std::vector<__m256i> docidbuf;
 
     if (results.empty()) return TopDocs{};
     if (results.size() == 1) return results[0];
@@ -149,7 +148,6 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
         totsize += results[i].size();
     }
 
-    docidbuf.resize(totsize / 2 / 16);
     std::sort(sorted_sizes.begin(), sorted_sizes.end());
 
 
@@ -180,35 +178,27 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
     if (!min_docs.size()) return TopDocs();
 
-    uint64_t score_cutoff = 0;
-    if (min_docs.size() > 700) {
-        for (auto &td: min_docs) score_cutoff += td.frequency;
-        score_cutoff /= min_docs.size();
-    }
-
     // Cutoff must be above the average score.
     for (auto pair = min_docs.begin(); pair != min_docs.end(); pair++) {
         bool exists_in_all = true;
         auto acculumated_score = 1UL;
 
-        if (pair->frequency > score_cutoff) {
-            for (auto &[_result_size, idx] : sorted_sizes) {
-                if (walkers[idx] >= enders[idx]) {
-                    // Exhausted one means exhausted all.
-                    goto exit_loop;
-                }
+        for (auto &[_result_size, idx] : sorted_sizes) {
+            if (walkers[idx] >= enders[idx]) {
+                // Exhausted one means exhausted all.
+                goto exit_loop;
+            }
 
-                if (unroll_binary_search_find(walkers[idx], enders[idx], pair.base())) {
-                    // Multiply the accumulated score by pair frequency.
-                    // Therefore, terms are advantaged for having high scores across all queries
+            if (unroll_binary_search_find(walkers[idx], enders[idx], pair.base())) {
+                // Multiply the accumulated score by pair frequency.
+                // Therefore, terms are advantaged for having high scores across all queries
 
-                    // Add a bonus for document matching more than one query term.
-                    // Add the frequency of the found term.
-                    acculumated_score += (walkers[idx] - 1)->frequency + 30;
-                } else {
-                    exists_in_all = false;
-                    break;
-                }
+                // Add a bonus for document matching more than one query term.
+                // Add the frequency of the found term.
+                acculumated_score += (walkers[idx] - 1)->frequency;
+            } else {
+                exists_in_all = false;
+                break;
             }
         }
 

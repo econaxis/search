@@ -3,7 +3,7 @@ use std::slice;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 
-use crate::cffi::{ctypes, self, c_char, search_index_top_n};
+use crate::cffi::{ctypes, self, c_char, search_index_top_n, clone_one_index};
 
 #[derive(Copy, Clone, Default, Debug)]
 #[repr(C)]
@@ -15,7 +15,18 @@ pub struct VecDPP(Vec<DocumentPositionPointer_v3>);
 
 pub struct C_SSK(*const ctypes::SortedKeysIndexStub);
 
+
+
+
 unsafe impl Send for C_SSK {}
+unsafe impl Sync for C_SSK {}
+
+impl Clone for C_SSK {
+    fn clone(&self) -> Self {
+        let cloned = unsafe {clone_one_index(self.0)};
+        Self (cloned)
+    }
+}
 
 impl VecDPP {
     pub fn new() -> Self {

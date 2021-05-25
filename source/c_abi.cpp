@@ -160,3 +160,9 @@ void delete_one_index(SortedKeysIndexStub *ssk) {
 }
 
 
+SortedKeysIndexStub *clone_one_index(SortedKeysIndexStub *other) {
+    auto *clone = new SortedKeysIndexStub(*other);
+    return clone;
+}
+
+

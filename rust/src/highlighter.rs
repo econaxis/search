@@ -2,8 +2,12 @@ use std::path::Path;
 use aho_corasick::AhoCorasickBuilder;
 use crate::IndexWorker;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
-use tracing::instrument;
+use tracing::{instrument, debug};
 use std::sync::Mutex;
+use std::collections::HashMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::ser::SerializeMap;
+use std::time::Duration;
 
 
 fn highlight_matches(str: &str, terms: &[String]) -> Vec<(usize, usize)> {
@@ -13,8 +17,8 @@ fn highlight_matches(str: &str, terms: &[String]) -> Vec<(usize, usize)> {
     let mut processed = [0u8; 32];
 
     aut.find_iter(str).filter_map(|match_| {
-        if processed[match_.pattern()] < 4 {
-            processed[match_.pattern()]+=1;
+        if processed[match_.pattern()] < 8 {
+            processed[match_.pattern()] += 1;
             Some((match_.start(), match_.end()))
         } else {
             None
@@ -22,54 +26,72 @@ fn highlight_matches(str: &str, terms: &[String]) -> Vec<(usize, usize)> {
     }).collect()
 }
 
-pub async fn highlight_files<T: AsRef<str>, AWrite: AsyncWrite + std::marker::Unpin>(
-    filelist: &[T], highlight_words: &[String], mut writer: &mut AWrite) {
+const FIRST_N_BYTES_ONLY: usize = 20000;
+
+struct CustomDeserialize<'a>(&'a Vec<(String, Vec<String>)>);
+
+impl Serialize for CustomDeserialize<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
+        S: Serializer {
+        let mut map = serializer.serialize_map(Some(self.0.len())).unwrap();
+
+        for (name, highlights) in self.0.iter() {
+            map.serialize_entry(name, highlights);
+        };
+        map.end()
+    }
+}
+
+pub fn serialize_response_to_json(a: &Vec<(String, Vec<String>)>) -> String {
+    let a = CustomDeserialize(a);
+    serde_json::to_string(&a).unwrap()
+}
+
+#[instrument(level = "debug", skip(filelist))]
+pub fn highlight_files<T: AsRef<str>>(filelist: &[T], highlight_words: &[String]) -> Vec<(String, Vec<String>)> {
+    let mut highlights = Vec::new();
     for path in filelist {
         let path = path.as_ref();
         let str = match IndexWorker::load_file_to_string(path.as_ref()) {
-            None => "".to_owned(),
+            None => {
+                debug!(path, "File doesn't exist");
+                "".to_owned()
+            },
             Some(x) => x
         };
 
         let mut str = str.as_str();
         // Limit highlighting to first 5kb only
         let mut strindices: Vec<usize> = str.char_indices().map(|(pos, _)| pos).collect();
-        if str.len() > 50000 {
-            str = &str[0..strindices[50000]];
-            strindices.truncate(50000);
+        if str.len() > FIRST_N_BYTES_ONLY {
+            str = &str[0..strindices[FIRST_N_BYTES_ONLY]];
+            strindices.truncate(FIRST_N_BYTES_ONLY);
         }
 
 
         let mut matches = highlight_matches(str, highlight_words);
 
-        writer.write_all(format!("File {}\n", path).as_bytes()).await;
 
-        // Declare 100kb buffer on stack to hold all data.
-        let mut simplebuffer = [0u8; 10000];
-        let mut bufferstackpointer = 0usize;
 
+        let mut highlight_hits = Vec::new();
         for (start, end) in matches {
-            // Start a new chunk.
-            let lastend = (end + 5).clamp(0, str.len() - 1);
-            let firstbegin = if start > 5 { start - 5 } else { 0 };
-
-            let lastend = strindices[strindices.partition_point(|&x| x <= lastend) - 1];
-            let firstbegin = strindices[strindices.partition_point(|&x| x <= firstbegin) - 1];
-
-            let s = format!("{}<mark>{}</mark>{} || ", &str[firstbegin..start], &str[start..end], &str[end..lastend]);
-            let s = s.as_bytes();
-            let slen = s.len();
-
-            if bufferstackpointer + slen < simplebuffer.len() {
-                simplebuffer[bufferstackpointer..bufferstackpointer + slen].copy_from_slice(s);
-                bufferstackpointer += slen;
-            } else {
-                writer.write_all(&simplebuffer[0..bufferstackpointer]).await;
-                simplebuffer[..slen].copy_from_slice(s);
-                bufferstackpointer = slen;
-            }
+            let beforestart: String = str[0..start].chars().rev().take(20).collect();
+            let beforestart: String = beforestart.chars().rev().collect();
+            let afterend: String = str[end..].chars().take(20).collect();
+            let real_highlight: &str = &str[start..end];
+            let s = format!("{}<mark>{}</mark>{}", beforestart, real_highlight, afterend);
+            highlight_hits.push(s);
         }
-        writer.write_all(&simplebuffer[0..bufferstackpointer]).await;
-        writer.write_all(b"\n\n\n").await;
+
+        if !highlight_hits.is_empty() {
+            highlights.push((path.to_owned(), highlight_hits));
+        }
+
+        // 20 highlighted files is enough for the first page. We don't need to highlight all.
+        if highlights.len() > 4 {
+            break;
+        }
     }
+
+    highlights
 }

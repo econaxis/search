@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<input type="text" id="search-bar"/>
+
+<pre id="output-bar"></pre>
+
+<script type="application/javascript">
+
+    let timeout = 0;
+    document.getElementById("search-bar").addEventListener("input", (ev) => {
+        let str = ev.target.value;
+
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            fetch("/search/?q=" + str).then(response => response.text()).then(response => {
+                response = JSON.parse(response);
+                response = JSON.stringify(response, null, 3);
+                document.getElementById("output-bar").innerHTML = response;
+            })
+        }, 50);
+    })
+</script>
+</body>
+</html>

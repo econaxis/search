@@ -147,6 +147,9 @@ extern "C" {
     pub fn initialize_dir_vars();
 
     pub fn query_for_filename(index: *const ctypes::SortedKeysIndexStub, docid: u32, buffer: *const c_char, bufferlen: u32) -> u32;
+
+    pub fn clone_one_index(other: *const ctypes::SortedKeysIndexStub) -> *const ctypes::SortedKeysIndexStub;
+
 }
 
 

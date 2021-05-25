@@ -54,7 +54,7 @@ private:
     std::vector<DocIDFilePair> filemap;
     std::unique_ptr<char[]> buffer;
 
-    int (&filterfunc)(const std::string &, const std::string &);
+    std::string suffix;
 
 public:
 
@@ -81,6 +81,8 @@ public:
 
     static TopDocs
     collection_merge_search(std::vector<SortedKeysIndexStub> &indices, const std::vector<std::string> &search_terms);
+
+    SortedKeysIndexStub(const SortedKeysIndexStub& other);
 };
 
 

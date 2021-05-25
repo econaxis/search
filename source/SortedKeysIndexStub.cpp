@@ -12,12 +12,13 @@ namespace fs = std::filesystem;
 constexpr unsigned int MATCHALL_BONUS = 20;
 constexpr unsigned int MATCHALL_SHORT_BONUS = 8;
 
+
 /**
  * Compares the shorter string against the longer string, checking if shorter is a prefix of longer.
  *
  * @return a score that means how well they match. A complete match (shorter == longer) will return CUTOFF_MAX;
  */
-unsigned int string_prefix_compare(const std::string &shorter, const std::string &longer) {
+static unsigned int string_prefix_compare(const std::string &shorter, const std::string &longer) {
     // Returns true if shorter is the prefix of longer.
     // e.g. shorter: "str" and longer: "string" returns true.
     auto ls = longer.size();
@@ -35,6 +36,8 @@ unsigned int string_prefix_compare(const std::string &shorter, const std::string
     if (ss == ls) return MATCHALL_BONUS + score;
     else return score;
 }
+
+
 
 #include <chrono>
 
@@ -76,7 +79,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
         // The number of bytes advanced = the offset amount.
         frequencies_pos += freq_initial_off;
-        if (auto score = filterfunc(term, key); score >= std::min(output.size() / 200, 5UL) + score_cutoff_booster) {
+        if (auto score = string_prefix_compare(term, key); score >= std::min(output.size() / 200, 5UL) + score_cutoff_booster) {
             // Seek back to original previewed position.
             frequencies.seekg(-freq_initial_off, std::ios_base::cur);
             auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
@@ -112,20 +115,13 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
 }
 
 
-int default_prefix_filter_function(const std::string &search_term, const std::string &tested_term) {
-    int score = string_prefix_compare(search_term, tested_term);
-    return score;
-}
 
-int default_filter_function(const std::string &search_term, const std::string &tested_term) {
-    return (search_term == tested_term) * (search_term.size());
-}
 
 constexpr std::size_t BUFLEN = 100000;
 
 #include "Constants.h"
 
-SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : filterfunc(default_prefix_filter_function) {
+SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix){
     frequencies = std::ifstream(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary);
     terms = std::ifstream(indice_files_dir / ("terms-" + suffix), std::ios_base::binary);
     assert(this->frequencies && this->terms);
@@ -157,4 +153,22 @@ TopDocs SortedKeysIndexStub::collection_merge_search(std::vector<SortedKeysIndex
     joined.sort_by_frequencies();
 
     return joined;
+}
+
+SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) {
+    frequencies = std::ifstream(indice_files_dir / ("frequencies-" + other.suffix), std::ios_base::binary);
+    terms = std::ifstream(indice_files_dir / ("terms-" + other.suffix), std::ios_base::binary);
+    assert(this->frequencies && this->terms);
+
+    auto filemap_f = std::ifstream(indice_files_dir / ("filemap-" + other.suffix), std::ios_base::binary);
+    filemap = other.filemap;
+
+    // Setup read cache buffer
+    buffer = std::make_unique<char[]>(BUFLEN);
+    this->frequencies.rdbuf()->pubsetbuf(buffer.get(), BUFLEN);
+
+    // Setup documents holding location buffer (aligned).
+    alignedbuf = std::make_unique<__m256[]>(MAX_FILES_PER_TERM * 2 / 8);
+
+    index = other.index;
 }

@@ -16,6 +16,7 @@ mod RustVecInterface;
 mod microsecond_timer;
 mod IndexWorker;
 
+
 use std::path::{Path, PathBuf};
 use crate::cffi::DocIDFilePair;
 use std::{fs, time};
@@ -31,11 +32,13 @@ use tokio::io::{Result, AsyncReadExt, split, AsyncWriteExt, AsyncWrite};
 use tokio::runtime::Runtime;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::highlighter::highlight_files;
+use crate::highlighter::{highlight_files, serialize_response_to_json};
 use tracing_subscriber::FmtSubscriber;
-use tracing::{Level, Instrument, span};
+use tracing::{Level, Instrument, span, event};
 use tracing_subscriber::fmt::format::FmtSpan;
-
+use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use serde::Deserialize;
+use std::time::Duration;
 
 const data_file_dir: &str = "/mnt/nfs/extra/data-files/";
 const indice_file_dir: &str = "/mnt/nfs/extra/data-files/indices/";
@@ -55,57 +58,94 @@ fn utf8_to_str(a: &[u8]) -> &str {
     }
 }
 
-async fn start_socket_server(mut iw: IndexWorker::IndexWorker) -> Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:3000").await?;
-
-    loop {
-        let (mut socket, _) = listener.accept().await?;
-
-        let start = time::Instant::now();
-        let mut buf = [0u8; 1000];
-        let res = socket.read(&mut buf).await.unwrap();
-
-        if res == 0 {
-            println!("Closing connection");
-            break;
-        };
-
-        let mut str = std::str::from_utf8(&buf[0..res]).unwrap();
-        str = str.trim();
-        let query: Vec<String> = str.split_whitespace().map(|x| x.to_owned()).collect();
-        println!("Query start: {}", start.elapsed().as_micros());
-
-        let mut res = iw.send_query_async(&query).await;
-
-
-        // Moves the socket into a new task and runs highlighting.
-        // Since highlighting might be resource intensive, we don't want to block incoming connections.
-        let task = tokio::spawn(async move {
-            let fullsize = res.len();
-            res.truncate(20);
-            highlight_files(res.as_slice(), query.as_slice(), &mut socket).await;
-        }.instrument(span!(Level::INFO, "Highlighting match")));
-        task.await;
-    }
-    Ok(())
+struct ApplicationState {
+    iw: Arc<IndexWorker::IndexWorker>,
 }
 
-fn main() {
-    unsafe { cffi::initialize_dir_vars() };
+#[derive(Deserialize, Debug)]
+struct Query {
+    q: String,
+}
 
+#[get("/search/")]
+async fn handle_request(data: web::Data<ApplicationState>, query: web::Query<Query>) -> HttpResponse {
+    let iw = &*data.iw;
+    let jsonstr = work_on_query(iw, &query.q).await;
+    HttpResponse::Ok()
+        .content_type("application/json")
+        .body(jsonstr)
+}
+
+#[get("/")]
+async fn main_page() -> HttpResponse {
+    let mut buf = String::new();
+    fs::File::open("/home/henry/search/website/index.html").unwrap().read_to_string(&mut buf).unwrap();
+    HttpResponse::Ok().body(buf)
+}
+
+async fn work_on_query(iw: &IndexWorker::IndexWorker, query: &str) -> String {
+    let start = time::Instant::now();
+
+    let query: Vec<String> = query.split_whitespace().map(|x| x.to_owned()).collect();
+
+    let mut res = iw.send_query_async(&query).await;
+
+    // Moves the socket into a new task and runs highlighting.
+    // Since highlighting might be resource intensive, we don't want to block incoming connections.
+    let fullsize = res.len();
+
+
+    let result = tokio::task::spawn(async move {
+        // We don't want to highlight all the files. Highlighting is slow because of opening many files
+        // TODO: store the files in an embedded database like Rocks or SQLite to reduce file open overhead.
+        highlight_files(res.as_slice(), query.as_slice())
+    }).await.unwrap();
+    serialize_response_to_json(&result)
+}
+
+fn setup_logging() {
     let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG)
-        .with_span_events(FmtSpan::ACTIVE).with_timer(microsecond_timer::MicrosecondTimer{}).finish();
+        .with_span_events(FmtSpan::ACTIVE).with_timer(microsecond_timer::MicrosecondTimer {}).with_thread_ids(true).finish();
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting default subscriber failed");
+}
 
-    let suffices = ["PA18E\0","xmB4m-PA18E-cqfS7-H0Yr1-4kUYr-C-cOO\0", "PA18E\0","xmB4m-PA18E-cqfS7-H0Yr1-4kUYr-C-cOO\0","xmB4m-PA18E-cqfS7-H0Yr1-4kUYr-C-cOO\0" ];
+fn main() -> io::Result<()> {
+    unsafe { cffi::initialize_dir_vars() };
 
-    let mut iw = IndexWorker::IndexWorker::new(&suffices);
+    setup_logging();
+    let suffices = ["xmB4m-PA18E-cqfS7-H0Yr1-4kUYr-C-cOO\0", "PA18E\0"];
 
-    let rt = Runtime::new().unwrap();
+    let mut iw = Arc::new(IndexWorker::IndexWorker::new(&suffices));
+    // let local = tokio::task::LocalSet::new();
+    let sys = actix_rt::System::with_tokio_rt(|| tokio::runtime::Builder::new_multi_thread()
+        .max_blocking_threads(1)
+        .thread_keep_alive(Duration::from_secs(1000000))
+        .on_thread_start(|| println!("Thread start"))
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap()
+    ).block_on(async {
+        HttpServer::new(move || {
+            App::new()
+                .data(ApplicationState { iw: iw.clone() })
+                .service(handle_request)
+                .service(main_page)
+        }).workers(1)
+            .bind("0.0.0.0:8080").unwrap()
+            .run().await;
+    }
+    );
 
-    rt.block_on(start_socket_server(iw));
+
+    // sys.run();
+    // sys.block_on(fut);
+
+    Ok(())
+
+    // rt.block_on(start_socket_server(iw));
 
     // let queries = vec!["CANADI".to_owned(), "DISNEY".to_owned()];
     // let fut = iw.send_query_async(&queries);

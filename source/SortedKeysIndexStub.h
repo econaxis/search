@@ -37,7 +37,7 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
 
 #include "DocIDFilePair.h"
 #include <immintrin.h>
-
+#include "FPStub.h"
 /**
  * Similar to SortedKeysIndex, but it only loads a specific subset of the index into memory.
  * For example, it loads only every 64th term into memory. The string is converted to a base26 number (as the string
@@ -51,7 +51,7 @@ private:
     mutable std::ifstream frequencies, terms;
 
 
-    std::vector<DocIDFilePair> filemap;
+    FPStub filemap;
     std::unique_ptr<char[]> buffer;
 
     std::string suffix;
@@ -60,17 +60,13 @@ public:
 
     SortedKeysIndexStub(std::string suffix);
 
-    static constexpr int MAX_FILES_PER_TERM = 30000;
-    std::vector<StubIndexEntry> index;
+    static constexpr int MAX_FILES_PER_TERM = 50000;
+    std::shared_ptr<const std::vector<StubIndexEntry>> index;
 
 
     std::string query_filemap(uint32_t docid) {
-        auto find = std::lower_bound(filemap.begin(), filemap.end(), docid);
-        if (find->document_id == docid) {
-            return find->file_name;
-        } else {
-            return "File not found";
-        }
+        auto ret =  filemap.query(docid);
+        return ret;
     }
 
     SortedKeysIndexStub() = default;

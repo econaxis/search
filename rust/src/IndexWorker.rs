@@ -35,6 +35,8 @@ unsafe impl Sync for IndexWorker {}
 
 impl Clone for IndexWorker {
     fn clone(&self) -> Self {
+        debug!("Cloning IndexWorker");
+
         let (sender, receiver) = mpsc::channel();
 
         let indices: Vec<C_SSK> = self.indices.iter().map(|x| {
@@ -82,7 +84,8 @@ impl IndexWorker {
 
     fn create_thread(receiver: mpsc::Receiver<Option<(Vec<String>, Arc<Mutex<SharedState>>)>>,
                      thread_indices: Arc<Vec<C_SSK>>) -> thread::JoinHandle<()> {
-        thread::spawn(move || {
+        let builder = thread::Builder::new().name("index-worker".to_string());
+        builder.spawn(move || {
             loop {
                 let received: Option<(Vec<String>, Arc<Mutex<SharedState>>)> = receiver.recv().unwrap();
                 if let Some((query, mut sharedstate)) = received {
@@ -139,7 +142,7 @@ impl IndexWorker {
                     break;
                 }
             }
-        })
+        }).unwrap()
     }
 
 
@@ -202,6 +205,7 @@ pub fn load_file_to_string(p: &Path) -> Option<String> {
 
 impl Drop for IndexWorker {
     fn drop(&mut self) {
+        debug!("Dropping IW");
         self.sender.lock().unwrap().send(None);
         self.thread_handle.take().unwrap().join();
     }

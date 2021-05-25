@@ -190,11 +190,15 @@ int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
     auto end = (uint32_t*) mybuffer + num_files * 2;
     auto start = (uint32_t*) mybuffer;
 
-    for (; start + 8 <= end; start += 8) {
+    for (; start + 8 < end; start += 8) {
         auto s256 = _mm256_load_si256(reinterpret_cast<const __m256i *>(start));
         s256 = _mm256_srai_epi32(s256, 4);
 
         _mm256_store_si256( reinterpret_cast<__m256i *>(start), s256);
+    }
+
+    for(; start < end; start++) {
+        *start >>= 4;
     }
 
     return num_files;
@@ -290,7 +294,9 @@ std::vector<DocIDFilePair> Serializer::read_filepairs(std::istream &stream) {
 
 
 DocIDFilePair Serializer::read_pair(std::istream &stream) {
-    return {read_vnum(stream), read_str(stream)};
+    uint32_t docid = read_vnum(stream);
+    auto str = read_str(stream);
+    return {docid, str};
 }
 
 

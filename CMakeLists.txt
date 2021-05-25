@@ -29,6 +29,7 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/compactor/Compactor.cpp"
         "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
         source/Constants.cpp source/Base26Num.cpp
+        source/FPStub.cpp
         source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h source/dict_strings.h source/ResultsPrinter.cpp source/ResultsPrinter.h source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/TopDocs.h source/CustomAllocatedVec.cpp source/CustomAllocatedVec.h)
 target_include_directories(search-share PUBLIC source extern/porter2_stemmer extern extern/mio/include)
 target_include_directories(general-indexer PUBLIC source extern/porter2_stemmer extern extern/mio/include)
@@ -51,6 +52,10 @@ add_custom_target(rust-library
         DEPENDS
         "${CMAKE_BINARY_DIR}/librust.so")
 
+add_custom_target(rust-web-server
+        DEPENDS
+        "${CMAKE_SOURCE_DIR}/rust/src")
+
 file(GLOB rust-sources rust/src/*)
 
 set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build --lib --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
@@ -71,5 +76,19 @@ add_custom_command(
         WORKING_DIRECTORY
             ${CMAKE_SOURCE_DIR}/rust
 )
+
+add_custom_command(
+        OUTPUT
+        "${CMAKE_BINARY_DIR}/librust.so"
+        COMMENT
+        "Builds the librust target"
+        COMMAND
+        ${rust-build-command}
+        DEPENDS
+        ${rust-sources}
+        WORKING_DIRECTORY
+        ${CMAKE_SOURCE_DIR}/rust
+)
+
 add_dependencies(general-indexer rust-library)
 add_dependencies(rust-library c-search-abi)

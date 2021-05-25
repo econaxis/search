@@ -217,8 +217,8 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
                         min_docs.docs.end());
 
     if (min_docs.size() < 5) {
-//        return min_docs;
-        return backup(results);
+        return min_docs;
+//        return backup(results);
     } else {
         return min_docs;
 

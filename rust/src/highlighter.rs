@@ -17,7 +17,7 @@ fn highlight_matches(str: &str, terms: &[String]) -> Vec<(usize, usize)> {
     let mut processed = [0u8; 32];
 
     aut.find_iter(str).filter_map(|match_| {
-        if processed[match_.pattern()] < 8 {
+        if processed[match_.pattern()] < 5 {
             processed[match_.pattern()] += 1;
             Some((match_.start(), match_.end()))
         } else {
@@ -26,7 +26,7 @@ fn highlight_matches(str: &str, terms: &[String]) -> Vec<(usize, usize)> {
     }).collect()
 }
 
-const FIRST_N_BYTES_ONLY: usize = 20000;
+const FIRST_N_BYTES_ONLY: usize = 300000;
 
 struct CustomDeserialize<'a>(&'a Vec<(String, Vec<String>)>);
 
@@ -49,8 +49,14 @@ pub fn serialize_response_to_json(a: &Vec<(String, Vec<String>)>) -> String {
 
 #[instrument(level = "debug", skip(filelist))]
 pub fn highlight_files<T: AsRef<str>>(filelist: &[T], highlight_words: &[String]) -> Vec<(String, Vec<String>)> {
+    let starttime = std::time::SystemTime::now();
     let mut highlights = Vec::new();
     for path in filelist {
+        if starttime.elapsed().unwrap().as_millis() > 1500 {
+            let dum = false;
+            break;
+        }
+
         let path = path.as_ref();
         let str = match IndexWorker::load_file_to_string(path.as_ref()) {
             None => {
@@ -59,8 +65,8 @@ pub fn highlight_files<T: AsRef<str>>(filelist: &[T], highlight_words: &[String]
             },
             Some(x) => x
         };
-
         let mut str = str.as_str();
+
         // Limit highlighting to first 5kb only
         let mut strindices: Vec<usize> = str.char_indices().map(|(pos, _)| pos).collect();
         if str.len() > FIRST_N_BYTES_ONLY {
@@ -79,7 +85,7 @@ pub fn highlight_files<T: AsRef<str>>(filelist: &[T], highlight_words: &[String]
             let beforestart: String = beforestart.chars().rev().collect();
             let afterend: String = str[end..].chars().take(20).collect();
             let real_highlight: &str = &str[start..end];
-            let s = format!("{}<mark>{}</mark>{}", beforestart, real_highlight, afterend);
+            let s = format!("{}((({}))){}", beforestart, real_highlight, afterend);
             highlight_hits.push(s);
         }
 
@@ -88,7 +94,7 @@ pub fn highlight_files<T: AsRef<str>>(filelist: &[T], highlight_words: &[String]
         }
 
         // 20 highlighted files is enough for the first page. We don't need to highlight all.
-        if highlights.len() > 4 {
+        if highlights.len() > 10 {
             break;
         }
     }

@@ -58,6 +58,8 @@ namespace Serializer {
     int read_work_index_entry_v2_optimized(std::istream &frequencies, __m256 *buffer);
 
     int read_work_index_entry_v2_optimized(std::istream &frequencies, __m256 *buffer);
+
+    std::vector<uint16_t> read_filepairs_stub(std::istream &stream);
 };
 
 namespace Serializer::ffi {

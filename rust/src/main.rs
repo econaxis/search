@@ -26,7 +26,7 @@ use crate::NameDatabase::NamesDatabase;
 use std::ffi::{OsStr, OsString};
 use RustVecInterface::C_SSK;
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
-use futures::{executor, io, Stream};
+use futures::{executor, io, Stream, TryFutureExt};
 use tokio::net::TcpListener;
 use tokio::io::{Result, AsyncReadExt, split, AsyncWriteExt, AsyncWrite};
 use tokio::runtime::Runtime;
@@ -116,6 +116,7 @@ struct HighlightId {
     id: u32,
 }
 
+
 #[get("/search/")]
 async fn handle_request(data: web::Data<ApplicationState>, query: web::Query<Query>) -> HttpResponse {
     let iw = &data.iw;
@@ -138,6 +139,14 @@ async fn test_get() -> HttpResponse {
     HttpResponseBuilder::new(StatusCode::OK).body(bs)
 }
 
+fn clear_highlight_tasks(cur_docid: u32, highlight_queue: &mut HashMap<u32, HighlightRequest>) {
+    let _sp = span!(Level::DEBUG, "clearing highlight queue", length = highlight_queue.len()).entered();
+    if highlight_queue.len() > 50 {
+        let limit = cur_docid.saturating_sub(5);
+        highlight_queue.retain(|k, v| *k > limit);
+    }
+}
+
 #[get("/highlight/")]
 async fn highlight_handler(data: web::Data<ApplicationState>, highlightid: web::Query<HighlightId>) -> HttpResponse {
     let mut jobs = data.highlighting_jobs.lock().await;
@@ -158,6 +167,7 @@ async fn highlight_handler(data: web::Data<ApplicationState>, highlightid: web::
 
     let res = res.await.unwrap();
 
+
     HttpResponse::Ok()
         .content_type("application/json")
         .body(serialize_response_to_json(&res))
@@ -171,19 +181,19 @@ async fn main_page() -> HttpResponse {
 }
 
 async fn work_on_query(data: &web::Data<ApplicationState>, iw: &IndexWorker::IndexWorker, query: &str) -> (u32, Vec<String>) {
-    let start = time::Instant::now();
-
     let query: Vec<String> = query.split_whitespace().map(|x| x.to_owned()).collect();
 
     let mut res = iw.send_query_async(&query).await;
 
     let id = jobs_counter.fetch_add(1, Ordering::Relaxed);
 
-    // Moves the socket into a new task and runs highlighting.
     // Since highlighting might be resource intensive, we don't want to block incoming connections.
-    let fullsize = res.len();
+    let mut highlight_jobs = data.highlighting_jobs.lock().await;
+    highlight_jobs.insert(id, HighlightRequest { query: query.clone(), files: res.clone() });
 
-    // data.highlighting_jobs.lock().await.insert(id, HighlightRequest { query: query.clone(), files: res.clone() });
+    if highlight_jobs.len() > 100 {
+        clear_highlight_tasks(id, &mut highlight_jobs);
+    }
     (id, res)
 }
 
@@ -219,7 +229,6 @@ fn main() -> io::Result<()> {
     let mut iw = Arc::new(IndexWorker::IndexWorker::new(&suffices));
 
     let sys = actix_rt::System::with_tokio_rt(|| tokio::runtime::Builder::new_current_thread()
-        .max_blocking_threads(2)
         .enable_all()
         .build()
         .unwrap()
@@ -232,7 +241,7 @@ fn main() -> io::Result<()> {
                 .service(main_page)
                 .service(test_get)
                 .service(highlight_handler)
-        }).workers(3)
+        }).workers(1)
             .bind("0.0.0.0:8080").unwrap()
             .run().await;
     }

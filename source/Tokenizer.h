@@ -18,6 +18,8 @@ namespace Tokenizer {
     int clean_token_to_index(std::string &token);
 
     void remove_punctuation(std::string &a);
+
+    bool is_stop_word(std::string& a);
 };
 
 

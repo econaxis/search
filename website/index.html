@@ -10,40 +10,48 @@
 <pre id="highlight-bar"></pre>
 
 <script type="application/javascript">
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
 
     let timeout = 0;
     let abort = new AbortController();
     let signal = abort.signal;
 
-    document.getElementById("search-bar").addEventListener("input", (ev) => {
-        let str = ev.target.value;
 
-        clearTimeout(timeout);
+    async function handle_request(str) {
         abort.abort();
         abort = new AbortController();
         signal = abort.signal;
-        timeout = setTimeout(() => {
-            fetch("/search/?q=" + str,
-                {signal: signal}
-            ).then(response => response.json()).then(text => {
-                formattedtext = JSON.stringify(text.data, null, 3);
-                id = text.id;
-                document.getElementById("highlight-bar").innerHTML = formattedtext;
+        let resp = await fetch("/search/?q=" + str, {signal});
+        let text = await resp.json();
 
-                fetch("/highlight/?id=" + id).then(response => response.json()).then(response => {
-                    for (v in response) {
-                        for (hg in response[v]) {
-                            let newresp = response[v][hg].replace(/(<([^>]+)>)/gi, "");
-                            newresp = newresp.replace(/\(\(\(/gi, "<mark>");
-                            newresp = newresp.replace(/\)\)\)/gi, "</mark>");
-                            response[v][hg] = newresp;
-                        }
-                    }
+        if (signal.aborted) return;
 
-                    document.getElementById('highlight-bar').innerHTML = JSON.stringify(response, null, 3);
-                })
-            })
-        }, 50);
+        formattedtext = JSON.stringify(text.data, null, 3);
+        id = text.id;
+        document.getElementById("highlight-bar").innerHTML = formattedtext;
+
+        let highlight = await fetch("/highlight/?id=" + id, {signal});
+        highlight = await highlight.json();
+
+        if (signal.aborted) return;
+
+
+        for (v in highlight) {
+            for (hg in highlight[v]) {
+                let newresp = highlight[v][hg].replace(/(<([^>]+)>)/gi, "");
+                newresp = newresp.replace(/\(\(\(/gi, "<mark>");
+                newresp = newresp.replace(/\)\)\)/gi, "</mark>");
+                highlight[v][hg] = newresp;
+            }
+        }
+
+        document.getElementById('highlight-bar').innerHTML = JSON.stringify(highlight, null, 3);
+    }
+
+    document.getElementById("search-bar").addEventListener("input", (ev) => {
+        handle_request(ev.target.value).then(() => console.log("done"));
     })
 </script>
 </body>

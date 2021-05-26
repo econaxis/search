@@ -1,7 +1,9 @@
 
+
 #include "Tokenizer.h"
 #include <string>
 #include <fstream>
+#include "Constants.h"
 
 #include <robin_hood/robin_hood.h>
 
@@ -12,8 +14,8 @@ int Tokenizer::clean_token_to_index(std::string &token) {
 
 }
 
-void clean_string(std::string& file) {
-    for(auto& c : file) {
+void clean_string(std::string &file) {
+    for (auto &c : file) {
         if (!(std::isalpha(c) || c == ' ')) {
             c = ' ';
         }
@@ -23,7 +25,7 @@ void clean_string(std::string& file) {
 
 std::vector<WordIndexEntry_unsafe> Tokenizer::index_string_file(std::string file, uint32_t docid) {
     clean_string(file);
-    robin_hood::unordered_map<std::string, WordIndexEntry_unsafe> index_temp;
+    robin_hood::unordered_map <std::string, WordIndexEntry_unsafe> index_temp;
     index_temp.reserve(file.length() / 5);
     int prev_pos, cur_pos = -1;
     while (prev_pos = cur_pos + 1, true) {
@@ -58,5 +60,14 @@ void Tokenizer::remove_punctuation(std::string &a) {
 
     for (auto &c : a) {
         c = (char) std::toupper(c);
+    }
+}
+
+
+bool Tokenizer::is_stop_word(std::string &a) {
+    if (std::find(stop_words.begin(), stop_words.end(), a) == stop_words.end()) {
+        return false;
+    } else {
+        return true;
     }
 }

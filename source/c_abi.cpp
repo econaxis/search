@@ -3,6 +3,7 @@
 #include "Constants.h"
 #include "rust-interface.h"
 #include "Tokenizer.h"
+
 namespace ffi = Serializer::ffi;
 namespace sr = Serializer;
 
@@ -88,8 +89,11 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
     assert(num_indices < 16);
     std::vector<std::string> query(num_terms);
     for (int i = 0; i < num_terms; i++) {
-        query[i] = std::string(query_terms[i]);
-        Tokenizer::clean_token_to_index(query[i]);
+        auto as_str = std::string(query_terms[i]);
+        if (!Tokenizer::is_stop_word(as_str)) {
+            Tokenizer::clean_token_to_index(as_str);
+            query[i] = as_str;
+        }
     }
 
     TopDocs joined;
@@ -123,7 +127,6 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
         fill_rust_vec(output_buffer, imbued.begin().base(), joined.size() * sizeof(DocumentPositionPointer_v2_imbued));
     }
 }
-
 
 
 uint32_t query_for_filename(SortedKeysIndexStub *index, uint32_t docid, char *buffer, uint32_t bufferlen) {

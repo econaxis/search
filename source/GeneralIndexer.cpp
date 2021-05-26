@@ -76,7 +76,7 @@ void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
                                  std::atomic_bool &done_flag) {
     for (auto &entry : filepairs) {
         auto abspath = data_files_dir / "data" / entry.file_name;
-        if(!fs::exists(abspath)) {
+        if(!fs::exists(abspath) || !fs::is_regular_file(abspath)) {
             std::cerr<<"Path "<<abspath.c_str()<<" nonexistent\n";
             continue;
         }

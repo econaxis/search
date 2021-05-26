@@ -51,16 +51,16 @@ private:
     mutable std::ifstream frequencies, terms;
 
 
+    std::string suffix;
     FPStub filemap;
     std::unique_ptr<char[]> buffer;
 
-    std::string suffix;
 
 public:
 
     SortedKeysIndexStub(std::string suffix);
 
-    static constexpr int MAX_FILES_PER_TERM = 50000;
+    static constexpr int MAX_FILES_PER_TERM = 70000;
     std::shared_ptr<const std::vector<StubIndexEntry>> index;
 
 

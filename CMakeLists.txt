@@ -60,6 +60,13 @@ file(GLOB rust-sources rust/src/*)
 
 set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build --lib --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
 
+add_custom_target(
+        rust-server ALL
+        COMMAND cargo build
+        DEPENDS ${CMAKE_SOURCE_DIR}/rust/src
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
+)
+
 
 if (CMAKE_BUILD_TYPE EQUAL RELWITHDEBINFO OR CMAKE_BUILD_TYPE EQUAL RELEASE)
     string(APPEND ${rust-build-command} --release)
@@ -92,3 +99,4 @@ add_custom_command(
 
 add_dependencies(general-indexer rust-library)
 add_dependencies(rust-library c-search-abi)
+add_dependencies(rust-server c-search-abi)

@@ -2,31 +2,51 @@ use std::path::Path;
 use aho_corasick::AhoCorasickBuilder;
 use crate::IndexWorker;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
-use tracing::{instrument, debug};
+use tracing::{instrument, debug, debug_span};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
 use std::time::Duration;
+use crate::IndexWorker::ResultsList;
+use std::ops::Deref;
 
-
+#[instrument(level = "debug", skip(str, terms))]
 fn highlight_matches(str: &str, terms: &[String]) -> Vec<(usize, usize)> {
+    assert!(terms.len() < 64);
+
+    let str = if str.len() > FIRST_N_CHARACTERS_ONLY {
+        &str[0..FIRST_N_CHARACTERS_ONLY]
+    } else {
+        str
+    };
+
     let aut = AhoCorasickBuilder::new().ascii_case_insensitive(true).build(terms);
 
-    // supports maximum 32 terms of query
-    let mut processed = [0u8; 32];
+    // supports maximum 64 terms of query
+    let mut processed = [0u8; 64];
+    let processed = &mut processed[0..terms.len()];
 
-    aut.find_iter(str).filter_map(|match_| {
+    let start_index = 0;
+
+    let mut res = Vec::new();
+
+    for match_ in aut.find_iter(str) {
         if processed[match_.pattern()] < 5 {
             processed[match_.pattern()] += 1;
-            Some((match_.start(), match_.end()))
-        } else {
-            None
+            res.push((match_.start(), match_.end()));
         }
-    }).collect()
+
+        // We have found all the matches we need to, so exit.
+        if processed.iter().all(|&x| x >= 5u8) {
+            break;
+        }
+    }
+
+    return res;
 }
 
-const FIRST_N_BYTES_ONLY: usize = 300000;
+const FIRST_N_CHARACTERS_ONLY: usize = 10000;
 
 struct CustomDeserialize<'a>(&'a Vec<(String, Vec<String>)>);
 
@@ -48,35 +68,26 @@ pub fn serialize_response_to_json(a: &Vec<(String, Vec<String>)>) -> String {
 }
 
 #[instrument(level = "debug", skip(filelist))]
-pub fn highlight_files<T: AsRef<str>>(filelist: &[T], highlight_words: &[String]) -> Vec<(String, Vec<String>)> {
+pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Vec<(String, Vec<String>)> {
     let starttime = std::time::SystemTime::now();
     let mut highlights = Vec::new();
-    for path in filelist {
-        if starttime.elapsed().unwrap().as_millis() > 1500 {
-            let dum = false;
-            break;
-        }
+    for (_, path) in filelist.deref() {
 
-        let path = path.as_ref();
+        // If we've used up more than 1.5 seconds already, exit and just show the results we already have.
+        if starttime.elapsed().unwrap().as_millis() > 1500 { break; }
+
+        let _sp = debug_span!("Loading file", file = %path).entered();
         let str = match IndexWorker::load_file_to_string(path.as_ref()) {
             None => {
-                debug!(path, "File doesn't exist");
+                debug!(path = path.as_str(), "File doesn't exist");
                 "".to_owned()
-            },
+            }
             Some(x) => x
         };
+        _sp.exit();
         let mut str = str.as_str();
 
-        // Limit highlighting to first 5kb only
-        let mut strindices: Vec<usize> = str.char_indices().map(|(pos, _)| pos).collect();
-        if str.len() > FIRST_N_BYTES_ONLY {
-            str = &str[0..strindices[FIRST_N_BYTES_ONLY]];
-            strindices.truncate(FIRST_N_BYTES_ONLY);
-        }
-
-
         let mut matches = highlight_matches(str, highlight_words);
-
 
 
         let mut highlight_hits = Vec::new();
@@ -93,8 +104,8 @@ pub fn highlight_files<T: AsRef<str>>(filelist: &[T], highlight_words: &[String]
             highlights.push((path.to_owned(), highlight_hits));
         }
 
-        // 20 highlighted files is enough for the first page. We don't need to highlight all.
-        if highlights.len() > 10 {
+        // 10 highlighted files is enough for the first page. We don't need to highlight all.
+        if highlights.len() >= 10 {
             break;
         }
     }

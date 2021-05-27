@@ -17,9 +17,10 @@ use tokio::task::JoinHandle;
 use crate::RustVecInterface::DocumentPositionPointer_v3;
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
+use serde::Serialize;
 
 struct SharedState {
-    pub data: Option<Vec<String>>,
+    pub data: Option<ResultsList>,
     pub waker: Option<std::task::Waker>,
 }
 
@@ -32,6 +33,28 @@ pub struct IndexWorker {
 unsafe impl Send for IndexWorker {}
 
 unsafe impl Sync for IndexWorker {}
+
+#[derive(Clone, Serialize)]
+pub struct ResultsList(Vec<(u32, String)>);
+
+impl From<Vec<(u32, String)>> for ResultsList {
+    fn from(t: Vec<(u32, String)>) -> Self {
+        Self(t)
+    }
+}
+
+impl Deref for ResultsList {
+    type Target = Vec<(u32, String)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for ResultsList {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 impl Clone for IndexWorker {
     fn clone(&self) -> Self {
@@ -104,38 +127,36 @@ impl IndexWorker {
                         cffi::search_multi_indices(thread_indices.len() as i32, indices_ptrptr.as_ptr(), query.len() as i32,
                                                    chars, &outputvec as *const VecDPP)
                     };
-                    event!(Level::DEBUG, "Matched {} files. Max score: {}", outputvec.len(),
+                    debug!("Matched {} files. Max score: {}", outputvec.len(),
                         max_score = outputvec.first().unwrap_or(&Default::default()).1);
 
-                    let buf = [0u8; 700];
+                    let buf = [0u8; 300];
 
-                    let mut filenames: Vec<String> = Vec::new();
+                    let mut results = ResultsList::from(Vec::new());
                     // let mut filenames_hash = HashSet::new();
 
                     let _sp = span!(Level::DEBUG, "Get filenames").entered();
+
                     for i in &*outputvec {
                         let len = unsafe {
                             cffi::query_for_filename(*thread_indices[i.2 as usize].as_ref(), i.0 as u32, buf.as_ptr() as *const c_char, buf.len() as u32)
                         } as usize;
 
-                        if len >= buf.len() {
-                            continue;
-                        }
-
+                        // The last character at index `len`, is the null terminator.
                         let str = String::from_utf8_lossy(&buf[0..len-1]).into_owned();
 
                         // Deduplicate names
                         // If we have two different StubIndex that somehow cover the same document,
                         // then it will lead to this document being included twice.
-                        if filenames.iter().find(|&x| x == &str).is_none() {
-                            filenames.push(str);
+                        if results.iter().find(|x| x.1 == str).is_none() {
+                            results.push((i.1, str.to_owned()));
                         }
                     }
-                    std::mem::drop(_sp);
-
-
+                    _sp.exit();
                     let mut sharedstate = sharedstate.lock().unwrap();
-                    sharedstate.data.replace(filenames);
+
+                    // Put the results into a sharedstate object, so the parent caller can access it.
+                    sharedstate.data.replace(results);
                     sharedstate.waker.take().unwrap().wake();
                 } else {
                     // Option is none, so we exit the loop and close the thread.
@@ -146,7 +167,7 @@ impl IndexWorker {
     }
 
 
-    pub async fn send_query_async(&self, query: &Vec<String>) -> Vec<String> {
+    pub async fn send_query_async(&self, query: &Vec<String>) -> ResultsList {
         // Returns list of filenames.
         let mut sent = false;
         let ss = Arc::new(Mutex::new(SharedState {
@@ -169,34 +190,6 @@ impl IndexWorker {
 
         futures::future::poll_fn(pollfn).await
     }
-
-    //
-    // pub fn poll_for_results(&mut self) -> Vec<String> {
-    //     self.condvar.wait_while(self.result_buffer.lock().unwrap(), |x| {
-    //         x.0 == self.prevresult
-    //     });
-    //
-    //     let ret = self.result_buffer.lock().unwrap().1.clone();
-    //
-    //     let indices = self.indices.lock().unwrap();
-    //
-    //     let buf = [0u8; 1000];
-    //
-    //     let mut filenames: Vec<String> = Vec::new();
-    //     for i in ret.deref() {
-    //         let len = unsafe {
-    //             cffi::query_for_filename(*indices[i.2 as usize].as_ref(), i.0 as u32, buf.as_ptr() as *const c_char, buf.len() as u32)
-    //         } as usize;
-    //
-    //         if len >= buf.len() {
-    //             continue;
-    //         }
-    //
-    //         let str = CStr::from_bytes_with_nul(&buf[0..len]).unwrap();
-    //         filenames.push(str.to_string_lossy().into_owned());
-    //     }
-    //     filenames
-    // }
 }
 
 pub fn load_file_to_string(p: &Path) -> Option<String> {

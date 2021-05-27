@@ -123,6 +123,8 @@ pub use public::*;
 use std::hash::{Hash, Hasher};
 
 
+
+// Contains FFI declarations for connecting to C++ shared library.
 #[link(name = "c-search-abi")]
 extern "C" {
     fn create_ifstream_from_path(path: *const c_char) -> *const ctypes::ifstream;

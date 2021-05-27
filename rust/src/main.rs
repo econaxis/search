@@ -50,6 +50,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::cell::Cell;
 use std::borrow::Borrow;
+use crate::IndexWorker::ResultsList;
 
 static jobs_counter: AtomicU32 = AtomicU32::new(1);
 
@@ -73,7 +74,7 @@ fn utf8_to_str(a: &[u8]) -> &str {
 
 struct HighlightRequest {
     query: Vec<String>,
-    files: Vec<String>,
+    files: ResultsList
 }
 
 struct ApplicationState {
@@ -162,7 +163,7 @@ async fn highlight_handler(data: web::Data<ApplicationState>, highlightid: web::
     debug!(flen = files.len(), "Received highlighting request");
 
     let res = tokio::task::spawn_blocking(move || {
-        highlight_files(files.as_slice(), query.as_slice())
+        highlight_files(&files, query.as_slice())
     });
 
     let res = res.await.unwrap();
@@ -180,7 +181,7 @@ async fn main_page() -> HttpResponse {
     HttpResponse::Ok().body(buf)
 }
 
-async fn work_on_query(data: &web::Data<ApplicationState>, iw: &IndexWorker::IndexWorker, query: &str) -> (u32, Vec<String>) {
+async fn work_on_query(data: &web::Data<ApplicationState>, iw: &IndexWorker::IndexWorker, query: &str) -> (u32, ResultsList) {
     let query: Vec<String> = query.split_whitespace().map(|x| x.to_owned()).collect();
 
     let mut res = iw.send_query_async(&query).await;
@@ -189,7 +190,11 @@ async fn work_on_query(data: &web::Data<ApplicationState>, iw: &IndexWorker::Ind
 
     // Since highlighting might be resource intensive, we don't want to block incoming connections.
     let mut highlight_jobs = data.highlighting_jobs.lock().await;
-    highlight_jobs.insert(id, HighlightRequest { query: query.clone(), files: res.clone() });
+
+    // Truncate the results list to max 10 elements. We don't need to highlight anymore.
+    let res_trunc = &res[0..std::cmp::min(res.len(), 10)];
+    let res_trunc = res_trunc.to_vec();
+    highlight_jobs.insert(id, HighlightRequest { query: query.clone(), files: ResultsList::from(res_trunc) });
 
     if highlight_jobs.len() > 100 {
         clear_highlight_tasks(id, &mut highlight_jobs);
@@ -206,11 +211,11 @@ fn setup_logging() {
 }
 
 fn main() -> io::Result<()> {
-    let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-    builder
-        .set_private_key_file("/home/henry/127.0.0.1+1-key.pem", SslFiletype::PEM)
-        .unwrap();
-    builder.set_certificate_chain_file("/home/henry/127.0.0.1+1.pem").unwrap();
+    // let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+    // builder
+    //     .set_private_key_file("/home/henry/127.0.0.1+1-key.pem", SslFiletype::PEM)
+    //     .unwrap();
+    // builder.set_certificate_chain_file("/home/henry/127.0.0.1+1.pem").unwrap();
     unsafe { cffi::initialize_dir_vars() };
 
     setup_logging();

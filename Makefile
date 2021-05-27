@@ -5,6 +5,8 @@ else
     data-file-path :=/mnt/nfs/extra/data-files
 endif
 
+.ONESHELL:
+
 RSYNC_COMMAND:=rsync -avh --filter=':- .gitignore' --info=progress2
 
 clear:
@@ -12,6 +14,10 @@ clear:
     $(RSYNC_COMMAND) $(data-file-path)/processed/ $(data-file-path)/data/ && \
 	(cd data&& fd . > ../total-files-list)
 	python source/tarrer.py $(data-file-path)
+
+run-server:
+	cd rust
+	cargo run
 
 clear-all: clear
 	fd . $(data-file-path)/indices -x rm -r {}

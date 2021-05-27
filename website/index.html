@@ -18,24 +18,36 @@
     let abort = new AbortController();
     let signal = abort.signal;
 
+    let curcounter = 0;
+    let latency = 100;
 
     async function handle_request(str) {
+        if(str.trim() === "") return;
+
+        curcounter++;
+        let mycounter = curcounter;
         abort.abort();
         abort = new AbortController();
         signal = abort.signal;
         let resp = await fetch("/search/?q=" + str, {signal});
         let text = await resp.json();
 
-        if (signal.aborted) return;
+        if (signal.aborted || mycounter !== curcounter) return;
 
         formattedtext = JSON.stringify(text.data, null, 3);
         id = text.id;
         document.getElementById("highlight-bar").innerHTML = formattedtext;
 
+        // If latency is high, we want to minimize calls to highlight. If latency is low, we can call highlight freely.
+        await sleep(Math.min(latency, 300));
+
+        if (signal.aborted || mycounter!==curcounter) return;
+
+        latency = window.performance.now();
         let highlight = await fetch("/highlight/?id=" + id, {signal});
+        latency = window.performance.now() - latency;
         highlight = await highlight.json();
 
-        if (signal.aborted) return;
 
 
         for (v in highlight) {

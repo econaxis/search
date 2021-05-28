@@ -57,19 +57,21 @@ add_custom_target(rust-web-server
 
 file(GLOB rust-sources rust/src/*)
 
-set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build --lib --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
+set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
+
+if (CMAKE_BUILD_TYPE MATCHES RelWithDebInfo OR CMAKE_BUILD_TYPE MATCHES Release)
+    message("MESSAGE: Using release build")
+    string(APPEND ${rust-build-command} --release)
+endif()
 
 add_custom_target(
         rust-server ALL
-        COMMAND cargo build
+        COMMAND ${rust-build-command}
         DEPENDS ${CMAKE_SOURCE_DIR}/rust/src
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
 )
 
 
-if (CMAKE_BUILD_TYPE EQUAL RELWITHDEBINFO OR CMAKE_BUILD_TYPE EQUAL RELEASE)
-    string(APPEND ${rust-build-command} --release)
-endif()
 add_custom_command(
         OUTPUT
             "${CMAKE_BINARY_DIR}/librust.so"

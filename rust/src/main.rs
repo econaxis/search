@@ -220,11 +220,6 @@ fn main() -> io::Result<()> {
     setup_logging();
     let suffices = ["oPV3-\0", "JX9vH\0", "D59V9\0", "WDHnk\0", "j493v\0", "k7FSu\0", "tg_2O\0", "vz1R3\0", "dLABs\0", "nPoty\0", "pEgBu\0", "-be7U\0", "pxVOI\0", "EcEAk\0", "yyQfQ\0", "Xo25c\0", "Sx0s2\0", "sUj-F\0", "fyuQf\0", "WpHIH-hBvUn\0", "6uVWX-c5H8m\0", "f0FRh-3Gw1R\0", "c4WUJ-od7Ew\0", "UgD0W-G_78v\0", ];
 
-    // Tokio or actix does this weird thing where they clone the IndexWorker many times
-    // This wastes memory, spawns useless threads, and there's no way I know to fix it.
-    // Solution: wrap `iw` in an Arc. Then actix can clone it however many times it wants.
-    // This won't spawn new threads or allocate memory. However, when we actually use it,
-    // we clone `iw` once, preventing excess threads.
     let iw: Vec<_> = suffices.chunks(4).map(|chunk| {
         IndexWorker::IndexWorker::new(chunk)
     }).collect();
@@ -249,9 +244,7 @@ fn main() -> io::Result<()> {
                 .service(highlight_handler)
         }).workers(1)
             .bind("0.0.0.0:8080").unwrap()
-            .run().await.unwrap();
-    }
-    );
+            .run().await.unwrap(); });
 
 
     // sys.run();

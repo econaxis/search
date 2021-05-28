@@ -49,7 +49,7 @@ mod public_ffi {
 
 
 fn pretty_serialize(d: &HashSet<DocIDFilePair>) {
-    let outfile = fs::File::create("file_metadata.pretty.json").unwrap();
+    let outfile = fs::File::create("/tmp/file_metadata.pretty.json").unwrap();
     serde_json::to_writer_pretty(outfile, &d).unwrap();
 }
 

@@ -1,22 +1,20 @@
-use std::sync::{mpsc, Arc, Mutex, Condvar};
+use std::sync::{mpsc, Arc, Mutex};
 use super::RustVecInterface::{VecDPP, C_SSK};
 use super::cffi;
-use std::{thread, fs, task};
+use std::{thread, fs};
 use std::ops::{Deref, DerefMut};
-use std::ffi::{CStr, CString};
+use std::ffi::{CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use std::future::Future;
+
 use std::task::{Context, Poll};
-use std::pin::Pin;
-use std::io::Read;
-use std::time::Duration;
-use std::sync::mpsc::TrySendError::Full;
+
+
 use tracing::{info, span, debug, Level, event};
-use tokio::task::JoinHandle;
-use crate::RustVecInterface::DocumentPositionPointer_v3;
-use std::collections::HashSet;
-use std::collections::hash_map::DefaultHasher;
+
+
+
+
 use serde::Serialize;
 
 struct SharedState {
@@ -122,7 +120,7 @@ impl IndexWorker {
         builder.spawn(move || {
             loop {
                 let received: Option<(Vec<String>, Arc<Mutex<SharedState>>)> = receiver.recv().unwrap();
-                if let Some((query, mut sharedstate)) = received {
+                if let Some((query, sharedstate)) = received {
                     info!("Sending query: {:?}", query);
                     let chars = str_to_char_char(&query);
 
@@ -189,7 +187,7 @@ impl IndexWorker {
         let pollfn = |cx: &mut Context<'_>| {
             if !sent {
                 ss.lock().unwrap().waker.replace(cx.waker().clone());
-                self.sender.lock().unwrap().send(Some((Vec::from(query), ss.clone())));
+                self.sender.lock().unwrap().send(Some((Vec::from(query), ss.clone()))).unwrap();
                 sent = true;
                 Poll::Pending
             } else {
@@ -211,7 +209,7 @@ pub fn load_file_to_string(p: &Path) -> Option<String> {
 impl Drop for IndexWorker {
     fn drop(&mut self) {
         debug!("Dropping IW");
-        self.sender.lock().unwrap().send(None);
-        self.thread_handle.take().unwrap().join();
+        self.sender.lock().unwrap().send(None).unwrap();
+        self.thread_handle.take().unwrap().join().unwrap();
     }
 }

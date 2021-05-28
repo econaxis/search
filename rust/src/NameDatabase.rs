@@ -1,11 +1,16 @@
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use crate::{cffi};
-use crate::RustVecInterface::DocumentPositionPointer_v3;
-use std::borrow::Borrow;
-use std::hash::Hash;
-use std::ffi::OsStr;
-use crate::cffi::DocIDFilePair;
+use std::{
+    borrow::Borrow,
+    hash::Hash,
+    fs::{File, self},
+    iter::FromIterator,
+    ffi::OsStr,
+    collections::{HashSet},
+    path::{Path},
+};
+use crate::cffi::{DocIDFilePair, generate_metadata_for_dir};
+pub use public_ffi::*;
+use serde::Serialize;
+
 
 #[derive(Default, Debug)]
 pub struct NamesDatabase {
@@ -42,17 +47,10 @@ mod public_ffi {
     }
 }
 
-pub use public_ffi::*;
-use std::fs::File;
-use std::fs;
-use std::iter::FromIterator;
-use super::cffi::os_str_to_str;
-use serde::Serialize;
-use rmp_serde::Deserializer;
 
 fn pretty_serialize(d: &HashSet<DocIDFilePair>) {
     let outfile = fs::File::create("file_metadata.pretty.json").unwrap();
-    serde_json::to_writer_pretty(outfile, &d);
+    serde_json::to_writer_pretty(outfile, &d).unwrap();
 }
 
 impl NamesDatabase {
@@ -64,20 +62,20 @@ impl NamesDatabase {
 
         let mut processed_data: HashSet<DocIDFilePair> = if json_metadata.is_ok() && json_metadata.unwrap().len() > 1 {
             println!("Reusing same JSON metadata file");
-            let mut cur_data = Self::from_json_file(json_path);
+            let cur_data = Self::from_json_file(json_path);
             cur_data.set
         } else {
-            fs::File::create(&json_path);
+            fs::File::create(&json_path).unwrap();
             HashSet::new()
         };
 
-        processed_data.extend(cffi::generate_metadata_for_dir(metadata_path, &processed_data));
+        processed_data.extend(generate_metadata_for_dir(metadata_path, &processed_data));
 
         // Serialize new metadata file.
         let binary_outfile = fs::File::create(&json_path).unwrap();
 
         let mut serializer = rmp_serde::Serializer::new(&binary_outfile);
-        processed_data.serialize(&mut serializer);
+        processed_data.serialize(&mut serializer).unwrap();
 
         pretty_serialize(&processed_data);
         Self {
@@ -95,11 +93,6 @@ impl NamesDatabase {
         let set = HashSet::from_iter(data.into_iter());
         NamesDatabase { set }
     }
-
-    pub fn exists<Q>(&self, key: &Q) -> bool where DocIDFilePair: Borrow<Q>, Q: Hash + Eq {
-        self.set.get(&key).is_some()
-    }
-
     pub fn get<Q>(&self, key: &Q) -> Option<&DocIDFilePair>
         where DocIDFilePair: Borrow<Q>, Q: Hash + Eq + ?Sized {
         self.set.get(&key)

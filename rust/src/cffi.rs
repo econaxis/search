@@ -1,20 +1,13 @@
-use crate::{data_file_dir};
-use super::RustVecInterface::{VecDPP, DocumentPositionPointer_v3};
-use regex;
+use super::RustVecInterface::{VecDPP};
 
 use std::ffi;
 use std::io::Read;
 pub use std::os::raw::c_char;
 
-use std::fmt::Error;
-use std::fs;
-
-use std::ffi::{c_void, CStr, OsStr};
-use std::ops::Deref;
+use std::ffi::{CStr, OsStr};
 use std::path::{Path, PathBuf};
 use std::borrow::Borrow;
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use serde::ser::SerializeTuple;
+use serde::{Serialize, Deserialize};
 use std::str::FromStr;
 
 
@@ -26,17 +19,15 @@ pub mod ctypes {
     }
 }
 
+
 mod public {
     use std::path::{Path, PathBuf};
-    use std::fs;
-    use std::io::{BufReader, Read, BufRead};
-    use crate::cffi::{DocIDFilePair, convert_name_to_abs};
-    use crate::{data_file_dir, indice_file_dir};
+    use std::{fs, env};
+    use std::io::{BufReader, BufRead};
+    use crate::cffi::{DocIDFilePair};
     use regex::Regex;
     use std::collections::HashSet;
     use std::ffi::OsStr;
-
-    const filemap_regex: &str = r"filemap-(.*)";
 
     fn filemaps<P: AsRef<Path>>(p: P) -> Vec<PathBuf> {
         let joined_regex: Regex = Regex::new(r"# joined .*").unwrap();
@@ -46,7 +37,6 @@ mod public {
 
         let bfr = fs::File::open(&p).map(|x| BufReader::new(x));
         let mut result_index_files = Vec::new();
-        let lines = 0;
 
         if let Ok(bfr) = bfr {
             for s in bfr.lines() {
@@ -57,7 +47,7 @@ mod public {
                     continue;
                 }
 
-                let s = PathBuf::from(format!("{}/filemap-{}", indice_file_dir, s));
+                let s = PathBuf::from(format!("{}/indices/filemap-{}", env::var("DATA_FILES_DIR").unwrap(), s));
                 if s.as_path().exists() {
                     result_index_files.push(s);
                 } else {
@@ -69,23 +59,7 @@ mod public {
         result_index_files
     }
 
-    fn word_count(p: &Path) -> Option<u32> {
-        let f = fs::File::open(p).ok()?;
-        let mut reader = BufReader::new(f);
-        let mut spaces = 0;
 
-        Some(reader.bytes().fold(0, |value, item| {
-            if item.ok() == Some(b' ') {
-                value + 1
-            } else {
-                value
-            }
-        }))
-    }
-
-    pub fn os_str_to_str<P: AsRef<Path>>(p: &P) -> &str {
-        p.as_ref().as_os_str().to_str().unwrap()
-    }
 
     /// Generate metadata for all filemap-* files in a directory as a vector of DocIDFilePairs.
     pub fn generate_metadata_for_dir<Path_t: AsRef<Path>>(path: Path_t, processed_already: &HashSet<DocIDFilePair>)
@@ -101,7 +75,6 @@ mod public {
                 // Fill in the remaining data of the elem.
                 elem.filemap_path = Some(path.clone());
 
-                let abspath = convert_name_to_abs(&elem.path);
                 // elem.bytes = fs::metadata(&abspath).map(|metadata| metadata.len() as u32).ok();
                 // elem.num_words = word_count(&abspath);
                 elem
@@ -114,10 +87,6 @@ mod public {
     }
 }
 
-fn convert_name_to_abs(p: &Path) -> PathBuf {
-    let out = PathBuf::from(data_file_dir.to_owned()).join("data").join(p);
-    return out;
-}
 
 pub use public::*;
 use std::hash::{Hash, Hasher};
@@ -130,16 +99,13 @@ extern "C" {
     fn create_ifstream_from_path(path: *const c_char) -> *const ctypes::ifstream;
     fn deallocate_ifstream(stream: *const ctypes::ifstream);
     fn read_from_ifstream(stream: *const ctypes::ifstream, buffer: *mut c_char, max_len: u32);
-    fn read_str(stream: *const ctypes::ifstream, buffer: *const c_char) -> u32;
     fn read_filepairs(stream: *const ctypes::ifstream, vecpointer: *const *const ctypes::vector, length: *const u32);
     fn deallocate_vec(ptr: *const ctypes::vector);
     fn copy_filepairs_to_buf(vec: *const ctypes::vector, buf: *const C_DocIDFilePair, max_length: u32);
 
     pub fn load_one_index(suffix_name: *const c_char) -> *mut ctypes::SortedKeysIndexStub;
 
-    #[allow(improper_ctypes)]
-    pub fn search_index_top_n(index: *const ctypes::SortedKeysIndexStub, output_buffer: *const VecDPP,
-                              term_num: i32, query_terms: *const *const c_char);
+
     pub fn delete_one_index(ssk: *const ctypes::SortedKeysIndexStub);
 
     #[allow(improper_ctypes)]
@@ -167,7 +133,6 @@ struct C_DocIDFilePair {
 
 pub fn get_filepairs<P: AsRef<Path>>(path: P) -> Vec<DocIDFilePair> {
     let mut cvec = unsafe { CVector::new_from_path(path) };
-    let mut vec: Vec<DocIDFilePair> = Vec::new();
     cvec.buffer.drain(0..).map(|i: C_DocIDFilePair| {
         i.into()
     }).collect()
@@ -255,8 +220,8 @@ impl CObj_Drop<C_DocIDFilePair> for CVector<C_DocIDFilePair> {
 
 impl CVector<C_DocIDFilePair> {
     pub unsafe fn new(stream: &ifstream) -> Self {
-        let mut vecpointer: *const ctypes::vector = 0 as *const _;
-        let mut length: u32 = 0;
+        let vecpointer: *const ctypes::vector = 0 as *const _;
+        let length: u32 = 0;
         read_filepairs(stream.as_ctypes(), &vecpointer as *const *const _, &length as *const u32);
 
         let mut buf = Vec::new();

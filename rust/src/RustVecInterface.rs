@@ -1,9 +1,9 @@
-use std::ffi::{c_void, CStr, CString};
-use std::slice;
+use std::ffi::{c_void, CStr};
 use std::mem;
 use std::ops::{Deref, DerefMut};
+use std::slice;
 
-use crate::cffi::{ctypes, self, c_char, search_index_top_n, clone_one_index};
+use crate::cffi::{self, clone_one_index, ctypes};
 
 #[derive(Copy, Clone, Default, Debug)]
 #[repr(C)]
@@ -58,24 +58,6 @@ impl C_SSK {
         let cstr = CStr::from_bytes_with_nul(suffix.as_bytes()).unwrap();
         let ssk = unsafe { cffi::load_one_index(cstr.as_ptr()) };
         Self(ssk)
-    }
-
-    pub fn search_terms(&self, terms: &[String]) -> VecDPP {
-        // Convert to acceptable *const *const c_char type.
-        let strs: Vec<CString> = terms.into_iter().map(|x| {
-            CString::new(x.as_bytes()).unwrap()
-        }).collect();
-
-        let chars: Vec<*const c_char> = strs.iter().map(|x| x.as_ptr()).collect();
-        let chars: *const *const c_char = chars.as_ptr();
-
-        let output_buf = VecDPP::new();
-
-        unsafe { search_index_top_n(*self.as_ref(), &output_buf, terms.len() as i32, chars) }
-
-        println!("{:?}", output_buf);
-
-        output_buf
     }
 }
 

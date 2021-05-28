@@ -1,6 +1,3 @@
-#![allow(unused)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
@@ -9,35 +6,27 @@
 #![feature(drain_filter)]
 
 mod cffi;
-mod index_file_checker;
 mod NameDatabase;
 mod highlighter;
 mod RustVecInterface;
-mod microsecond_timer;
 mod IndexWorker;
 
 
-use std::path::{Path, PathBuf};
-use crate::cffi::DocIDFilePair;
-use std::{fs, time, env};
-use std::io::{BufReader, Read, Write};
-use std::cmp::Ord;
-use crate::NameDatabase::NamesDatabase;
-use std::ffi::{OsStr, OsString};
-use RustVecInterface::C_SSK;
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
-use futures::{executor, io, Stream, TryFutureExt};
-use tokio::net::TcpListener;
-use tokio::io::{Result, AsyncReadExt, split, AsyncWriteExt, AsyncWrite};
-use tokio::runtime::Runtime;
+use std::{fs, env};
+use std::io::{Read};
+
+use futures::{io, Stream};
+
+use tokio::io::{Result};
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
+
 use crate::highlighter::{highlight_files, serialize_response_to_json};
 use tracing_subscriber::FmtSubscriber;
 use tracing::{Level, Instrument, span, event, debug, info, debug_span};
 use tracing_subscriber::fmt::format::FmtSpan;
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder, HttpResponseBuilder};
+use actix_web::{get, web, App, HttpResponse, HttpServer, HttpResponseBuilder};
 use serde::Deserialize;
 use std::time::Duration;
 use std::task::{Context, Poll};
@@ -46,34 +35,16 @@ use actix_web::http::StatusCode;
 use actix_web::web::Bytes;
 use actix_web::body::BodyStream;
 use std::collections::HashMap;
-use tracing_log::LogTracer;
+
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::cell::Cell;
-use std::borrow::Borrow;
+
+
 use crate::IndexWorker::ResultsList;
 use std::ops::Deref;
-use tracing_subscriber::util::SubscriberInitExt;
-use log::LevelFilter;
+
 
 static jobs_counter: AtomicU32 = AtomicU32::new(1);
 
-const data_file_dir: &str = "/mnt/nfs/extra/data-files/";
-const indice_file_dir: &str = "/mnt/nfs/extra/data-files/indices/";
-
-const equals_separator: &str = "===============================";
-
-const html_prefix: &str = r#"<!doctype html><html>
-<head> <meta charset="utf-8"/></head>
-<body style = "margin: 20%">"#;
-const html_suffix: &str = "</body></html>";
-
-
-fn utf8_to_str(a: &[u8]) -> &str {
-    let res = std::str::from_utf8(a);
-    if let Ok(v) = res { v } else {
-        "UTF8 - error"
-    }
-}
 
 struct HighlightRequest {
     query: Vec<String>,
@@ -90,7 +61,7 @@ struct FT(u32);
 impl Stream for FT {
     type Item = Result<Bytes>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.0 += 1;
         let mut b = vec![0u8; 1000];
         for i in 1..1000 {
@@ -147,13 +118,13 @@ fn clear_highlight_tasks(cur_docid: u32, highlight_queue: &mut HashMap<u32, High
     let _sp = span!(Level::DEBUG, "clearing highlight queue", length = highlight_queue.len()).entered();
     if highlight_queue.len() > 50 {
         let limit = cur_docid.saturating_sub(30);
-        highlight_queue.retain(|k, v| *k > limit);
+        highlight_queue.retain(|k, _v| *k > limit);
     }
 }
 
 #[get("/highlight/")]
 async fn highlight_handler(data: web::Data<ApplicationState>, highlightid: web::Query<HighlightId>) -> HttpResponse {
-    let mut jobs = data.highlighting_jobs.lock().await;
+    let jobs = data.highlighting_jobs.lock().await;
     let jobrequest = jobs.get(&highlightid.id);
     if jobrequest.is_none() {
         return HttpResponse::BadRequest().finish();
@@ -190,8 +161,8 @@ async fn broadcast_query(indices: &[IndexWorker::IndexWorker], query: &[String])
         iw.send_query_async(query)
     }).collect();
 
-    let mut res = futures::future::join_all(futures_list);
-    let mut res = res.instrument(debug_span!("Fanning out requests")).await;
+    let res = futures::future::join_all(futures_list);
+    let res = res.instrument(debug_span!("Fanning out requests")).await;
 
     let _sp = debug_span!("Reducing requests").entered();
     let mut res = res.into_iter().reduce(|x1, x2| x1.join(x2)).unwrap();
@@ -202,7 +173,7 @@ async fn broadcast_query(indices: &[IndexWorker::IndexWorker], query: &[String])
 async fn work_on_query(data: &web::Data<ApplicationState>, iw: &[IndexWorker::IndexWorker], query: &str) -> (u32, ResultsList) {
     let query: Vec<String> = query.split_whitespace().map(|x| x.to_owned()).collect();
 
-    let mut res = broadcast_query(iw, &query).await;
+    let res = broadcast_query(iw, &query).await;
 
     let id = jobs_counter.fetch_add(1, Ordering::Relaxed);
 
@@ -229,7 +200,7 @@ fn setup_logging() {
         println!("Using env logger");
     } else {
         let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG)
-            .with_span_events(FmtSpan::ACTIVE).with_timer(microsecond_timer::MicrosecondTimer {}).finish();
+            .with_span_events(FmtSpan::ACTIVE).finish();
 
         tracing::subscriber::set_global_default(subscriber)
             .expect("setting default subscriber failed");
@@ -254,20 +225,20 @@ fn main() -> io::Result<()> {
     // Solution: wrap `iw` in an Arc. Then actix can clone it however many times it wants.
     // This won't spawn new threads or allocate memory. However, when we actually use it,
     // we clone `iw` once, preventing excess threads.
-    let mut iw: Vec<_> = suffices.chunks(6).map(|chunk| {
+    let iw: Vec<_> = suffices.chunks(4).map(|chunk| {
         IndexWorker::IndexWorker::new(chunk)
     }).collect();
 
 
-    let mut highlighting_jobs = Arc::new(Mutex::new(HashMap::new()));
+    let highlighting_jobs = Arc::new(Mutex::new(HashMap::new()));
 
 
-    let sys = actix_rt::System::with_tokio_rt(|| tokio::runtime::Builder::new_current_thread()
+    let _sys = actix_rt::System::with_tokio_rt(|| tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap()
     ).block_on(async move {
-        let mut iw = Arc::new(iw);
+        let iw = Arc::new(iw);
 
         HttpServer::new(move || {
             App::new()
@@ -278,7 +249,7 @@ fn main() -> io::Result<()> {
                 .service(highlight_handler)
         }).workers(1)
             .bind("0.0.0.0:8080").unwrap()
-            .run().await;
+            .run().await.unwrap();
     }
     );
 

@@ -109,7 +109,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
                 // For debug inspections only.
                 if(i->document_id == 50234) {
                     auto str = query_filemap(i->document_id);
-                    bool a = true;
+                    bool dummy = true;
                 }
             }
             outputs.emplace_back(init, init + size);

@@ -95,7 +95,7 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
      *                     n elements of [document_id][frequency]...
      */
     serialize_vnum(frequencies, term_pos, true);
-//    serialize_vnum(frequencies, positions.tellp(), true);
+    serialize_vnum(frequencies, positions.tellp(), true);
     serialize_vnum(frequencies, 0, true);
 
 

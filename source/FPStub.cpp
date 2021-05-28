@@ -15,7 +15,6 @@ FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
             diffvec.push_back(stream.tellg());
         }
         auto dfp = Serializer::read_pair(stream);
-        assert(dfp.document_id == i+1);
     }
 }
 

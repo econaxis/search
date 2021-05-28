@@ -21,6 +21,7 @@ void SortedKeysIndex::sort_and_group_shallow() {
 
     auto it = index.begin();
 
+
     // For empty vector, index.begin() == index.end().
     while (it != index.end() && it < index.end() - 1) {
         auto cur_key = it->key;

@@ -66,10 +66,6 @@ load_all_indices() {
 
         std::cout << "Used database file: " << line << "\n";
 
-        std::ifstream filepairstream(indice_files_dir / ("filemap-" + line), std::ios_base::binary);
-//        auto temp = Serializer::read_filepairs(filepairstream);
-//        temp.clear();
-//        filepairs.push_back(temp);
         indices.emplace_back(line);
 
         if (indices.size() >= 3) break;
@@ -165,8 +161,62 @@ void test() {
     std::cout<<b<<"\n"<<counter1<<" "<<counter2<<"\n";
 }
 
+std::string file = "    <title>Spurius Maelius</title>\n"
+                   "    <ns>0</ns>\n"
+                   "    <id>2978110</id>\n"
+                   "    <revision>\n"
+                   "      <id>994986955</id>\n"
+                   "      <parentid>983171579</parentid>\n"
+                   "      <timestamp>2020-12-18T16:15:26Z</timestamp>\n"
+                   "      <contributor>\n"
+                   "        <username>Avilich</username>\n"
+                   "        <id>36246437</id>\n"
+                   "      </contributor>\n"
+                   "      <comment>inadequate link</comment>\n"
+                   "      <model>wikitext</model>\n"
+                   "      <format>text/x-wiki</format>\n"
+                   "      <text bytes=\"2387\" xml:space=\"preserve\">{{short description|Wealthy Roman plebeian}}\n"
+                   "'''Spurius Maelius''' (died 439 BC) was a wealthy [[Ancient Rome|Roman]] [[plebeian]] who was slain because he was suspected of intending to make himself king.&lt;ref name=&quot;Livy1881&quot;&gt;{{cite book|author=Livy|title=The History of Rome|url=https://books.google.com/books?id=p8w_AAAAYAAJ&amp;pg=PA293|year=1881|publisher=Harper &amp; Brothers|pages=293–}}&lt;/ref&gt;\n"
+                   "\n"
+                   "==Biography==\n"
+                   "During a severe famine, Spurius Maelius bought up a large amount of [[grain supply to the city of Rome|wheat]] and sold it at a low price to the people of Rome. According to [[Livy]], Lucius Minucius Augurinus, the [[Patrician (ancient Rome)|patrician]] ''praefectus annonae'' (president of the market), thereupon accused him of collecting arms in Maelius' house, and that he was holding secret meetings at which plans were being undoubtedly formed to establish a monarchy. The cry was taken up. Maelius, summoned before the aged [[Cincinnatus]] (specially appointed ''[[Roman dictator|dictator]]''), refused to appear, and was slain by the [[Magister equitum|Master of the Horse]], [[Gaius Servilius Ahala]]. Afterward his house was razed to the ground, his wheat distributed amongst the people, and his property confiscated. The open space called the Equimaelium, on which his house had stood, preserved the memory of his death along the [[Vicus Jugarius]]. [[Cicero]] calls Ahala's deed a glorious one, but, whether Maelius entertained any ambitious projects or not, his [[summary execution]] was an act of [[murder]], since by the ''[[Valerio-Horatian Laws|Lex Valeria Horatia de provocatione]]'' the dictator was bound to allow the right of appeal.{{sfn|Chisholm|1911|p=298}}\n"
+                   "\n"
+                   "==See also==\n"
+                   "* [[Marcus Junius Brutus]]\n"
+                   "\n"
+                   "==References==\n"
+                   "{{reflist}}\n"
+                   "\n"
+                   ";Attribution\n"
+                   "*{{1911|wstitle=Maelius, Spurius |volume=17 |page=298}} Endnotes:\n"
+                   "\n"
+                   "==Sources==\n"
+                   "*Niebuhr's ''History of Rome'', ii. 418 (Eng. trans., 1851);\n"
+                   "*G. Cornewall Lewis, ''Credibility of early Roman History'', ii.;\n"
+                   "*Livy, iv. 13;\n"
+                   "*Ancient sources: [[Livy]], iv.13; Cicero, ''De senectute'' 16, ''De amicitia'' 8, ''De republica'', ii.49; [[Florus]], i.26; [[Dionysius Halicarnassensis]] xii.I.\n"
+                   "\n"
+                   "{{DEFAULTSORT:Maelius, Spurius}}\n"
+                   "[[Category:439 BC deaths]]\n"
+                   "[[Category:Ancient Roman murder victims]]\n"
+                   "[[Category:Ancient Roman plebeians]]\n"
+                   "[[Category:5th-century BC Romans]]\n"
+                   "[[Category:Maelii]]\n"
+                   "[[Category:Year of birth missing]]</text>\n"
+                   "      <sha1>7lduy7euf0mqac27hol00i3g3ilpsex</sha1>\n"
+                   "    </revision>\n"
+                   "  </page>\n"
+                   "  <page>";
 
 int main(int argc, char *argv[]) {
+    auto test = Tokenizer::index_string_file(file, 32);
+    auto ssk = SortedKeysIndex(test);
+
+    ssk.sort_and_group_shallow();
+    ssk.sort_and_group_all();
+    auto wie = ssk.get_index()[69];
+    auto t =wie.get_frequencies_vector();
+
     using namespace std::chrono;
     initialize_directory_variables();
 

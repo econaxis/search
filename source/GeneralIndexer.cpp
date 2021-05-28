@@ -76,8 +76,8 @@ void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
                                  std::atomic_bool &done_flag) {
     for (auto &entry : filepairs) {
         auto abspath = data_files_dir / "data" / entry.file_name;
-        if(!fs::exists(abspath) || !fs::is_regular_file(abspath)) {
-            std::cerr<<"Path "<<abspath.c_str()<<" nonexistent\n";
+        if (!fs::exists(abspath) || !fs::is_regular_file(abspath)) {
+            std::cerr << "Path " << abspath.c_str() << " nonexistent\n";
             continue;
         }
 
@@ -92,9 +92,12 @@ void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
         if (!file.eof() && !file.fail()) {
             filestr.append((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         }
-        contents.wait_for([&] {
-            return contents.size() < 300;
-        });
+
+        if (contents.size() > 600) {
+            contents.wait_for([&] {
+                return contents.size() < 300;
+            });
+        }
 
         contents.push({std::move(filestr), entry});
     }
@@ -147,7 +150,8 @@ int GeneralIndexer::read_some_files() {
         auto[contents, docidfilepair] = file_contents.pop();
 
         if (progress_counter++ % (MAX_FILES_PER_INDEX / 5000 + 1) == 0) {
-            std::cout << "Done " << progress_counter * 100 / MAX_FILES_PER_INDEX << "% "<<progress_counter<<"\r"<< std::flush;
+            std::cout << "Done " << progress_counter * 100 / MAX_FILES_PER_INDEX << "% " << progress_counter << "\r"
+                      << std::flush;
         }
 
         auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);

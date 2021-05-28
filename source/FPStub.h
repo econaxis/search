@@ -10,7 +10,7 @@
 
 namespace fs = std::filesystem;
 class FPStub {
-    int interval = 1;
+    static constexpr int interval = 5;
     std::vector<uint32_t> diffvec;
     mutable std::ifstream stream;
 public:

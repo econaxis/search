@@ -234,7 +234,7 @@ StubIndexEntry Serializer::read_stub_index_entry_v2(std::istream &frequencies, s
 
 
 std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istream &frequencies, std::istream &terms) {
-    constexpr int INTERVAL = 20; // read only every Nth entry.
+    constexpr int INTERVAL = 16; // read only every Nth entry.
     assert(frequencies.tellg() == 0 && terms.tellg() == 0);
 
     auto num_entries = Serializer::read_vnum(frequencies);

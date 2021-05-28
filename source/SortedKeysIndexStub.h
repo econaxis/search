@@ -64,7 +64,7 @@ public:
     std::shared_ptr<const std::vector<StubIndexEntry>> index;
 
 
-    std::string query_filemap(uint32_t docid) {
+    std::string query_filemap(uint32_t docid) const {
         auto ret =  filemap.query(docid);
         return ret;
     }

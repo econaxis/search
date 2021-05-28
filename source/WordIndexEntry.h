@@ -63,6 +63,30 @@ struct WordIndexEntry {
         return freq_data;
     }
 
+    static void test() {
+        WordIndexEntry wa{"fdsacv", {}};
+        wa.files = {
+                {1, 2},
+                {1, 8},
+                {1, 3},
+                {1, 21},
+                {1, 22},
+                {1, 32},
+                {1, 52},
+                {1, 25},
+                {21, 25},
+                {21, 25},
+                {21, 25},
+                {31, 25},
+                {31, 25},
+        };
+
+        auto res = wa.get_frequencies_vector();
+        assert(res[0] == std::pair(1U, 8U));
+        assert(res[1] == std::pair(21U, 3U));
+        assert(res[2] == std::pair(31U, 2U));
+    }
+
 };
 
 inline bool operator<(const WordIndexEntry &elem1, const WordIndexEntry &elem2) {

@@ -19,7 +19,7 @@ mod IndexWorker;
 
 use std::path::{Path, PathBuf};
 use crate::cffi::DocIDFilePair;
-use std::{fs, time};
+use std::{fs, time, env};
 use std::io::{BufReader, Read, Write};
 use std::cmp::Ord;
 use crate::NameDatabase::NamesDatabase;
@@ -35,7 +35,7 @@ use tokio::sync::Mutex;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use crate::highlighter::{highlight_files, serialize_response_to_json};
 use tracing_subscriber::FmtSubscriber;
-use tracing::{Level, Instrument, span, event, debug};
+use tracing::{Level, Instrument, span, event, debug, info, debug_span};
 use tracing_subscriber::fmt::format::FmtSpan;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder, HttpResponseBuilder};
 use serde::Deserialize;
@@ -46,11 +46,14 @@ use actix_web::http::StatusCode;
 use actix_web::web::Bytes;
 use actix_web::body::BodyStream;
 use std::collections::HashMap;
-
+use tracing_log::LogTracer;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::cell::Cell;
 use std::borrow::Borrow;
 use crate::IndexWorker::ResultsList;
+use std::ops::Deref;
+use tracing_subscriber::util::SubscriberInitExt;
+use log::LevelFilter;
 
 static jobs_counter: AtomicU32 = AtomicU32::new(1);
 
@@ -74,11 +77,11 @@ fn utf8_to_str(a: &[u8]) -> &str {
 
 struct HighlightRequest {
     query: Vec<String>,
-    files: ResultsList
+    files: ResultsList,
 }
 
 struct ApplicationState {
-    iw: IndexWorker::IndexWorker,
+    iw: Vec<IndexWorker::IndexWorker>,
     highlighting_jobs: Arc<Mutex<HashMap<u32, HighlightRequest>>>,
 }
 
@@ -143,7 +146,7 @@ async fn test_get() -> HttpResponse {
 fn clear_highlight_tasks(cur_docid: u32, highlight_queue: &mut HashMap<u32, HighlightRequest>) {
     let _sp = span!(Level::DEBUG, "clearing highlight queue", length = highlight_queue.len()).entered();
     if highlight_queue.len() > 50 {
-        let limit = cur_docid.saturating_sub(5);
+        let limit = cur_docid.saturating_sub(30);
         highlight_queue.retain(|k, v| *k > limit);
     }
 }
@@ -181,10 +184,25 @@ async fn main_page() -> HttpResponse {
     HttpResponse::Ok().body(buf)
 }
 
-async fn work_on_query(data: &web::Data<ApplicationState>, iw: &IndexWorker::IndexWorker, query: &str) -> (u32, ResultsList) {
+
+async fn broadcast_query(indices: &[IndexWorker::IndexWorker], query: &[String]) -> ResultsList {
+    let futures_list: Vec<_> = indices.iter().map(|iw| {
+        iw.send_query_async(query)
+    }).collect();
+
+    let mut res = futures::future::join_all(futures_list);
+    let mut res = res.instrument(debug_span!("Fanning out requests")).await;
+
+    let _sp = debug_span!("Reducing requests").entered();
+    let mut res = res.into_iter().reduce(|x1, x2| x1.join(x2)).unwrap();
+    res.sort();
+    res
+}
+
+async fn work_on_query(data: &web::Data<ApplicationState>, iw: &[IndexWorker::IndexWorker], query: &str) -> (u32, ResultsList) {
     let query: Vec<String> = query.split_whitespace().map(|x| x.to_owned()).collect();
 
-    let mut res = iw.send_query_async(&query).await;
+    let mut res = broadcast_query(iw, &query).await;
 
     let id = jobs_counter.fetch_add(1, Ordering::Relaxed);
 
@@ -192,9 +210,9 @@ async fn work_on_query(data: &web::Data<ApplicationState>, iw: &IndexWorker::Ind
     let mut highlight_jobs = data.highlighting_jobs.lock().await;
 
     // Truncate the results list to max 10 elements. We don't need to highlight anymore.
-    let res_trunc = &res[0..std::cmp::min(res.len(), 10)];
-    let res_trunc = res_trunc.to_vec();
-    highlight_jobs.insert(id, HighlightRequest { query: query.clone(), files: ResultsList::from(res_trunc) });
+    // let res_trunc = &res[0..std::cmp::min(res.len(), 10)];
+    // let res_trunc = res_trunc.to_vec();
+    highlight_jobs.insert(id, HighlightRequest { query: query.clone(), files: ResultsList::from(res.to_vec()) });
 
     if highlight_jobs.len() > 100 {
         clear_highlight_tasks(id, &mut highlight_jobs);
@@ -203,11 +221,21 @@ async fn work_on_query(data: &web::Data<ApplicationState>, iw: &IndexWorker::Ind
 }
 
 fn setup_logging() {
-    let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG)
-        .with_span_events(FmtSpan::ACTIVE).with_timer(microsecond_timer::MicrosecondTimer {}).finish();
+    if env::var("RUST_LOG").is_ok() {
+        env_logger::Builder::new().format_timestamp_millis()
+            // .filter_level(log::LevelFilter::Debug)
+            // .filter_module("tracing::span", LevelFilter::Trace)
+            .parse_default_env().init();
+        println!("Using env logger");
+    } else {
+        let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG)
+            .with_span_events(FmtSpan::ACTIVE).with_timer(microsecond_timer::MicrosecondTimer {}).finish();
 
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("setting default subscriber failed");
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("setting default subscriber failed");
+
+        println!("Using tracing_subscriber");
+    }
 }
 
 fn main() -> io::Result<()> {
@@ -219,29 +247,31 @@ fn main() -> io::Result<()> {
     unsafe { cffi::initialize_dir_vars() };
 
     setup_logging();
-    let suffices = ["WpHIH\0", "hBvUn\0", "6uVWX\0"];
-    // let suffices = &suffices[0..1];
-
-
-    let mut highlighting_jobs = Arc::new(Mutex::new(HashMap::new()));
-
+    let suffices = ["oPV3-\0", "JX9vH\0", "D59V9\0", "WDHnk\0", "j493v\0", "k7FSu\0", "tg_2O\0", "vz1R3\0", "dLABs\0", "nPoty\0", "pEgBu\0", "-be7U\0", "pxVOI\0", "EcEAk\0", "yyQfQ\0", "Xo25c\0", "Sx0s2\0", "sUj-F\0", "fyuQf\0", "WpHIH-hBvUn\0", "6uVWX-c5H8m\0", "f0FRh-3Gw1R\0", "c4WUJ-od7Ew\0", "UgD0W-G_78v\0", ];
 
     // Tokio or actix does this weird thing where they clone the IndexWorker many times
     // This wastes memory, spawns useless threads, and there's no way I know to fix it.
     // Solution: wrap `iw` in an Arc. Then actix can clone it however many times it wants.
     // This won't spawn new threads or allocate memory. However, when we actually use it,
     // we clone `iw` once, preventing excess threads.
-    let mut iw = Arc::new(IndexWorker::IndexWorker::new(&suffices));
+    let mut iw: Vec<_> = suffices.chunks(6).map(|chunk| {
+        IndexWorker::IndexWorker::new(chunk)
+    }).collect();
+
+
+    let mut highlighting_jobs = Arc::new(Mutex::new(HashMap::new()));
+
 
     let sys = actix_rt::System::with_tokio_rt(|| tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap()
     ).block_on(async move {
+        let mut iw = Arc::new(iw);
+
         HttpServer::new(move || {
-            let iw = iw.clone().as_ref().clone();
             App::new()
-                .data(ApplicationState { iw: iw, highlighting_jobs: highlighting_jobs.clone() })
+                .data(ApplicationState { iw: iw.deref().clone(), highlighting_jobs: highlighting_jobs.clone() })
                 .service(handle_request)
                 .service(main_page)
                 .service(test_get)

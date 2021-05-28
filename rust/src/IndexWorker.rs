@@ -37,6 +37,17 @@ unsafe impl Sync for IndexWorker {}
 #[derive(Clone, Serialize)]
 pub struct ResultsList(Vec<(u32, String)>);
 
+impl ResultsList {
+    pub fn join(mut self, mut other: ResultsList) -> Self {
+        self.0.append(&mut other.0);
+        self
+    }
+
+    pub fn sort(&mut self) {
+        self.0.as_mut_slice().sort_by_key(|tup| tup.0);
+    }
+}
+
 impl From<Vec<(u32, String)>> for ResultsList {
     fn from(t: Vec<(u32, String)>) -> Self {
         Self(t)
@@ -149,6 +160,7 @@ impl IndexWorker {
                         // If we have two different StubIndex that somehow cover the same document,
                         // then it will lead to this document being included twice.
                         if results.iter().find(|x| x.1 == str).is_none() {
+                            debug!(id = i.0, path = %str);
                             results.push((i.1, str.to_owned()));
                         }
                     }
@@ -167,7 +179,7 @@ impl IndexWorker {
     }
 
 
-    pub async fn send_query_async(&self, query: &Vec<String>) -> ResultsList {
+    pub async fn send_query_async(&self, query: &[String]) -> ResultsList {
         // Returns list of filenames.
         let mut sent = false;
         let ss = Arc::new(Mutex::new(SharedState {
@@ -177,7 +189,7 @@ impl IndexWorker {
         let pollfn = |cx: &mut Context<'_>| {
             if !sent {
                 ss.lock().unwrap().waker.replace(cx.waker().clone());
-                self.sender.lock().unwrap().send(Some((query.clone(), ss.clone())));
+                self.sender.lock().unwrap().send(Some((Vec::from(query), ss.clone())));
                 sent = true;
                 Poll::Pending
             } else {

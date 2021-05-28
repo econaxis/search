@@ -11,15 +11,8 @@ use std::time::Duration;
 use crate::IndexWorker::ResultsList;
 use std::ops::Deref;
 
-#[instrument(level = "debug", skip(str, terms))]
 fn highlight_matches(str: &str, terms: &[String]) -> Vec<(usize, usize)> {
     assert!(terms.len() < 64);
-
-    let str = if str.len() > FIRST_N_CHARACTERS_ONLY {
-        &str[0..FIRST_N_CHARACTERS_ONLY]
-    } else {
-        str
-    };
 
     let aut = AhoCorasickBuilder::new().ascii_case_insensitive(true).build(terms);
 
@@ -46,7 +39,6 @@ fn highlight_matches(str: &str, terms: &[String]) -> Vec<(usize, usize)> {
     return res;
 }
 
-const FIRST_N_CHARACTERS_ONLY: usize = 10000;
 
 struct CustomDeserialize<'a>(&'a Vec<(String, Vec<String>)>);
 
@@ -71,23 +63,27 @@ pub fn serialize_response_to_json(a: &Vec<(String, Vec<String>)>) -> String {
 pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Vec<(String, Vec<String>)> {
     let starttime = std::time::SystemTime::now();
     let mut highlights = Vec::new();
-    for (_, path) in filelist.deref() {
+
+    let _highlight_span = debug_span!("Highlight matches");
+    for (_, path) in filelist.iter().rev() {
 
         // If we've used up more than 1.5 seconds already, exit and just show the results we already have.
-        if starttime.elapsed().unwrap().as_millis() > 1500 { break; }
+        // if starttime.elapsed().unwrap().as_millis() > 50000 { break; }
 
         let _sp = debug_span!("Loading file", file = %path).entered();
-        let str = match IndexWorker::load_file_to_string(path.as_ref()) {
-            None => {
-                debug!(path = path.as_str(), "File doesn't exist");
-                "".to_owned()
-            }
-            Some(x) => x
-        };
+        let str = IndexWorker::load_file_to_string(path.as_ref());
+
+        if str.is_none() {
+            continue;
+        }
+        let str = str.unwrap();
         _sp.exit();
         let mut str = str.as_str();
 
+        // Highlighting done here, we want to measure exact time it takes to highlight.
+        let _sp = _highlight_span.enter();
         let mut matches = highlight_matches(str, highlight_words);
+        std::mem::drop(_sp);
 
 
         let mut highlight_hits = Vec::new();
@@ -102,6 +98,8 @@ pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Ve
 
         if !highlight_hits.is_empty() {
             highlights.push((path.to_owned(), highlight_hits));
+        } else {
+            debug!(%path, "Couldn't find any matches");
         }
 
         // 10 highlighted files is enough for the first page. We don't need to highlight all.

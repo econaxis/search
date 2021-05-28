@@ -38,7 +38,6 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
 }
 
 
-
 #include <chrono>
 
 using namespace std::chrono;
@@ -47,6 +46,20 @@ using namespace std::chrono;
 #include <numeric>
 
 std::ofstream deb("/tmp/debug");
+
+template<typename Iterator>
+int compute_average(Iterator begin, Iterator end) {
+    auto sum = std::accumulate(begin, end, 0);
+
+    auto len = std::max(end - begin, 1L);
+    auto avg =  sum / len;
+    auto max_elem = std::max_element(begin, end);
+
+    if(len > 20) avg += (*max_elem - avg) * 0.5;
+    else if (len < 10) avg /= 2;
+
+    return avg;
+}
 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
@@ -70,6 +83,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
     TopDocs output;
     std::vector<TopDocs> outputs;
+    std::vector<int> output_score;
     outputs.reserve(50);
 
     while (frequencies_pos <= file_end->doc_position) {
@@ -78,25 +92,40 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
         // The number of bytes advanced = the offset amount.
         frequencies_pos += freq_initial_off;
-        if (auto score = string_prefix_compare(term, key); score >= std::min(output.size() / 200, 3UL)) {
+
+        auto min_cutoff_score = compute_average(output_score.begin(), output_score.end());
+        if (auto score = string_prefix_compare(term, key); score >= min_cutoff_score) {
             // Seek back to original previewed position.
             frequencies.seekg(-freq_initial_off, std::ios_base::cur);
             auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
 
             auto init = (DocumentPositionPointer_v2 *) alignedbuf.get();
+            auto tot_score = 0;
             for (auto i = init; i < init + size; i++) {
                 float coefficient = std::log10(i->frequency) * 2 + 1;
                 i->frequency = coefficient * score;
+                tot_score += i->frequency;
+
+                // For debug inspections only.
+                if(i->document_id == 50234) {
+                    auto str = query_filemap(i->document_id);
+                    bool a = true;
+                }
             }
             outputs.emplace_back(init, init + size);
-
+            output_score.emplace_back(tot_score / size);
         }
     }
 
-    if(outputs.empty()) return TopDocs{};
+    if (outputs.empty()) return TopDocs{};
 
+    int score_cutoff = compute_average(output_score.begin(), output_score.end());
     for (int i = 1; i < outputs.size(); i++) {
-        outputs[0].append_multi(outputs[i].begin(), outputs[i].end(), false);
+
+        // Append only words that are above average score, as determined by cutoff.
+        if (output_score[i] >= score_cutoff) {
+            outputs[0].append_multi(outputs[i].begin(), outputs[i].end(), false);
+        }
     }
     return outputs[0];
 
@@ -114,13 +143,12 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
 }
 
 
-
-
 constexpr std::size_t BUFLEN = 100000;
 
 #include "Constants.h"
 
-SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix), filemap((indice_files_dir / ("filemap-" + suffix))){
+SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix),
+                                                               filemap((indice_files_dir / ("filemap-" + suffix))) {
     frequencies = std::ifstream(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary);
     terms = std::ifstream(indice_files_dir / ("terms-" + suffix), std::ios_base::binary);
     assert(this->frequencies && this->terms);
@@ -133,7 +161,8 @@ SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix), f
     // Setup documents holding location buffer (aligned).
     alignedbuf = std::make_unique<__m256[]>(MAX_FILES_PER_TERM * 2 / 8);
 
-    index = std::make_shared<const std::vector<StubIndexEntry>>(Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms));
+    index = std::make_shared<const std::vector<StubIndexEntry>>(
+            Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms));
 }
 
 
@@ -152,7 +181,8 @@ TopDocs SortedKeysIndexStub::collection_merge_search(std::vector<SortedKeysIndex
     return joined;
 }
 
-SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other): filemap(indice_files_dir / ("filemap-" + other.suffix)) {
+SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : filemap(
+        indice_files_dir / ("filemap-" + other.suffix)) {
     frequencies = std::ifstream(indice_files_dir / ("frequencies-" + other.suffix), std::ios_base::binary);
     terms = std::ifstream(indice_files_dir / ("terms-" + other.suffix), std::ios_base::binary);
     assert(this->frequencies && this->terms);

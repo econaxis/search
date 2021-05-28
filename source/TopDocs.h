@@ -137,7 +137,8 @@ public:
     }
 
     void sort_by_frequencies() {
-        std::sort(begin(), end(), [](auto &t, auto &t1) {
+        auto partial_end = std::min(end(), begin() + 50);
+        std::partial_sort(begin(), partial_end, end(), [](auto &t, auto &t1) {
             return t.frequency < t1.frequency;
         });
     }

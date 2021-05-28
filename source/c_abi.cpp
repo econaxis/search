@@ -86,7 +86,7 @@ struct DocumentPositionPointer_v2_imbued {
 void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int num_terms, const char **query_terms,
                           RustVec *output_buffer) {
 
-    assert(num_indices < 16);
+    assert(num_indices < 32);
     std::vector<std::string> query(num_terms);
     for (int i = 0; i < num_terms; i++) {
         auto as_str = std::string(query_terms[i]);
@@ -100,29 +100,28 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
     for (int i = 0; i < num_indices; i++) {
         auto temp = indices[i]->search_many_terms(query);
 
-        uint32_t curtag = i << 28;
+        uint32_t curtag = i << 27;
 
         // Imbue top 4 bits of docid with tag (which index we are using)
         for (auto &pair: temp) {
-            assert(pair.document_id < 1 << 28);
+            assert(pair.document_id < 1 << 27);
             pair.document_id |= curtag;
         }
         if (temp.size()) joined.append_multi(temp.begin(), temp.end());
     }
 
-    joined.merge_similar_docs();
     joined.sort_by_frequencies();
     std::reverse(joined.begin(), joined.end());
 
     std::vector<DocumentPositionPointer_v2_imbued> imbued;
 
-    uint32_t tag_remover = (1 << 28) - 1;
+    uint32_t tag_remover = (1 << 27) - 1;
 
     for (auto &i : joined) {
-        imbued.push_back({i.document_id & tag_remover, i.frequency, static_cast<uint8_t>(i.document_id >> 28)});
+        imbued.push_back({i.document_id & tag_remover, i.frequency, static_cast<uint8_t>(i.document_id >> 27)});
     }
-    if (joined.size() > 500) {
-        fill_rust_vec(output_buffer, imbued.begin().base(), 500 * sizeof(DocumentPositionPointer_v2_imbued));
+    if (joined.size() > 100) {
+        fill_rust_vec(output_buffer, imbued.begin().base(), 100 * sizeof(DocumentPositionPointer_v2_imbued));
     } else {
         fill_rust_vec(output_buffer, imbued.begin().base(), joined.size() * sizeof(DocumentPositionPointer_v2_imbued));
     }

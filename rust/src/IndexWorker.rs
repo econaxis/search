@@ -30,7 +30,6 @@ pub struct IndexWorker {
 
 unsafe impl Send for IndexWorker {}
 
-unsafe impl Sync for IndexWorker {}
 
 #[derive(Clone, Serialize)]
 pub struct ResultsList(Vec<(u32, String)>);

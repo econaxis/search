@@ -188,9 +188,6 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
         // File already exists. Get a new suffix that's more random.
         suffix += random_b64_str(50);
     }
-    // Since indexing was successful, we move the processed files to the processed folder.
-    fs::create_directory(data_files_dir / ("processed"));
-
     std::cout << "Persisting files to disk - " << suffix << "\n";
     auto filemap_path = "filemap-" + suffix;
     std::ofstream filemapstream(indice_files_dir / filemap_path, std::ios_base::binary);

@@ -1,4 +1,4 @@
-use super::RustVecInterface::{VecDPP};
+use crate::RustVecInterface::{VecDPP};
 
 use std::ffi;
 use std::io::Read;
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::borrow::Borrow;
 use serde::{Serialize, Deserialize};
 use std::str::FromStr;
+use std::hash::{Hash, Hasher};
 
 
 pub mod ctypes {
@@ -18,79 +19,6 @@ pub mod ctypes {
     pub type SortedKeysIndexStub;
     }
 }
-
-
-mod public {
-    use std::path::{Path, PathBuf};
-    use std::{fs, env};
-    use std::io::{BufReader, BufRead};
-    use crate::cffi::{DocIDFilePair};
-    use regex::Regex;
-    use std::collections::HashSet;
-    use std::ffi::OsStr;
-
-    fn filemaps<P: AsRef<Path>>(p: P) -> Vec<PathBuf> {
-        let joined_regex: Regex = Regex::new(r"# joined .*").unwrap();
-
-        // Check the index_files file too, make sure there aren't any mistakes.
-        let p = p.as_ref().to_path_buf().join("index_files");
-
-        let bfr = fs::File::open(&p).map(|x| BufReader::new(x));
-        let mut result_index_files = Vec::new();
-
-        if let Ok(bfr) = bfr {
-            for s in bfr.lines() {
-                let s = s.unwrap();
-
-                // Check that this line has not been joined already.
-                if joined_regex.is_match(&s) {
-                    continue;
-                }
-
-                let s = PathBuf::from(format!("{}/indices/filemap-{}", env::var("DATA_FILES_DIR").unwrap(), s));
-                if s.as_path().exists() {
-                    result_index_files.push(s);
-                } else {
-                    eprintln!("Path doesn't exist: {:#?}", &s);
-                }
-            };
-        };
-
-        result_index_files
-    }
-
-
-
-    /// Generate metadata for all filemap-* files in a directory as a vector of DocIDFilePairs.
-    pub fn generate_metadata_for_dir<Path_t: AsRef<Path>>(path: Path_t, processed_already: &HashSet<DocIDFilePair>)
-                                                          -> Vec<DocIDFilePair> {
-        let a: Vec<PathBuf> = filemaps(path).drain_filter(|path| {
-            // Only filter paths not in the procesed already path.
-            let path: &OsStr = path.as_ref();
-            processed_already.get(path).is_none()
-        }).collect();
-        let mut fp_total = Vec::new();
-        for ref path in a {
-            let fp = super::get_filepairs(path).into_iter().map(|mut elem: DocIDFilePair| {
-                // Fill in the remaining data of the elem.
-                elem.filemap_path = Some(path.clone());
-
-                // elem.bytes = fs::metadata(&abspath).map(|metadata| metadata.len() as u32).ok();
-                // elem.num_words = word_count(&abspath);
-                elem
-            }).collect::<Vec<DocIDFilePair>>();
-
-            println!("{} files processed", fp.len());
-            fp_total.extend(fp);
-        }
-        fp_total
-    }
-}
-
-
-pub use public::*;
-use std::hash::{Hash, Hasher};
-
 
 
 // Contains FFI declarations for connecting to C++ shared library.
@@ -105,7 +33,6 @@ extern "C" {
 
     pub fn load_one_index(suffix_name: *const c_char) -> *mut ctypes::SortedKeysIndexStub;
 
-
     pub fn delete_one_index(ssk: *const ctypes::SortedKeysIndexStub);
 
     #[allow(improper_ctypes)]
@@ -117,7 +44,6 @@ extern "C" {
     pub fn query_for_filename(index: *const ctypes::SortedKeysIndexStub, docid: u32, buffer: *const c_char, bufferlen: u32) -> u32;
 
     pub fn clone_one_index(other: *const ctypes::SortedKeysIndexStub) -> *const ctypes::SortedKeysIndexStub;
-
 }
 
 

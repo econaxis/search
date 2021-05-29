@@ -107,7 +107,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
                 tot_score += i->frequency;
 
                 // For debug inspections only.
-                if(i->document_id == 50234) {
+                if(i->document_id == 90240) {
                     auto str = query_filemap(i->document_id);
                     bool dummy = true;
                 }

@@ -1,7 +1,5 @@
 use std::time::SystemTime;
 use std::fmt::{Display, Formatter, Debug};
-use tracing::field::{Field, Visit};
-
 pub struct TimeSpan(SystemTime);
 
 impl TimeSpan {

@@ -13,8 +13,6 @@ use std::task::{Context, Poll};
 use tracing::{info, span, debug, Level, event};
 
 
-
-
 use serde::Serialize;
 
 struct SharedState {
@@ -59,6 +57,7 @@ impl Deref for ResultsList {
         &self.0
     }
 }
+
 impl DerefMut for ResultsList {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -137,7 +136,7 @@ impl IndexWorker {
                                                    chars, &outputvec as *const VecDPP)
                     };
                     debug!("Matched {} files. Max score: {}", outputvec.len(),
-                        max_score = outputvec.first().unwrap_or(&Default::default()).1);
+                           max_score = outputvec.first().unwrap_or(&Default::default()).1);
 
                     let buf = [0u8; 300];
 
@@ -152,7 +151,7 @@ impl IndexWorker {
                         } as usize;
 
                         // The last character at index `len`, is the null terminator.
-                        let str = String::from_utf8_lossy(&buf[0..len-1]).into_owned();
+                        let str = String::from_utf8_lossy(&buf[0..len - 1]).into_owned();
 
                         // Deduplicate names
                         // If we have two different StubIndex that somehow cover the same document,
@@ -181,12 +180,12 @@ impl IndexWorker {
         // Returns list of filenames.
         let mut sent = false;
         let ss = Arc::new(Mutex::new(SharedState {
-            data: Default::default(),
+            data: None,
             waker: None,
         }));
         let pollfn = |cx: &mut Context<'_>| {
+            ss.lock().unwrap().waker.replace(cx.waker().clone());
             if !sent {
-                ss.lock().unwrap().waker.replace(cx.waker().clone());
                 self.sender.lock().unwrap().send(Some((Vec::from(query), ss.clone()))).unwrap();
                 sent = true;
                 Poll::Pending

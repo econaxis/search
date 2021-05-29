@@ -5,12 +5,12 @@
 #![feature(min_specialization)]
 #![feature(drain_filter)]
 
-pub mod cffi;
-pub mod highlighter;
-pub mod RustVecInterface;
-pub mod IndexWorker;
-pub mod webserver;
-pub mod elapsed_span;
+mod cffi;
+mod highlighter;
+mod RustVecInterface;
+mod IndexWorker;
+mod webserver;
+mod elapsed_span;
 
 use std::{env};
 
@@ -28,7 +28,6 @@ use tracing_subscriber::fmt::format::FmtSpan;
 
 use std::sync::atomic::{AtomicU32};
 use std::sync::Arc;
-
 
 static jobs_counter: AtomicU32 = AtomicU32::new(1);
 

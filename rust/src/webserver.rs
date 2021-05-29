@@ -9,11 +9,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
-use hyper::{Body, Request, Response, Server, StatusCode};
+use hyper::{Body, Request, Response, Server};
 use hyper::service::{make_service_fn, service_fn};
-use serde::Deserialize;
 use tracing::{debug, debug_span, Level, span};
 use tracing::Instrument;
+
 
 use crate::elapsed_span;
 use crate::highlighter::{highlight_files, serialize_response_to_json};
@@ -41,12 +41,13 @@ async fn broadcast_query(indices: &[IndexWorker], query: &[String]) -> ResultsLi
         iw.send_query_async(query)
     }).collect();
 
-    let res = futures::future::join_all(futures_list);
-    let res = res.instrument(debug_span!("Fanning out requests")).await;
 
-    let _sp = debug_span!("Reducing requests").entered();
+    let starttime = elapsed_span::new_span();
+    let res = futures::future::join_all(futures_list).await;
     let mut res = res.into_iter().reduce(|x1, x2| x1.join(x2)).unwrap_or_default();
     res.sort();
+
+    debug!("Fanning out requests + reduction. Duration: {}", starttime.elapsed());
     res
 }
 
@@ -103,14 +104,14 @@ async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Res
         clear_highlight_tasks(id, &mut highlight_jobs);
     }
 
-    let jsonout = serde_json::json!({
+    let jsonout: Body = serde_json::json!({
         "id": id,
         "data": res
-    }).to_string();
+    }).to_string().into();
     Ok(Response::builder()
         .header("Content-Type", "application/json")
         .header("Server-Timing", starttime.elapsed())
-        .body(jsonout.into()).unwrap())
+        .body(jsonout).unwrap())
 }
 
 fn parse_url_query(uri: &hyper::Uri, query_term: &str) -> Result<Vec<String>, io::Error> {

@@ -13,6 +13,9 @@ impl TimeSpan {
     }
 }
 
+pub fn new_span() -> TimeSpan {
+    TimeSpan::new()
+}
 
 impl Display for TimeSpan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

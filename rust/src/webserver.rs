@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
-use hyper::{Body,Request, Response, Server, StatusCode};
+use hyper::{Body, Request, Response, Server, StatusCode};
 use hyper::service::{make_service_fn, service_fn};
 use serde::Deserialize;
 use tracing::{debug, debug_span, Level, span};
@@ -33,6 +33,7 @@ pub struct ApplicationState {
     pub highlighting_jobs: Arc<Mutex<HashMap<u32, HighlightRequest>>>,
     pub jobs_counter: AtomicU32,
 }
+
 unsafe impl Send for ApplicationState {}
 
 async fn broadcast_query(indices: &[IndexWorker], query: &[String]) -> ResultsList {
@@ -59,31 +60,30 @@ fn clear_highlight_tasks(cur_docid: u32, highlight_queue: &mut HashMap<u32, High
 }
 
 async fn highlight_handler(data: &ApplicationState, highlightid: u32) -> Result<Response<Body>, io::Error> {
-    let jobs = data.highlighting_jobs.lock().await;
-    let jobrequest = jobs.get(&highlightid).ok_or(io::Error::new(io::ErrorKind::Other, format!("highlight request id {} not found", highlightid)))?;
-    let HighlightRequest { query, files } = jobrequest;
-    let query = query.clone();
-    let files = files.clone();
-    std::mem::drop(jobs);
+    let (query, files) = {
+        let jobs = data.highlighting_jobs.lock().await;
+        let jobrequest = jobs.get(&highlightid).ok_or(make_err(&*format!("highlight request id {} not found", highlightid)))?;
+        let HighlightRequest { query, files } = jobrequest;
+        (query.clone(), files.clone())
+    };
 
     debug!(flen = files.len(), "Received highlighting request");
 
+    let starttime = elapsed_span::new_span();
     let res = tokio::task::spawn_blocking(move || {
         highlight_files(&files, query.as_slice())
-    });
-
-    let res = res.await?;
-
+    }).await?;
 
     Response::builder()
         .header("Content-Type", "application/json")
-        .body(Body::from(serialize_response_to_json(&res))).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))
+        .header("Server-Timing", starttime.elapsed().to_string())
+        .body(Body::from(serialize_response_to_json(&res))).map_err(|e| make_err(&*format!("{}", e)))
 }
 
 
 async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Response<Body>, io::Error> {
-    debug!( start_time = %elapsed_span::TimeSpan::new(), ?query, "Started processing for ");
-    let starttime = elapsed_span::TimeSpan::new();
+    debug!(?query, "Started processing for ");
+    let starttime = elapsed_span::new_span();
 
     let iw = &data.iw;
 
@@ -105,10 +105,12 @@ async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Res
 
     let jsonout = serde_json::json!({
         "id": id,
-        "data": res,
-        "processing_time": starttime.elapsed()
+        "data": res
     }).to_string();
-    Ok(Response::builder().header("Content-Type", "application/json").body(jsonout.into()).unwrap())
+    Ok(Response::builder()
+        .header("Content-Type", "application/json")
+        .header("Server-Timing", starttime.elapsed())
+        .body(jsonout.into()).unwrap())
 }
 
 fn parse_url_query(uri: &hyper::Uri, query_term: &str) -> Result<Vec<String>, io::Error> {
@@ -121,8 +123,6 @@ fn parse_url_query(uri: &hyper::Uri, query_term: &str) -> Result<Vec<String>, io
 
     Ok(query)
 }
-
-
 
 
 async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Result<Response<Body>, io::Error> {
@@ -141,8 +141,6 @@ async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Resul
 
 
 pub fn get_server(state: Arc<ApplicationState>) -> BoxFuture<'static, Result<(), hyper::Error>> {
-    debug!("starting server");
-    // We'll bind to 127.0.0.1:3000
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
 
     let make_svc = make_service_fn(move |_conn| {

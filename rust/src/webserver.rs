@@ -1,24 +1,22 @@
+use io::ErrorKind;
+use std::collections::HashMap;
 use std::convert::Infallible;
+use std::io;
 use std::net::SocketAddr;
-use hyper::{Body, Request, Response, Server, StatusCode, http};
-use hyper::service::{make_service_fn, service_fn};
+use std::ops::{Deref};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
-
-use crate::IndexWorker::{IndexWorker, ResultsList};
-use std::sync::{Arc};
-use serde::{Deserialize};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::collections::HashMap;
+use hyper::{Body,Request, Response, Server, StatusCode};
+use hyper::service::{make_service_fn, service_fn};
+use serde::Deserialize;
+use tracing::{debug, debug_span, Level, span};
 use tracing::Instrument;
 
-
 use crate::highlighter::{highlight_files, serialize_response_to_json};
-use tracing::{debug, debug_span, span, Level};
-use std::io;
-use io::ErrorKind;
-use std::ops::Deref;
+use crate::IndexWorker::{IndexWorker, ResultsList};
 
 pub struct HighlightRequest {
     query: Vec<String>,
@@ -47,7 +45,7 @@ async fn broadcast_query(indices: &[IndexWorker], query: &[String]) -> ResultsLi
     let res = res.instrument(debug_span!("Fanning out requests")).await;
 
     let _sp = debug_span!("Reducing requests").entered();
-    let mut res = res.into_iter().reduce(|x1, x2| x1.join(x2)).unwrap();
+    let mut res = res.into_iter().reduce(|x1, x2| x1.join(x2)).unwrap_or_default();
     res.sort();
     res
 }
@@ -108,8 +106,8 @@ async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Res
     let jsonout = serde_json::json!({
         "id": id,
         "data": res
-    });
-    Ok(Response::new(Body::from(jsonout.to_string())))
+    }).to_string();
+    Ok(Response::builder().header("Content-Type", "application/json").body(jsonout.into()).unwrap())
 }
 
 fn parse_url_query(uri: &hyper::Uri) -> Result<Vec<String>, io::Error> {
@@ -135,19 +133,20 @@ async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Resul
 }
 
 
-pub fn get_server() -> BoxFuture<'static, Result<(), hyper::Error>> {
+pub fn get_server(state: Arc<ApplicationState>) -> BoxFuture<'static, Result<(), hyper::Error>> {
     debug!("starting server");
     // We'll bind to 127.0.0.1:3000
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
 
     let make_svc = make_service_fn(move |_conn| {
-        debug!("Making service func");
-        // let state = state.clone();
+        let state = state.clone();
         // service_fn converts our function into a `Service`
         async move {
-            Ok::<_, Infallible>(service_fn(|req: Request<Body>| async move {
-                Ok::<_, String>(Response::new(Body::from("fdsaf")))
-                // route_request(req, state.clone())
+            Ok::<_, Infallible>(service_fn(move |req| {
+                tokio::spawn(async {
+                    println!("Spawned task");
+                });
+                route_request(req, state.clone())
             }))
         }
     });

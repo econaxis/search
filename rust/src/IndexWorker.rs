@@ -31,7 +31,7 @@ pub struct IndexWorker {
 unsafe impl Send for IndexWorker {}
 
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Default)]
 pub struct ResultsList(Vec<(u32, String)>);
 
 impl ResultsList {
@@ -44,6 +44,7 @@ impl ResultsList {
         self.0.as_mut_slice().sort_by_key(|tup| tup.0);
     }
 }
+
 
 impl From<Vec<(u32, String)>> for ResultsList {
     fn from(t: Vec<(u32, String)>) -> Self {

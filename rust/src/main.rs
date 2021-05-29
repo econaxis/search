@@ -25,7 +25,7 @@ use futures::{io};
 use tracing_subscriber::FmtSubscriber;
 use tracing::{Level};
 use tracing_subscriber::fmt::format::FmtSpan;
-use serde::Deserialize;
+
 
 
 
@@ -55,10 +55,6 @@ fn setup_logging() {
         println!("Using tracing_subscriber");
     }
 }
-// async fn main() {
-//     let server = webserver::get_server().await;
-//     server.await;
-// }
 
 const suffices: [&str; 24] = ["oPV3-\0", "JX9vH\0", "D59V9\0", "WDHnk\0", "j493v\0", "k7FSu\0", "tg_2O\0", "vz1R3\0", "dLABs\0", "nPoty\0", "pEgBu\0", "-be7U\0", "pxVOI\0", "EcEAk\0", "yyQfQ\0", "Xo25c\0", "Sx0s2\0", "sUj-F\0", "fyuQf\0", "WpHIH-hBvUn\0", "6uVWX-c5H8m\0", "f0FRh-3Gw1R\0", "c4WUJ-od7Ew\0", "UgD0W-G_78v\0", ];
 
@@ -71,20 +67,19 @@ fn main() -> io::Result<()> {
     //     .unwrap();
     // builder.set_certificate_chain_file("/home/henry/127.0.0.1+1.pem").unwrap();
     unsafe { cffi::initialize_dir_vars() };
-    // let iw: Vec<_> = suffices[0..4].chunks(4).map(|chunk| {
-    //     IndexWorker::IndexWorker::new(chunk)
-    // }).collect();
+    let iw: Vec<_> = suffices[0..0].chunks(4).map(|chunk| {
+        IndexWorker::IndexWorker::new(chunk)
+    }).collect();
 
-    // let appstate = webserver::ApplicationState {
-    //     iw,
-    //     highlighting_jobs: Arc::new(Default::default()),
-    //     jobs_counter: Default::default()
-    // };
+    let appstate = webserver::ApplicationState {
+        iw,
+        highlighting_jobs: Arc::new(Default::default()),
+        jobs_counter: Default::default()
+    };
 
-    let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(8).enable_all().build().unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
     runtime.block_on(async move {
-        // let server = webserver::get_server(Arc::from(appstate));
-        let server = webserver::get_server();
+        let server = webserver::get_server(Arc::from(appstate));
         server.await.unwrap();
     });
 

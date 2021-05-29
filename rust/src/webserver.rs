@@ -15,6 +15,7 @@ use serde::Deserialize;
 use tracing::{debug, debug_span, Level, span};
 use tracing::Instrument;
 
+use crate::elapsed_span;
 use crate::highlighter::{highlight_files, serialize_response_to_json};
 use crate::IndexWorker::{IndexWorker, ResultsList};
 
@@ -23,18 +24,16 @@ pub struct HighlightRequest {
     files: ResultsList,
 }
 
+fn make_err(str: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, str)
+}
+
 pub struct ApplicationState {
     pub iw: Vec<IndexWorker>,
     pub highlighting_jobs: Arc<Mutex<HashMap<u32, HighlightRequest>>>,
     pub jobs_counter: AtomicU32,
 }
-
 unsafe impl Send for ApplicationState {}
-
-#[derive(Deserialize, Debug)]
-struct Query {
-    q: String,
-}
 
 async fn broadcast_query(indices: &[IndexWorker], query: &[String]) -> ResultsList {
     let futures_list: Vec<_> = indices.iter().map(|iw| {
@@ -83,7 +82,8 @@ async fn highlight_handler(data: &ApplicationState, highlightid: u32) -> Result<
 
 
 async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Response<Body>, io::Error> {
-    debug!(?query, "Started processing for ");
+    debug!( start_time = %elapsed_span::TimeSpan::new(), ?query, "Started processing for ");
+    let starttime = elapsed_span::TimeSpan::new();
 
     let iw = &data.iw;
 
@@ -99,34 +99,41 @@ async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Res
     // let res_trunc = res_trunc.to_vec();
     highlight_jobs.insert(id, HighlightRequest { query: query.to_vec(), files: ResultsList::from(res.to_vec()) });
 
-    if highlight_jobs.len() > 100 {
+    if highlight_jobs.len() > 50 {
         clear_highlight_tasks(id, &mut highlight_jobs);
     }
 
     let jsonout = serde_json::json!({
         "id": id,
-        "data": res
+        "data": res,
+        "processing_time": starttime.elapsed()
     }).to_string();
     Ok(Response::builder().header("Content-Type", "application/json").body(jsonout.into()).unwrap())
 }
 
-fn parse_url_query(uri: &hyper::Uri) -> Result<Vec<String>, io::Error> {
+fn parse_url_query(uri: &hyper::Uri, query_term: &str) -> Result<Vec<String>, io::Error> {
     let query = uri.query().ok_or(io::Error::new(io::ErrorKind::Other, "Can't pull query"))?;
-    let match_indices = query.match_indices("q=").next().
-        ok_or(io::Error::new(ErrorKind::Other, "?q query not found"))?.0;
+    let match_indices = query.match_indices(query_term).next().
+        ok_or(io::Error::new(ErrorKind::Other, format!("{} query not found", query_term)))?.0;
 
-    let query: Vec<String> = query[match_indices + 2..].split(|x| x == '+').map(|x| x.to_string()).collect();
+    let query: Vec<String> = query[match_indices + query_term.len()..].split(|x| x == '+').map(|x| x.to_string()).collect();
     debug!(parsed = ?query);
 
     Ok(query)
 }
 
 
+
+
 async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Result<Response<Body>, io::Error> {
     let uri = req.uri().path();
     if uri.starts_with("/search") {
-        let q = parse_url_query(req.uri())?;
+        let q = parse_url_query(req.uri(), "?q=")?;
         handle_request(data.deref(), &*q).await
+    } else if uri.starts_with("/highlight") {
+        let q = parse_url_query(req.uri(), "?id=")?.into_iter().next().ok_or(make_err("ID not found"))?;
+        let q: u32 = q.parse().map_err(|_| make_err(&*format!("Couldn't parse int: {}", q)))?;
+        highlight_handler(data.deref(), q).await
     } else {
         Err(io::Error::new(ErrorKind::Other, format!("no matching path found for {}", uri)))
     }

@@ -1,5 +1,6 @@
 use std::time::SystemTime;
 use std::fmt::{Display, Formatter, Debug};
+use tracing::field::{Field, Visit};
 
 pub struct TimeSpan(SystemTime);
 
@@ -11,6 +12,7 @@ impl TimeSpan {
         self.0.elapsed().unwrap().as_millis() as u32
     }
 }
+
 
 impl Display for TimeSpan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

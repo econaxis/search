@@ -5,21 +5,16 @@
 #![feature(min_specialization)]
 #![feature(drain_filter)]
 
-mod cffi;
-mod highlighter;
-mod RustVecInterface;
-mod IndexWorker;
-mod webserver;
+pub mod cffi;
+pub mod highlighter;
+pub mod RustVecInterface;
+pub mod IndexWorker;
+pub mod webserver;
+pub mod elapsed_span;
 
 use std::{env};
 
-
 use futures::{io};
-
-
-
-
-
 
 
 use tracing_subscriber::FmtSubscriber;

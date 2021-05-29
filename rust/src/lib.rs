@@ -5,9 +5,10 @@
 #![feature(min_specialization)]
 #![feature(drain_filter)]
 
-mod highlighter;
-mod RustVecInterface;
-mod IndexWorker;
-mod webserver;
 
 pub mod cffi;
+pub mod highlighter;
+pub mod RustVecInterface;
+pub mod IndexWorker;
+pub mod elapsed_span;
+pub mod webserver;

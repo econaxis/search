@@ -57,14 +57,10 @@ public:
     std::vector<DocumentPositionPointer_v2> docs;
     using value_type = DocumentPositionPointer_v2;
 
-    TopDocs(int reservation = 50) {
-
-    };
+    TopDocs() = default;
 
 
-    std::vector<value_type>::const_iterator begin() const {
-        return docs.begin();
-    }
+
 
     template<typename Iterator>
     TopDocs(Iterator ibegin, Iterator iend) {
@@ -76,13 +72,12 @@ public:
         std::memcpy(docs.data(), ibegin, (iend - ibegin) * sizeof(value_type));
     }
 
-
+    // Iterator implementations to match the interface of vector
+    // Also allows for range based for loops, which is convenient.
+    std::vector<value_type>::const_iterator begin() const {return docs.begin();}
     std::vector<value_type>::const_iterator end() const { return docs.end(); }
-
     std::vector<value_type>::iterator begin() { return docs.begin(); }
-
     std::vector<value_type>::iterator end() { return docs.end(); }
-
     std::size_t size() const { return docs.size(); }
 
     template<typename Iterator>
@@ -100,11 +95,11 @@ public:
         docs = std::move(merged);
     }
 
-    void clear() {
-        docs.clear();
-    }
-
-
+    // If our list contains two same document ID's, then add their scores and merge them into one.
+    // This is possible in prefix searching, when a document might have multiple words whose prefixes
+    // match the same query term.
+    // This also happens when we merge the TopDocs of two query terms, so documents containing both terms
+    // should be bonused.
     void merge_similar_docs() {
         if (size() == 0) return;
 

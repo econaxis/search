@@ -7,7 +7,6 @@
 #include <thread>
 #include "FileListGenerator.h"
 #include <atomic>
-//#define READ_TAR
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
 
@@ -113,33 +112,36 @@ void reduce_word_index_entries(std::vector<WordIndexEntry_unsafe> &op1,
     }
 }
 
-template<typename T>
-std::vector<T> remake_vector() {
-    auto a = std::vector<T>();
+std::vector<WordIndexEntry_unsafe> remake_vector() {
+    auto a = std::vector<WordIndexEntry_unsafe>();
     a.reserve(11000);
     return a;
 }
 
 
 int GeneralIndexer::read_some_files() {
+    // Vector of file paths and generated, incremental ID.
     FilePairs fp = FileListGenerator::from_file();
 
-    uint32_t progress_counter = 0;
+    int progress_counter = 0;
 
     // Vector of arrays with custom allocator.
     SortedKeysIndex a1;
+
+    // Thread synchronization variables.
+    // done_flag: for the file contents producer thread to signify it has pulled all file contents,
+    //      or else, we don't know if we have indexed everything or are still waiting on file IO.
+    // file_contents: a thread-safe queue that holds the contents + filename of each file for the Tokenizer
+    //      to process.
     std::atomic_bool done_flag = false;
     SyncedQueue file_contents;
-#ifdef READ_TAR
-    std::vector<std::string> tarnames = {"tar-1.tar","tar-2.tar","tar-3.tar","tar-4.tar","tar-4.tar"};
-    std::thread filecontentproducer(queue_produce_file_contents, std::ref(tarnames), std::ref(file_contents),
-                                    std::ref(done_flag));
-#else
+
+    // Start our thread to open all files and load them into memory, so we don't get stuck on file IO
+    // in the processing + indexing thread.
     std::thread filecontentproducer(queue_produce_file_contents, std::ref(file_contents), std::ref(fp),
                                     std::ref(done_flag));
-#endif
 
-    auto a0 = remake_vector<WordIndexEntry_unsafe>();
+    auto a0 = remake_vector();
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
             file_contents.wait_for([&]() {
@@ -157,25 +159,40 @@ int GeneralIndexer::read_some_files() {
         auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
         reduce_word_index_entries(a0, std::move(temp));
 
+        // `a0` is our "holding zone" for recently indexed files. It is a vector of all tokens and their positions in each file.
+        // When a0 gets too full, we want to copy its data into the main index `a1`. Here, all similar tokens from different files
+        // will be merged.
+        //
+        // The reason we need a holding location for a0 is because at the indexing stage, we'll make many tiny vectors (one for each term),
+        // which is very inefficient. Therefore, in `a0`, we use some unsafe pool memory allocation to speed indexing up. Then, periodically,
+        // we'll copy that unsafe memory into safe, STL vector-managed memory. Plus, the memory pool `ContiguousAllocator`
+        // only has a fixed size which will runtime crash if we exceed it.
         if (a0.size() > 10000) {
-            if (a0.size() % 10 == 0) a1.sort_and_group_shallow();
+            // Only need to sort and group (merge similar terms into the same vector) every few iterations.
+            if (a0.size() % 20 == 0) a1.sort_and_group_shallow();
+
+            // Merge the unsafe, speedy holding structure into the main index.
             a1.merge_into(SortedKeysIndex(std::move(a0)));
-            a0 = remake_vector<WordIndexEntry_unsafe>();
+
+            // Reset the holding vector to its empty state, ready for more indexing.
+            a0 = remake_vector();
         }
     }
     a1.merge_into(SortedKeysIndex(std::move(a0)));
-    filecontentproducer.join();
 
     if (a1.get_index().empty()) {
         return 0;
     }
     a1.sort_and_group_shallow();
-    a1.sort_and_group_all();
 
+    // Instead of sorting and grouping by terms, this also sorts each term's documents list by document ID.
+    // This could take a long time (many sorts), and there's no memory-conservation advantage,
+    // so we only need to do it at the end.
+    a1.sort_and_group_all();
 
     persist_indices(a1, fp);
 
-
+    filecontentproducer.join();
     return 1;
 }
 
@@ -199,20 +216,7 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     index_file << suffix << "\n";
 }
 
-
-/**
- * When we're in the midst of renaming files or doing an operation with bad consequences if it fails,
- * then we inform the user of what to do.
- */
-void GeneralIndexer::register_atexit_handler() {
-    // not used.
-}
-
-
-/**
- * Various debug testing functions.
- */
-
+// Various debug testing functions.
 void GeneralIndexer::test_serialization() {
     std::vector<WordIndexEntry_unsafe> a;
     std::uniform_int_distribution<uint> dist(0, 10); // ASCII table codes for normal characters.

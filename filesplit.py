@@ -1,38 +1,35 @@
-from os import listdir, chdir, mkdir
-import os
-from os.path import isfile, join
-from sys import argv
-import re
-from urllib.parse import unquote
 
-chdir(argv[1])
+import requests
 
-files = (f for f in listdir(argv[1]) if isfile(join(argv[1], f)))
-madedir = {}
-madedir2 = {}
-i = 0
+import zipfile
+import io
 
-for f in files:
-    ff = unquote(f)
-    ff = re.sub('[._\-\[\],\.1-9]', '', ff)
-    ff = ff.upper()
+arr = [
+"ipa210527.zip",
+"ipa210520.zip",
+"ipa210513.zip",
+"ipa210506.zip",
+"ipa210429.zip",
+"ipa210422.zip",
+"ipa210415.zip",
+"ipa210408.zip",
+"ipa210401.zip",
+"ipa210325.zip",
+"ipa210318.zip",
+"ipa210311.zip",
+"ipa210304.zip",
+"ipa210225.zip",
+"ipa210218.zip",
+"ipa210211.zip",
+"ipa210204.zip",
+"ipa210128.zip",
+"ipa210121.zip",
+"ipa210114.zip",
+"ipa210107.zip"]
 
-    i += 1
-    if i % 100 == 0:
-        print(i * 100 / 3e6)
-
-    dir1 = ff[0:2]
-
-    if len(f) > 4:
-        dir2 = dir1 + "/" + ff[2:4]
-    else:
-        dir2 = dir1 + "/this"
-
-    realdir = f"dir_{dir2}"
-    realdir = realdir
-
-    if realdir not in madedir2 and not os.path.exists(realdir):
-        os.makedirs(realdir)
-        madedir2[realdir] = True
-
-    os.rename(f, f"{realdir}/{f}")
+for i in arr:
+    print("Extracting ", i)
+    url = f"https://bulkdata.uspto.gov/data/patent/application/redbook/fulltext/2021/{i}"
+    r = requests.get(url, stream = True)
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    z.extractall("i")

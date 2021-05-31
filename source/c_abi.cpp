@@ -58,7 +58,7 @@ struct RustDIFP {
 
 void copy_filepairs_to_buf(std::vector<DocIDFilePair> *vec, RustDIFP *buf, uint32_t max_length) {
     if (max_length != vec->size()) abi_error("Incorrect size");
-    for (int i = 0; i < vec->size(); i++) {
+    for (std::size_t i = 0; i < vec->size(); i++) {
         buf[i].docid = vec->at(i).document_id;
         buf[i].name = vec->at(i).file_name.data();
     }
@@ -96,7 +96,7 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
     }
 
     TopDocs joined;
-    for (int i = 0; i < num_indices; i++) {
+    for (std::size_t i = 0; i < num_indices; i++) {
         auto temp = indices[i]->search_many_terms(query);
 
         uint32_t curtag = i << 27;

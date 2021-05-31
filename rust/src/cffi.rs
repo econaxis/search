@@ -108,7 +108,7 @@ impl Into<DocIDFilePair> for C_DocIDFilePair {
         let path = PathBuf::from_str(tup.1).unwrap();
         DocIDFilePair {
             docid: tup.0,
-            path: path,
+            path,
             ..Default::default()
         }
     }

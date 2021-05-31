@@ -2,10 +2,9 @@
 #include <iostream>
 #include "SortedKeysIndexStub.h"
 #include "DocumentsMatcher.h"
-#include "SortedKeysIndex.h"
-#include "Tokenizer.h"
 #include "Base26Num.h"
 #include <cmath>
+#include <numeric>
 
 namespace fs = std::filesystem;
 
@@ -43,7 +42,6 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
 using namespace std::chrono;
 
 
-#include <numeric>
 
 std::ofstream deb("/tmp/debug");
 

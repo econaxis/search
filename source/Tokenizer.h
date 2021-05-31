@@ -13,13 +13,10 @@ namespace Tokenizer {
     std::vector<WordIndexEntry_unsafe> index_string_file(std::string file, uint32_t docid);
 
 
-    void stem_english(std::string &a);
 
     int clean_token_to_index(std::string &token);
 
     void remove_punctuation(std::string &a);
-
-    bool is_stop_word(std::string& a);
 };
 
 

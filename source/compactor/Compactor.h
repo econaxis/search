@@ -9,7 +9,6 @@
 namespace Compactor {
     namespace fs=std::filesystem;
     enum class ReadState {
-        PROCESSED_ALREADY,
         GOOD,
         STREAM_ERROR
     };

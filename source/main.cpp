@@ -78,10 +78,10 @@ load_all_indices() {
 
 
 
-[[maybe_unused]] static unsigned int measure() {
+[[maybe_unused]] static unsigned long measure() {
     using namespace std::chrono;
     static auto lasttime = high_resolution_clock::now();
-    unsigned int ret = duration_cast<nanoseconds>(high_resolution_clock::now() - lasttime).count();
+    unsigned long ret = duration_cast<nanoseconds>(high_resolution_clock::now() - lasttime).count();
     lasttime = high_resolution_clock::now();
     return ret;
 }

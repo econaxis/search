@@ -1,3 +1,4 @@
+#include <iostream>
 #include "c_abi.h"
 #include "Serializer.h"
 #include "Constants.h"
@@ -90,10 +91,8 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
     std::vector<std::string> query(num_terms);
     for (int i = 0; i < num_terms; i++) {
         auto as_str = std::string(query_terms[i]);
-        if (!Tokenizer::is_stop_word(as_str)) {
-            Tokenizer::clean_token_to_index(as_str);
-            query[i] = as_str;
-        }
+        Tokenizer::clean_token_to_index(as_str);
+        query[i] = as_str;
     }
 
     TopDocs joined;

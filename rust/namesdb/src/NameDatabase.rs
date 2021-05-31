@@ -1,14 +1,6 @@
 extern crate rust;
 
-use std::{
-    borrow::Borrow,
-    hash::Hash,
-    fs::{File, self},
-    iter::FromIterator,
-    ffi::OsStr,
-    collections::{HashSet},
-    path::{Path},
-};
+use std::{borrow::Borrow, hash::Hash, fs::{File, self}, iter::FromIterator, ffi::OsStr, collections::{HashSet}, path::{Path}, io};
 use std::path::{PathBuf};
 use std::{env};
 use std::io::{BufReader, BufRead};
@@ -54,26 +46,27 @@ mod public_ffi {
     }
 }
 
-
+#[cfg(debug_assertions)]
 fn pretty_serialize(d: &HashSet<DocIDFilePair>) {
     let outfile = fs::File::create("/tmp/file_metadata.pretty.json").unwrap();
     serde_json::to_writer_pretty(outfile, &d).unwrap();
 }
+#[cfg(not(debug_assertions))]
+fn pretty_serialize(_: &HashSet<DocIDFilePair>) {}
 
 impl NamesDatabase {
     pub fn new(metadata_path: &Path) -> Self {
         let json_path = metadata_path.join("file_metadata.msgpack");
         let json_path = json_path.as_path();
-
-        let json_metadata = fs::metadata(&json_path);
-
-        let mut processed_data: HashSet<DocIDFilePair> = if json_metadata.is_ok() && json_metadata.unwrap().len() > 1 {
-            println!("Reusing same JSON metadata file");
-            let cur_data = Self::from_json_file(json_path);
-            cur_data.set
-        } else {
-            fs::File::create(&json_path).unwrap();
-            HashSet::new()
+        let mut processed_data: HashSet<DocIDFilePair> = {
+            if json_path.exists() {
+                println!("Reusing same JSON metadata file");
+                let cur_data = Self::from_json_file(json_path);
+                cur_data.set
+            } else {
+                fs::File::create(&json_path).expect(&*format!("Couldn't open file {:?}", json_path));
+                HashSet::new()
+            }
         };
 
         processed_data.extend(generate_metadata_for_dir(metadata_path, &processed_data));
@@ -84,6 +77,7 @@ impl NamesDatabase {
         let mut serializer = rmp_serde::Serializer::new(&binary_outfile);
         processed_data.serialize(&mut serializer).unwrap();
 
+        // Serialize for debugging
         pretty_serialize(&processed_data);
         Self {
             set: HashSet::from_iter(processed_data.into_iter())
@@ -109,7 +103,6 @@ impl NamesDatabase {
         self.get(OsStr::new(key))
     }
 }
-
 
 
 fn filemaps<P: AsRef<Path>>(p: P) -> Vec<PathBuf> {
@@ -145,7 +138,7 @@ fn filemaps<P: AsRef<Path>>(p: P) -> Vec<PathBuf> {
 
 /// Generate metadata for all filemap-* files in a directory as a vector of DocIDFilePairs.
 pub fn generate_metadata_for_dir<P: AsRef<Path>>(path: P, processed_already: &HashSet<DocIDFilePair>)
-                                                      -> Vec<DocIDFilePair> {
+                                                 -> Vec<DocIDFilePair> {
     let a: Vec<PathBuf> = filemaps(path).drain_filter(|path| {
         // Only filter paths not in the procesed already path.
         let path: &OsStr = path.as_ref();

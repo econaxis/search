@@ -27,9 +27,7 @@ void SortedKeysIndex::sort_and_group_shallow() {
         auto cur_key = it->key;
         auto next = it + 1;
         for (; next < index.end() && next->key == cur_key; next++) {
-            for (auto& i : next->files) {
-                it->files.push_back(i);
-            }
+            std::move(next->files.begin(), next->files.end(), std::back_inserter(it->files));
             next->files.clear();
         }
         it = next;

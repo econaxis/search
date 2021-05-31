@@ -17,9 +17,7 @@
 struct StubIndexEntry {
     Base26Num key;
 
-    // The position on the file that this key resides at.
-    // At this position, it's the start of WordIndexEntry for this key.
-    uint32_t doc_position;
+    uint32_t terms_pos;
 
     bool operator<(const StubIndexEntry &other) const {
         return key < other.key;
@@ -60,7 +58,7 @@ public:
 
     SortedKeysIndexStub(std::string suffix);
 
-    static constexpr int MAX_FILES_PER_TERM = 70000;
+    static constexpr int MAX_FILES_PER_TERM = 100000;
     std::shared_ptr<const std::vector<StubIndexEntry>> index;
 
 

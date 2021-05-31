@@ -30,11 +30,11 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
         source/Constants.cpp source/Base26Num.cpp
         source/FPStub.cpp
-        source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h source/dict_strings.h source/ResultsPrinter.cpp source/ResultsPrinter.h source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/TopDocs.h source/CustomAllocatedVec.cpp source/CustomAllocatedVec.h)
+        source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h source/dict_strings.h source/ResultsPrinter.cpp source/ResultsPrinter.h source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/TopDocs.h source/CustomAllocatedVec.cpp source/CustomAllocatedVec.h source/PositionsSearcher.cpp source/PositionsSearcher.h)
 target_include_directories(search-share PUBLIC source extern extern/mio/include)
 target_include_directories(general-indexer PUBLIC source extern extern/mio/include)
 
-target_link_libraries(general-indexer PRIVATE pthread ${CMAKE_BINARY_DIR}/librust.so)
+target_link_libraries(general-indexer PRIVATE pthread ${CMAKE_BINARY_DIR}/libnamesdb.so)
 
 add_executable(search source/main.cpp)
 target_link_libraries(search PRIVATE search-share general-indexer)
@@ -49,7 +49,7 @@ target_link_libraries(c-search-abi PRIVATE search-share)
 
 add_custom_target(rust-library
         DEPENDS
-        "${CMAKE_BINARY_DIR}/librust.so")
+        "${CMAKE_BINARY_DIR}/libnamesdb.so")
 
 add_custom_target(rust-web-server
         DEPENDS
@@ -74,7 +74,7 @@ add_custom_target(
 
 add_custom_command(
         OUTPUT
-            "${CMAKE_BINARY_DIR}/librust.so"
+            "${CMAKE_BINARY_DIR}/libnamesdb.so"
         COMMENT
             "Builds the librust target"
         COMMAND
@@ -84,20 +84,6 @@ add_custom_command(
         WORKING_DIRECTORY
             ${CMAKE_SOURCE_DIR}/rust
 )
-
-add_custom_command(
-        OUTPUT
-        "${CMAKE_BINARY_DIR}/librust.so"
-        COMMENT
-        "Builds the librust target"
-        COMMAND
-        ${rust-build-command}
-        DEPENDS
-        ${rust-sources}
-        WORKING_DIRECTORY
-        ${CMAKE_SOURCE_DIR}/rust
-)
-
 add_dependencies(general-indexer rust-library)
 add_dependencies(rust-library c-search-abi)
 add_dependencies(rust-server c-search-abi)

@@ -40,7 +40,7 @@ namespace Serializer {
 
     WordIndexEntry read_work_index_entry(std::istream &frequencies, std::istream &terms, std::istream &positions);
 
-    PreviewResult preview_work_index_entry(std::istream &frequencies, std::istream &terms);
+    PreviewResult preview_work_index_entry(std::istream &terms);
     int read_work_index_entry_v2_optimized(std::istream &frequencies, __m256 *buffer);
 };
 

@@ -62,11 +62,6 @@ public:
 
 
 
-    template<typename Iterator>
-    TopDocs(Iterator ibegin, Iterator iend) {
-        append_multi(ibegin, iend);
-    }
-
     TopDocs(value_type *ibegin, value_type *iend) {
         docs.resize(iend - ibegin);
         std::memcpy(docs.data(), ibegin, (iend - ibegin) * sizeof(value_type));
@@ -116,6 +111,8 @@ public:
                 collected_score = 0;
             } else {
                 collected_score += doc.frequency;
+
+                // Invalidate the document's information.
                 doc.frequency = 0;
                 doc.document_id = 0;
                 deleted_any = true;
@@ -131,6 +128,8 @@ public:
 
     }
 
+    // Partial sorts the TopDocs collection by frequency. Useful for the last stage of processing when we don't care about maintaining
+    // document id order, and instead want the top ranking documents.
     void sort_by_frequencies() {
         auto partial_end = std::min(end(), begin() + 50);
         std::partial_sort(begin(), partial_end, end(), [](auto &t, auto &t1) {

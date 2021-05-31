@@ -29,8 +29,6 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use std::sync::atomic::{AtomicU32};
 use std::sync::Arc;
 
-static jobs_counter: AtomicU32 = AtomicU32::new(1);
-
 
 fn setup_logging() {
     if env::var("RUST_LOG").is_ok() {
@@ -73,7 +71,7 @@ fn main() -> io::Result<()> {
 
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
     runtime.block_on(async move {
-        let server = webserver::get_server(Arc::from(appstate));
+        let server = webserver::get_server(appstate);
         server.await.unwrap();
     });
 

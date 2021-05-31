@@ -14,7 +14,6 @@ namespace GeneralIndexer {
     int read_some_files();
 
 
-    void register_atexit_handler();
 
     void persist_indices(const SortedKeysIndex &master, const std::vector<DocIDFilePair> &filepairs);
 

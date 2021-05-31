@@ -9,8 +9,9 @@
 #include "CustomAllocatedVec.h"
 
 struct PreviewResult {
-    std::streamoff freq_off;
-    std::streamoff term_off;
+    std::streampos frequencies_pos;
+    std::streampos terms_pos;
+    std::streampos positions_pos;
     std::string key;
 };
 
@@ -23,7 +24,7 @@ struct WordIndexEntry_v2 {
 
 struct WordIndexEntry_unsafe {
     std::string key;
-    CustomAllocatedVec<DocumentPositionPointer, 3, 100000> files;
+    CustomAllocatedVec<DocumentPositionPointer, 3, 50000> files;
 
     WordIndexEntry_unsafe(std::string key, const std::vector<DocumentPositionPointer>& f) : key(std::move(key)), files() {
         for (const auto &i : f) {

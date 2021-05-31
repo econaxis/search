@@ -11,8 +11,7 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use hyper::{Body, Request, Response, Server};
 use hyper::service::{make_service_fn, service_fn};
-use tracing::{debug, debug_span, Level, span};
-use tracing::Instrument;
+use tracing::{debug,Level, span};
 
 
 use crate::elapsed_span;
@@ -141,8 +140,10 @@ async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Resul
 }
 
 
-pub fn get_server(state: Arc<ApplicationState>) -> BoxFuture<'static, Result<(), hyper::Error>> {
+pub fn get_server(state: ApplicationState) -> BoxFuture<'static, Result<(), hyper::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
+
+    let state = Arc::from(state);
 
     let make_svc = make_service_fn(move |_conn| {
         let state = state.clone();

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <ostream>
+#include <cassert>
 
 struct DocumentPositionPointer {
     uint32_t document_id;
@@ -15,6 +16,16 @@ struct DocumentPositionPointer {
 
     bool operator!=(const DocumentPositionPointer& other) const {
         return document_id != other.document_id;
+    }
+    bool operator==(const DocumentPositionPointer& other) const {
+        return document_id == other.document_id;
+    }
+    DocumentPositionPointer operator+(const DocumentPositionPointer& other) const {
+        return DocumentPositionPointer {document_id + other.document_id, document_position + other.document_position};
+    }
+    DocumentPositionPointer operator-(const DocumentPositionPointer& other) const {
+        assert(document_id >= other.document_id && document_position >= other.document_position);
+        return DocumentPositionPointer {document_id - other.document_id, document_position - other.document_position};
     }
 
     DocumentPositionPointer() = default;

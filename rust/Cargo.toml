@@ -1,5 +1,7 @@
 [workspace]
-members=["namesdb"]
+members = ["namesdb"]
+default-members=["namesdb"]
+
 
 [package]
 name = "rust"

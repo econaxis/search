@@ -9,8 +9,7 @@
 
 namespace fs = std::filesystem;
 
-constexpr unsigned int MATCHALL_BONUS = 20;
-constexpr unsigned int MATCHALL_SHORT_BONUS = 8;
+constexpr unsigned int MATCHALL_BONUS = 5;
 
 
 /**
@@ -24,15 +23,16 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
     auto ls = longer.size();
     auto ss = shorter.size();
 
+
     if (ls < ss) return 0;
 
+    float divider = 5.F / (ls - ss + 5);
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
-            return i / (ls - ss + 1);
+            return i * divider;
         }
     }
-
-    const auto score = ss / (ls - ss + 1) + MATCHALL_SHORT_BONUS;
+    const auto score = ss * divider;
     if (ss == ls) return MATCHALL_BONUS + score;
     else return score;
 }
@@ -71,46 +71,45 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
     if (file_start == index->end()) { return TopDocs{}; }
 
+    // We assume that the positions of `terms` and `frequencies` are indetermined.
+    // Therefore, we seek to the correct location as determined by the file_start StubIndEntry,
+    // read the frequencies_pos, then seek the `frequencies` stream to that location.
+    // Now, we have both streams at the correct location.
+    auto terms_pos = file_start->terms_pos;
+    terms.seekg(terms_pos);
+    Serializer::read_str(terms); // First key string
+    auto frequencies_pos = Serializer::read_vnum(terms); // Frequencies position
 
-    auto frequencies_pos = file_start->doc_position;
     frequencies.seekg(frequencies_pos);
 
-    // Peek the term position.
-    auto term_pos = Serializer::read_vnum(frequencies);
-    frequencies.seekg(frequencies_pos);
-
-    terms.seekg(term_pos);
+    // Seek back to original location for reading.
+    terms.seekg(terms_pos);
 
     TopDocs output;
     std::vector<TopDocs> outputs;
     std::vector<int> output_score;
     outputs.reserve(50);
 
-    while (frequencies_pos <= file_end->doc_position) {
+    while (terms_pos <= file_end->terms_pos) {
         // Preview the WIE without loading everything into memory.
-        auto[freq_initial_off, terms_initial_off, key] = Serializer::preview_work_index_entry(frequencies, terms);
-
-        // The number of bytes advanced = the offset amount.
-        frequencies_pos += freq_initial_off;
+        auto preview = Serializer::preview_work_index_entry(terms);
+        terms_pos = preview.terms_pos;
 
         auto min_cutoff_score = compute_average(output_score.begin(), output_score.end());
-        if (auto score = string_prefix_compare(term, key); score >= min_cutoff_score) {
+        if (auto score = string_prefix_compare(term, preview.key); score >= min_cutoff_score) {
             // Seek back to original previewed position.
-            frequencies.seekg(-freq_initial_off, std::ios_base::cur);
+            frequencies.seekg(preview.frequencies_pos);
+
+            // Read the work index entry from the correct, seeked position.
             auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
 
+            // Do some processing with the data.
             auto init = (DocumentPositionPointer_v2 *) alignedbuf.get();
             auto tot_score = 0;
             for (auto i = init; i < init + size; i++) {
                 float coefficient = std::log10(i->frequency) * 2 + 1;
                 i->frequency = coefficient * score;
                 tot_score += i->frequency;
-
-                // For debug inspections only.
-                if(i->document_id == 90240) {
-                    auto str = query_filemap(i->document_id);
-                    bool dummy = true;
-                }
             }
             outputs.emplace_back(init, init + size);
             output_score.emplace_back(tot_score / size);

@@ -2,7 +2,7 @@ SHELL:=bash
 ifdef DATA_FILES_DIR
     data-file-path := $(DATA_FILES_DIR)
 else
-    data-file-path :=/mnt/nfs/extra/data-files
+    data-file-path :=/mnt/nfs/extra/gutenberg
 endif
 
 .ONESHELL:

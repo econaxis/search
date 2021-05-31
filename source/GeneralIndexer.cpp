@@ -7,6 +7,10 @@
 #include <thread>
 #include "FileListGenerator.h"
 #include <atomic>
+#include <condition_variable>
+#include <iostream>
+#include <queue>
+
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
 
@@ -94,7 +98,7 @@ void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
 
         if (contents.size() > 600) {
             contents.wait_for([&] {
-                return contents.size() < 300;
+                return contents.size() < 100;
             });
         }
 
@@ -167,9 +171,9 @@ int GeneralIndexer::read_some_files() {
         // which is very inefficient. Therefore, in `a0`, we use some unsafe pool memory allocation to speed indexing up. Then, periodically,
         // we'll copy that unsafe memory into safe, STL vector-managed memory. Plus, the memory pool `ContiguousAllocator`
         // only has a fixed size which will runtime crash if we exceed it.
-        if (a0.size() > 10000) {
+        if (a0.size() > 1000) {
             // Only need to sort and group (merge similar terms into the same vector) every few iterations.
-            if (a0.size() % 20 == 0) a1.sort_and_group_shallow();
+            if (a1.get_index().size() > 10000 && a1.get_index().size() % 100 == 0) a1.sort_and_group_shallow();
 
             // Merge the unsafe, speedy holding structure into the main index.
             a1.merge_into(SortedKeysIndex(std::move(a0)));

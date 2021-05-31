@@ -15,16 +15,6 @@ void advance_to_next_unique_value(Iterator &it, const Callable &value_getter) {
     while (value_getter(*it) == prev_value) { it++; };
 }
 
-constexpr int bitsetsize = 10000;
-
-std::bitset<bitsetsize> convert_to_hashset(TopDocs &td) {
-    std::bitset<bitsetsize> bit;
-    for (auto&[docid, freq] : td) {
-        bit.set(docid % bitsetsize);
-    }
-    return bit;
-}
-
 
 #include <immintrin.h>
 
@@ -72,9 +62,6 @@ using namespace std::chrono;
 
 
 using DPP = DocumentPositionPointer_v2;
-
-int stats[7] = {0, 0, 0, 0, 0, 0, 0};
-
 static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *value) {
     auto prediction = end;
 

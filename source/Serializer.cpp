@@ -1,3 +1,4 @@
+#include <iostream>
 #include "Serializer.h"
 #include "Constants.h"
 #include "SortedKeysIndex.h"
@@ -27,7 +28,7 @@ void Serializer::serialize_vnum(std::ostream &stream, uint32_t number, bool pad3
 // Position of first set bit in the first part determines how many bytes long the number is.
     constexpr uint8_t uint8max = (1 << 7) - 1;        // 1...          one byte
     constexpr uint16_t uint16max = (1 << 14) - 1;         // 01...         two bytes
-    constexpr uint32_t uint32max = (1 << 28) - 1;         // 0001...       four bytes
+    constexpr uint32_t uint32max = (1 << 29) - 1;         // 0001...       four bytes
     constexpr uint64_t uint64max = (1ULL << 57) - 1;    // 00000001...   eight bytes
 
     auto write_num = [&](auto num) {
@@ -42,13 +43,15 @@ void Serializer::serialize_vnum(std::ostream &stream, uint32_t number, bool pad3
         number |= 1 << 1;
         write_num(static_cast<uint16_t>(number));
     } else if (number <= uint32max) {
-        number = number << 4;
-        number |= 1 << 3;
+        number = number << 3;
+        number |= 1 << 2;
         write_num(static_cast<uint32_t>(number));
-    } else if (false && number <= uint64max) { // not supported
-        number &= (1ULL << 58) - 1;
-        write_num(static_cast<uint64_t>(number));
+    } else if (number <= uint64max && !pad32) { // not supported
+        uint64_t num64 = ((uint64_t) number) << 4;
+        number |= 1 << 3;
+        write_num(num64);
     } else {
+        std::cout << "Number: " << number << "\n";
         throw std::runtime_error("Number too big");
     }
 }
@@ -67,11 +70,21 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         // 16 bit number
         byte = byte >> 2; // byte has 6 bits of info
         holder = (holder << 6) | byte;
-    } else if (byte & 1 << 3) {
+    } else if (byte & 1 << 2) {
         stream.read(reinterpret_cast<char *> (&holder), 3);
-        byte = byte >> 4; // byte has 4 bits of info.
+        byte = byte >> 3; // byte has 4 bits of info.
         // 32 bit number
-        holder = (holder << 4) | byte;
+        holder = (holder << 3) | byte;
+    } else if (byte & 1 << 3) {
+        uint64_t bigholder = 0;
+        stream.read(reinterpret_cast<char *>(bigholder), 7);
+        byte = byte >> 4;
+        bigholder = (bigholder << 4) | byte;
+
+        if (holder > (2 >> 31)) {
+            throw std::runtime_error("64 bit number can't be coerced to 32 bits");
+        }
+        holder = static_cast<uint32_t>(bigholder);
     } else {
         int a = stream.tellg();
         int b = stream.good();
@@ -86,17 +99,14 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
 void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostream &terms, std::ostream &positions,
                                             const WordIndexEntry &ie) {
     assert(std::is_sorted(ie.files.begin(), ie.files.end()));
-    uint32_t term_pos = terms.tellp();
     serialize_str(terms, ie.key);
+    serialize_vnum(terms, frequencies.tellp(), true);
+    serialize_vnum(terms, positions.tellp(), true);
 
     /**
      * The frequencies file should be an array, where each element corresponds to a WordIndexEntry.
-     *      Each element: [term_pos] [positions_pos] [number of elements = n]
-     *                     n elements of [document_id][frequency]...
+     *      Each element: [number of elements = n], then n elements of [document_id][frequency]...
      */
-    serialize_vnum(frequencies, term_pos, true);
-    serialize_vnum(frequencies, positions.tellp(), true);
-    serialize_vnum(frequencies, 0, true);
 
 
     // contains <document_id, frequency> for the number of times this word appears in the document.
@@ -119,9 +129,16 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
      *      20 * 32 bits for the document id (all 123) and 20 * 32 bits for the document position.
      */
     serialize_vnum(positions, ie.files.size(), false);
-    for (const auto &i : ie.files) {
-        serialize_vnum(positions, i.document_id, false);
-        serialize_vnum(positions, i.document_position, false);
+    auto prev_i = DocumentPositionPointer{1 << 30, 1 << 30};
+    for (auto i = ie.files.begin(); i != ie.files.end(); i++) {
+        if (*i == prev_i) {
+            auto diff = *i - prev_i;
+            serialize_vnum(positions, diff.document_position, false);
+        } else {
+            prev_i = *i;
+            serialize_vnum(positions, i->document_id, false);
+            serialize_vnum(positions, i->document_position, false);
+        }
     }
 
 }
@@ -145,59 +162,46 @@ Serializer::read_work_index_entry(std::istream &frequencies, std::istream &terms
     return wie;
 }
 
-
-PreviewResult Serializer::preview_work_index_entry(std::istream &frequencies, std::istream &terms) {
-    uint32_t frequencies_off = 0;
-    uint32_t terms_off = 0;
-    uint32_t buf1[3];
-    frequencies.read(reinterpret_cast<char *>(buf1), sizeof(uint32_t) * 3);
-
-    frequencies_off += frequencies.gcount();
-    buf1[0] >>= 4; // Rightshift by 4. This is term position.
-    buf1[2] >>= 4; // Rightshift number by 4 bits. This is the number of files.
-    frequencies.ignore(buf1[2] * 2 * sizeof(uint32_t));
-    frequencies_off += frequencies.gcount();
+// Frequencies istream should be in the correct aligned position already
+PreviewResult Serializer::preview_work_index_entry(std::istream &terms) {
 
     std::string key = read_str(terms);
-    terms_off += terms.gcount();
+    auto frequencies_pos = read_vnum(terms);
+    auto positions_pos = read_vnum(terms); // positions_pos, currently unused at this stage.
 
-
-    return {frequencies_off, terms_off, key};
+    return {frequencies_pos, terms.tellg(), positions_pos, key};
 }
 
 #include <immintrin.h>
 
-constexpr auto MAX_FILES_PER_TERM =  SortedKeysIndexStub::MAX_FILES_PER_TERM;
+constexpr auto MAX_FILES_PER_TERM = SortedKeysIndexStub::MAX_FILES_PER_TERM;
+
 int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
                                                    __m256 *buffer) {
 
-    uint32_t num_buffers[3];
-    frequencies.read(reinterpret_cast<char *>(num_buffers), 3 * sizeof(uint32_t));
-//    auto term_pos = num_buffers[0] >> 4;
-    auto num_files = num_buffers[2] >> 4;
-    auto *mybuffer = (DocumentPositionPointer_v2*) buffer;
+    auto num_files = read_vnum(frequencies);
+    auto *mybuffer = (DocumentPositionPointer_v2 *) buffer;
 
-    if(num_files > MAX_FILES_PER_TERM) {
+    if (num_files > MAX_FILES_PER_TERM) {
         auto excess = num_files - MAX_FILES_PER_TERM;
         frequencies.ignore(excess * sizeof(DocumentPositionPointer_v2));
         num_files = MAX_FILES_PER_TERM;
     }
-//    assert(buffer.size() * 8>= num_files * 2);
 
-    // These VInts are padded to 4 bytes, so we can do this.
+    // These VInts are padded to 4 byte or 32 bit integers, so we can do this.
     frequencies.read(reinterpret_cast<char *>(mybuffer), num_files * sizeof(DocumentPositionPointer_v2));
 
-    auto end = (uint32_t*) mybuffer + num_files * 2;
-    auto start = (uint32_t*) mybuffer;
+    auto end = (uint32_t *) mybuffer + num_files * 2;
+    auto start = (uint32_t *) mybuffer;
 
     for (; start + 8 < end; start += 8) {
         auto s256 = _mm256_load_si256(reinterpret_cast<const __m256i *>(start));
         s256 = _mm256_srai_epi32(s256, 4);
 
-        _mm256_store_si256( reinterpret_cast<__m256i *>(start), s256);
+        _mm256_store_si256(reinterpret_cast<__m256i *>(start), s256);
     }
 
-    for(; start < end; start++) {
+    for (; start < end; start++) {
         *start >>= 4;
     }
 
@@ -205,12 +209,14 @@ int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
 }
 
 WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
-    auto term_pos = read_vnum(frequencies);
-    read_vnum(frequencies); // skip positions.
-    auto num_files = read_vnum(frequencies);
-    terms.seekg(term_pos);
-
+    unsigned int term_pos = terms.tellg();
     auto key = read_str(terms);
+    auto frequencies_pos = read_vnum(terms);
+    read_vnum(terms); // positions_pos
+
+    frequencies.seekg(frequencies_pos);
+
+    auto num_files = read_vnum(frequencies);
 
     WordIndexEntry_v2 out{key, term_pos, {}};
     out.files.resize(num_files);
@@ -225,10 +231,10 @@ WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies
 }
 
 StubIndexEntry Serializer::read_stub_index_entry_v2(std::istream &frequencies, std::istream &terms) {
-    uint32_t frequencies_position = frequencies.tellg();
+    uint32_t terms_pos = terms.tellg();
     auto wie = read_work_index_entry_v2(frequencies, terms);
     return StubIndexEntry{
-            Base26Num(wie.key), frequencies_position
+            Base26Num(wie.key), terms_pos
     };
 }
 
@@ -250,9 +256,8 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
     for (int i = 0; i < num_entries; i++) {
         if (i % INTERVAL == 0) {
             out.push_back(read_stub_index_entry_v2(frequencies, terms));
-            if (i% 50000 == 0) std::cout<<"Reading file "<<i * 100 / num_entries<<"% \r";
-        }
-        else preview_work_index_entry(frequencies, terms);
+            if (i % 50000 == 0) std::cout << "Reading file " << i * 100 / num_entries << "% \r";
+        } else preview_work_index_entry(terms);
     }
     std::cout << out.size() << " stub entries\n";
     return out;

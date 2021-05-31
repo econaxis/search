@@ -19,16 +19,17 @@ class CustomAllocatedVec {
 
 public:
     CustomAllocatedVec() {
-        block = get_default_allocator().get_new_block();
+        auto block_opt = get_default_allocator().get_new_block();
+        if (block_opt) {
+            block = block_opt.value();
+            is_heap = false;
+        } else {
+            reserve(get_default_allocator().BLOCK_INTERVAL);
+        }
         cur_size = 0;
         total_size = get_default_allocator().BLOCK_INTERVAL;
     }
 
-    std::vector<T> to_vector() const {
-        std::vector<T> out(cur_size);
-        std::memcpy(out.data(), block, sizeof(T) * cur_size);
-        return out;
-    }
 
     void push_back(T elem) {
         if (cur_size < total_size) {
@@ -85,12 +86,21 @@ public:
     }
 
     CustomAllocatedVec(const CustomAllocatedVec<T, block_size, num_blocks> &other) {
+        block = nullptr;
+        total_size = 0;
+        cur_size = 0;
+
         if (other.is_heap) {
             block = new T[other.total_size];
             is_heap = true;
         } else {
-            block = get_default_allocator().get_new_block();
-            is_heap = false;
+            auto block_opt = get_default_allocator().get_new_block();
+            if (block_opt) {
+                block = block_opt.value();
+                is_heap = false;
+            } else {
+                reserve(other.total_size);
+            }
         }
         cur_size = other.cur_size;
         total_size = other.total_size;
@@ -101,8 +111,7 @@ public:
         if (is_heap) {
             delete[]block;
             block = nullptr;
-        }
-        else if (block != nullptr) {
+        } else if (block != nullptr) {
             get_default_allocator().free_block(block);
             block = nullptr;
         }

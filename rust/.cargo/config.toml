@@ -7,7 +7,7 @@ configurable-env = true
 unstable-options = true
 
 [env]
-DATA_FILES_DIR = "/mnt/nfs/extra/data-files/"
+DATA_FILES_DIR = "/mnt/nfs/extra/gutenberg/"
 
 
 [target.x86_64-unknown-linux-gnu]

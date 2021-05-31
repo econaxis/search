@@ -2,6 +2,7 @@
 #define GAME_FILELISTGENERATOR_H
 #include <filesystem>
 #include "rust-interface.h"
+#include <iostream>
 constexpr std::string_view LOCKFILE = "/tmp/search-total-files-list.lock";
 constexpr unsigned int MAX_FILES_PER_INDEX = 100000;
 

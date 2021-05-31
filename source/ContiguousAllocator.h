@@ -3,21 +3,20 @@
 #define GAME_CONTIGUOUSALLOCATOR_H
 
 #include <memory>
-#include <iostream>
 #include <stack>
-#include <queue>
+#include <optional>
 
 template<typename T>
 class ContiguousAllocator {
     std::size_t current_allocated;
     std::unique_ptr<T[]> memory;
-
     std::stack<T *> free;
 public:
     int BLOCK_INTERVAL; // Each vector should have how many positions?
     int TOTAL_BLOCKS; // How many vectors needed?
 
-    ContiguousAllocator(int block_interval = 4, int total_blocks = 300000): BLOCK_INTERVAL(block_interval), TOTAL_BLOCKS(total_blocks) {
+    ContiguousAllocator(int block_interval = 4, int total_blocks = 300000) : BLOCK_INTERVAL(block_interval),
+                                                                             TOTAL_BLOCKS(total_blocks) {
         memory = std::make_unique<T[]>(BLOCK_INTERVAL * TOTAL_BLOCKS);
         current_allocated = 0;
     }
@@ -26,7 +25,7 @@ public:
         free.push(what);
     }
 
-    T *get_new_block() {
+    std::optional<T *> get_new_block() {
         if (!free.empty()) {
             T *temp = free.top();
             if (!free.empty()) free.pop();
@@ -36,8 +35,8 @@ public:
             current_allocated += BLOCK_INTERVAL;
             return block_loc;
         } else {
-            throw std::runtime_error("Mem contiguous alloc. exceeded");
-            //            return nullptr;
+//            throw std::runtime_error("Mem contiguous alloc. exceeded");
+            return std::nullopt;
         }
     }
 

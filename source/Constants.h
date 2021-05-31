@@ -8,5 +8,4 @@ extern std::filesystem::path indice_files_dir;
 extern const std::string unique_directory_suffix;
 void initialize_directory_variables();
 
-const extern std::array<std::string_view, 128> stop_words;
 #endif //GAME_CONSTANTS_H

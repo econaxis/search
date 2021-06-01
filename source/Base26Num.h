@@ -1,7 +1,3 @@
-//
-// Created by henry on 2021-05-18.
-//
-
 #ifndef GAME_BASE26NUM_H
 #define GAME_BASE26NUM_H
 #include <cstdint>

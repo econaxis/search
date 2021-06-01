@@ -1,4 +1,3 @@
-
 #ifndef GAME_TOKENIZER_H
 #define GAME_TOKENIZER_H
 

@@ -1,6 +1,4 @@
-//
-// Created by henry on 2021-05-18.
-//
+
 
 #include "Base26Num.h"
 #include <cmath>

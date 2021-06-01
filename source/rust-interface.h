@@ -1,7 +1,3 @@
-//
-// Created by henry on 2021-05-13.
-//
-
 #ifndef GAME_RUST_INTERFACE_H
 #define GAME_RUST_INTERFACE_H
 

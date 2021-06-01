@@ -1,7 +1,3 @@
-//
-// Created by henry on 2021-05-25.
-//
-
 #ifndef GAME_FPSTUB_H
 #define GAME_FPSTUB_H
 

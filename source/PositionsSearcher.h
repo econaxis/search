@@ -1,7 +1,3 @@
-//
-// Created by henry on 2021-05-30.
-//
-
 #ifndef GAME_POSITIONSSEARCHER_H
 #define GAME_POSITIONSSEARCHER_H
 

@@ -35,7 +35,7 @@ target_include_directories(general-indexer PUBLIC source extern extern/mio/inclu
 
 target_link_libraries(general-indexer PRIVATE pthread ${CMAKE_BINARY_DIR}/libnamesdb.so)
 
-add_executable(search source/main.cpp)
+add_executable(search source/main.cpp source/PositionsSolver.cpp source/PositionsSolver.h)
 target_link_libraries(search PRIVATE search-share general-indexer)
 
 

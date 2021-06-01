@@ -1,6 +1,4 @@
-//
-// Created by henry on 2021-05-25.
-//
+
 
 #include "Serializer.h"
 #include <filesystem>

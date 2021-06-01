@@ -1,4 +1,3 @@
-
 #ifndef GAME_RANDOM_B64_GEN_H
 #define GAME_RANDOM_B64_GEN_H
 

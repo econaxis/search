@@ -1,4 +1,3 @@
-
 #ifndef GAME_COMPACTOR_H
 #define GAME_COMPACTOR_H
 

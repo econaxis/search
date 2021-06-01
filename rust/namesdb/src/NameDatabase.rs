@@ -9,11 +9,13 @@ use regex::Regex;
 pub use public_ffi::*;
 use serde::Serialize;
 use rmp_serde;
+use std::str::FromStr;
 
 
 #[derive(Default, Debug)]
 pub struct NamesDatabase {
     set: HashSet<DocIDFilePair>,
+    json_path: PathBuf
 }
 
 mod public_ffi {
@@ -25,6 +27,10 @@ mod public_ffi {
         unsafe { CStr::from_ptr(s) }.to_str().unwrap()
     }
 
+    #[no_mangle]
+    pub extern fn register_temporary_file(ndb: *mut NamesDatabase, path: *const c_char, docid: u32) {
+        unsafe {&mut *ndb}.insert(c_char_to_str(path), docid);
+    }
 
     #[no_mangle]
     pub extern fn new_name_database(name: *const c_char) -> *const NamesDatabase {
@@ -42,6 +48,7 @@ mod public_ffi {
 
     #[no_mangle]
     pub extern fn drop_name_database(ndb: *mut NamesDatabase) {
+        unsafe {&mut *ndb}.drop_serialize();
         unsafe { Box::from_raw(ndb) };
     }
 }
@@ -57,11 +64,10 @@ fn pretty_serialize(_: &HashSet<DocIDFilePair>) {}
 impl NamesDatabase {
     pub fn new(metadata_path: &Path) -> Self {
         let json_path = metadata_path.join("file_metadata.msgpack");
-        let json_path = json_path.as_path();
         let mut processed_data: HashSet<DocIDFilePair> = {
             if json_path.exists() {
                 println!("Reusing same JSON metadata file");
-                let cur_data = Self::from_json_file(json_path);
+                let cur_data = Self::from_json_file(&json_path);
                 cur_data.set
             } else {
                 fs::File::create(&json_path).expect(&*format!("Couldn't open file {:?}", json_path));
@@ -69,19 +75,17 @@ impl NamesDatabase {
             }
         };
 
+        // Check if there's any new filemaps that we haven't indexed last round.
         processed_data.extend(generate_metadata_for_dir(metadata_path, &processed_data));
 
-        // Serialize new metadata file.
-        let binary_outfile = fs::File::create(&json_path).unwrap();
-
-        let mut serializer = rmp_serde::Serializer::new(&binary_outfile);
-        processed_data.serialize(&mut serializer).unwrap();
-
-        // Serialize for debugging
-        pretty_serialize(&processed_data);
         Self {
-            set: HashSet::from_iter(processed_data.into_iter())
+            set: processed_data,
+            json_path
         }
+    }
+
+    pub fn insert(&mut self, path: &str, id: u32) {
+        self.set.insert(DocIDFilePair {docid: id, path: PathBuf::from_str(path).unwrap(), ..Default::default()});
     }
 
     pub fn from_json_file(json_path: &Path) -> Self {
@@ -92,7 +96,7 @@ impl NamesDatabase {
         let data: Vec<DocIDFilePair> = Deserialize::deserialize(&mut deserializer).unwrap();
 
         let set = HashSet::from_iter(data.into_iter());
-        NamesDatabase { set }
+        NamesDatabase { set, json_path: json_path.to_owned() }
     }
     pub fn get<Q>(&self, key: &Q) -> Option<&DocIDFilePair>
         where DocIDFilePair: Borrow<Q>, Q: Hash + Eq + ?Sized {
@@ -101,6 +105,16 @@ impl NamesDatabase {
 
     pub fn get_from_str(&self, key: &str) -> Option<&DocIDFilePair> {
         self.get(OsStr::new(key))
+    }
+    fn drop_serialize(&mut self) {
+        // Serialize new metadata file.
+        let binary_outfile = fs::File::create(&self.json_path).unwrap();
+
+        let mut serializer = rmp_serde::Serializer::new(&binary_outfile);
+        self.set.serialize(&mut serializer).unwrap();
+
+        // Serialize for debugging
+        pretty_serialize(&self.set);
     }
 }
 

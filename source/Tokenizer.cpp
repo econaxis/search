@@ -8,7 +8,7 @@
 #include <robin_hood/robin_hood.h>
 
 struct WordPos {
-    unsigned int start, end, position;
+    unsigned int start, end;
 };
 
 int Tokenizer::clean_token_to_index(std::string &token) {
@@ -22,7 +22,7 @@ int Tokenizer::clean_token_to_index(std::string &token) {
 std::vector<WordPos> clean_string(std::string &file) {
     std::vector<WordPos> result;
 
-    unsigned int last_end = -1, cur_word = 0;
+    unsigned int last_end = -1;
     bool is_in_word = false;
     for (unsigned int i = 0; i < file.size(); i++) {
         if (std::isalpha(file[i])) {
@@ -34,7 +34,7 @@ std::vector<WordPos> clean_string(std::string &file) {
 
         if (!std::isalpha(file[i])) {
             if (is_in_word) {
-                result.push_back({last_end, i, cur_word++});
+                result.push_back({last_end, i});
 
                 last_end = -1;
                 is_in_word = false;
@@ -48,15 +48,19 @@ std::vector<WordPos> clean_string(std::string &file) {
 std::vector<WordIndexEntry_unsafe> Tokenizer::index_string_file(std::string file, uint32_t docid) {
     auto positions = clean_string(file);
     robin_hood::unordered_map<std::string, WordIndexEntry_unsafe> index_temp;
+    robin_hood::unordered_set<unsigned int> processed;
     index_temp.reserve(file.length() / 2);
-    for (auto[start, end, word_count] : positions) {
+
+    unsigned int word_count = 0;
+
+    for (auto[start, end] : positions) {
         auto temp = file.substr(start, end - start);
 
         if (clean_token_to_index(temp)) {
             if (auto it = index_temp.find(temp); it == index_temp.end()) {
                 index_temp.emplace(temp, WordIndexEntry_unsafe{temp, {}});
             }
-            index_temp.at(temp).files.push_back(DocumentPositionPointer{docid, word_count});
+            index_temp.at(temp).files.push_back(DocumentPositionPointer{docid, word_count++});
         }
     }
     std::vector<WordIndexEntry_unsafe> final;

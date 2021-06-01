@@ -1,10 +1,11 @@
 #include "compactor/Compactor.h"
 #include "Constants.h"
-
+#include "Serializer.h"
 namespace fs = std::filesystem;
 
 int main() {
     initialize_directory_variables();
+
 
     while (true) {
 

@@ -40,7 +40,6 @@ public:
         }
     }
 
-
     void clear() {
         while (!free.empty()) free.pop();
         current_allocated = 0;

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <cassert>
+#include <numeric>
 #include "DocumentPositionPointer.h"
 #include "CustomAllocatedVec.h"
 
@@ -24,7 +25,8 @@ struct WordIndexEntry_v2 {
 
 struct WordIndexEntry_unsafe {
     std::string key;
-    CustomAllocatedVec<DocumentPositionPointer, 3, 50000> files;
+    using VecType = CustomAllocatedVec<DocumentPositionPointer, 3, 50000>;
+    VecType files;
 
     WordIndexEntry_unsafe(std::string key, const std::vector<DocumentPositionPointer>& f) : key(std::move(key)), files() {
         for (const auto &i : f) {
@@ -61,6 +63,7 @@ struct WordIndexEntry {
                 prev_same_idx = i;
             }
         }
+
         return freq_data;
     }
 

@@ -74,7 +74,7 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         stream.read(reinterpret_cast<char *> (&holder), 3);
         byte = byte >> 3; // byte has 4 bits of info.
         // 32 bit number
-        holder = (holder << 3) | byte;
+        holder = (holder << 5) | byte;
     } else if (byte & 1 << 3) {
         uint64_t bigholder = 0;
         stream.read(reinterpret_cast<char *>(bigholder), 7);
@@ -100,8 +100,8 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
                                             const WordIndexEntry &ie) {
     assert(std::is_sorted(ie.files.begin(), ie.files.end()));
     serialize_str(terms, ie.key);
-    serialize_vnum(terms, frequencies.tellp(), true);
-    serialize_vnum(terms, positions.tellp(), true);
+    serialize_vnum(terms, frequencies.tellp(), false);
+    serialize_vnum(terms, positions.tellp(), false);
 
     /**
      * The frequencies file should be an array, where each element corresponds to a WordIndexEntry.
@@ -111,6 +111,8 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
 
     // contains <document_id, frequency> for the number of times this word appears in the document.
     std::vector<std::pair<uint32_t, uint32_t>> freq_data = ie.get_frequencies_vector();
+
+    assert(std::is_sorted(freq_data.begin(), freq_data.end()));
     serialize_vnum(frequencies, freq_data.size(), true);
     for (auto&[a, b] : freq_data) {
         serialize_vnum(frequencies, a, true);
@@ -129,16 +131,10 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
      *      20 * 32 bits for the document id (all 123) and 20 * 32 bits for the document position.
      */
     serialize_vnum(positions, ie.files.size(), false);
-    auto prev_i = DocumentPositionPointer{1 << 30, 1 << 30};
+    auto prev_i = DocumentPositionPointer{0, 0};
     for (auto i = ie.files.begin(); i != ie.files.end(); i++) {
-        if (*i == prev_i) {
-            auto diff = *i - prev_i;
-            serialize_vnum(positions, diff.document_position, false);
-        } else {
-            prev_i = *i;
-            serialize_vnum(positions, i->document_id, false);
-            serialize_vnum(positions, i->document_position, false);
-        }
+        serialize_vnum(positions, i->document_id, false);
+        serialize_vnum(positions, i->document_position, false);
     }
 
 }
@@ -154,9 +150,10 @@ Serializer::read_work_index_entry(std::istream &frequencies, std::istream &terms
     wie.files.reserve(num_positions);
 
     while (num_positions--) {
-        int docid = read_vnum(positions);
-        int position = read_vnum(positions);
-        wie.files.emplace_back(docid, position);
+        auto number = read_vnum(positions);
+        auto freq = read_vnum(positions);
+
+        wie.files.emplace_back(number, freq);
     }
 
     return wie;
@@ -178,7 +175,7 @@ constexpr auto MAX_FILES_PER_TERM = SortedKeysIndexStub::MAX_FILES_PER_TERM;
 
 int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
                                                    __m256 *buffer) {
-
+// TODO: no padding allowed for terms element with frequencies pos and positions pos.
     auto num_files = read_vnum(frequencies);
     auto *mybuffer = (DocumentPositionPointer_v2 *) buffer;
 
@@ -219,13 +216,20 @@ WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies
     auto num_files = read_vnum(frequencies);
 
     WordIndexEntry_v2 out{key, term_pos, {}};
-    out.files.resize(num_files);
-    // These VInts are padded to 4 bytes, so we can do this.
-    frequencies.read(reinterpret_cast<char *>(out.files.data()), num_files * 2 * sizeof(uint32_t));
-    for (auto &i : out.files) {
-        i.frequency >>= 4;
-        i.document_id >>= 4;
+    out.files.reserve(num_files);
+    while(num_files--) {
+        auto docid = read_vnum(frequencies);
+        auto freq = read_vnum(frequencies);
+        out.files.emplace_back(docid, freq);
     }
+    assert(std::is_sorted(out.files.begin(), out.files.end()));
+    // These VInts are padded to 4 bytes, so we can do this.
+//    frequencies.read(reinterpret_cast<char *>(out.files.data()), num_files * 2 * sizeof(uint32_t));
+//
+//    for (auto &i : out.files) {
+//        i.frequency >>= 4;
+//        i.document_id >>= 4;
+//    }
 
     return out;
 }

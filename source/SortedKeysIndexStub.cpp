@@ -3,6 +3,7 @@
 #include "SortedKeysIndexStub.h"
 #include "DocumentsMatcher.h"
 #include "Base26Num.h"
+#include "Serializer.h"
 #include <cmath>
 #include <numeric>
 
@@ -36,14 +37,6 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
     else return score;
 }
 
-
-#include <chrono>
-
-using namespace std::chrono;
-
-
-
-std::ofstream deb("/tmp/debug");
 
 template<typename Iterator>
 int compute_average(Iterator begin, Iterator end) {

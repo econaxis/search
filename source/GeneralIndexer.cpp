@@ -35,7 +35,7 @@ struct SyncedQueue {
 
     std::pair<std::string, DocIDFilePair> pop() {
         auto l = get_lock();
-        auto b = queue.back();
+        auto b = queue.front();
         queue.pop();
         cv.notify_one();
         return b;
@@ -75,14 +75,10 @@ void queue_produce_file_contents_tar(std::vector<std::string> tarnames, SyncedQu
     contents.cv.notify_all();
 }
 
-void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
+void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepairs,
                                  std::atomic_bool &done_flag) {
     for (auto &entry : filepairs) {
         auto abspath = data_files_dir / "data" / entry.file_name;
-        if (!fs::exists(abspath) || !fs::is_regular_file(abspath)) {
-            std::cerr << "Path " << abspath.c_str() << " nonexistent\n";
-            continue;
-        }
 
         auto len = fs::file_size(abspath);
         std::ifstream file(abspath);
@@ -96,9 +92,9 @@ void queue_produce_file_contents(SyncedQueue &contents, FilePairs &filepairs,
             filestr.append((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         }
 
-        if (contents.size() > 600) {
+        if (contents.size() > 10) {
             contents.wait_for([&] {
-                return contents.size() < 100;
+                return contents.size() <= 3;
             });
         }
 
@@ -125,7 +121,9 @@ std::vector<WordIndexEntry_unsafe> remake_vector() {
 
 int GeneralIndexer::read_some_files() {
     // Vector of file paths and generated, incremental ID.
-    FilePairs fp = FileListGenerator::from_file();
+    const FilePairs fp = FileListGenerator::from_file();
+
+    if(fp.empty()) return 0;
 
     int progress_counter = 0;
 
@@ -154,15 +152,14 @@ int GeneralIndexer::read_some_files() {
         }
         if (!file_contents.size() && done_flag) continue;
         auto[contents, docidfilepair] = file_contents.pop();
-
-        if (progress_counter++ % (MAX_FILES_PER_INDEX / 5000 + 1) == 0) {
-            std::cout << "Done " << progress_counter * 100 / MAX_FILES_PER_INDEX << "% " << progress_counter << "\r"
+        if (progress_counter++ % (fp.size() / 5000 + 1) == 0) {
+            std::cout << "Done " << progress_counter * 100 / fp.size() << "% " << progress_counter << "\r"
                       << std::flush;
         }
 
         auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
-        reduce_word_index_entries(a0, std::move(temp));
 
+        reduce_word_index_entries(a0, std::move(temp));
         // `a0` is our "holding zone" for recently indexed files. It is a vector of all tokens and their positions in each file.
         // When a0 gets too full, we want to copy its data into the main index `a1`. Here, all similar tokens from different files
         // will be merged.
@@ -171,29 +168,29 @@ int GeneralIndexer::read_some_files() {
         // which is very inefficient. Therefore, in `a0`, we use some unsafe pool memory allocation to speed indexing up. Then, periodically,
         // we'll copy that unsafe memory into safe, STL vector-managed memory. Plus, the memory pool `ContiguousAllocator`
         // only has a fixed size which will runtime crash if we exceed it.
-        if (a0.size() > 1000) {
+        if (a0.size() > 10000) {
+
             // Only need to sort and group (merge similar terms into the same vector) every few iterations.
-            if (a1.get_index().size() > 10000 && a1.get_index().size() % 100 == 0) a1.sort_and_group_shallow();
-
-            // Merge the unsafe, speedy holding structure into the main index.
-            a1.merge_into(SortedKeysIndex(std::move(a0)));
-
+            if (a1.get_index().size() > 1000 && a1.get_index().size() % 50 == 0) a1.sort_and_group_shallow();
+            // Merge the unsafe, quick holding structure into the main index.
+            a1.merge_into(SortedKeysIndex(a0));
             // Reset the holding vector to its empty state, ready for more indexing.
             a0 = remake_vector();
         }
     }
-    a1.merge_into(SortedKeysIndex(std::move(a0)));
+    if(!a0.empty()) a1.merge_into(SortedKeysIndex(std::move(a0)));
 
-    if (a1.get_index().empty()) {
-        return 0;
-    }
+    if (a1.get_index().empty()) return 0;
+    a1.check_dups();
+
+
     a1.sort_and_group_shallow();
 
     // Instead of sorting and grouping by terms, this also sorts each term's documents list by document ID.
     // This could take a long time (many sorts), and there's no memory-conservation advantage,
     // so we only need to do it at the end.
     a1.sort_and_group_all();
-
+    a1.check_dups();
     persist_indices(a1, fp);
 
     filecontentproducer.join();

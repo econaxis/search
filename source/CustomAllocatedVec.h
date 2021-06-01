@@ -18,16 +18,17 @@ class CustomAllocatedVec {
     bool is_heap = false;
 
 public:
+
     CustomAllocatedVec() {
         auto block_opt = get_default_allocator().get_new_block();
         if (block_opt) {
             block = block_opt.value();
             is_heap = false;
+            total_size = get_default_allocator().BLOCK_INTERVAL;
         } else {
             reserve(get_default_allocator().BLOCK_INTERVAL);
         }
         cur_size = 0;
-        total_size = get_default_allocator().BLOCK_INTERVAL;
     }
 
 
@@ -47,11 +48,6 @@ public:
         else {
             throw std::runtime_error("Index exceeded size");
         }
-    }
-
-    void clear() {
-        cur_size = 0;
-        total_size = 0;
     }
 
     bool empty() const {

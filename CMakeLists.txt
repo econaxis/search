@@ -18,7 +18,6 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         "source/Serializer.h"
         "source/Tokenizer.cpp"
         "source/DocumentPositionPointer.h"
-        "source/WordIndexEntry.cpp"
         "source/WordIndexEntry.h"
         "source/Serializer.cpp"
         extern/microtar/microtar.c

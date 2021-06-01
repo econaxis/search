@@ -10,7 +10,6 @@ SortedKeysIndex::SortedKeysIndex(std::vector<WordIndexEntry_unsafe> index)  {
     }
 }
 
-
 void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
     std::move(other.index.begin(), other.index.end(), std::back_inserter(index));
 }
@@ -42,6 +41,19 @@ void SortedKeysIndex::sort_and_group_all() {
     std::for_each(index.begin(), index.end(), [](WordIndexEntry &elem) {
         std::sort(elem.files.begin(), elem.files.end());
     });
+}
+
+void SortedKeysIndex::check_dups() {
+    for (auto& wie : index) {
+        auto prev = 0;
+        for(auto& [docid, pos] : wie.files) {
+            if (docid* 14343 + pos == prev) {
+                int a = 5;
+            } else {
+                prev = docid * 14343 + pos;
+            }
+        }
+    }
 }
 
 std::vector<WordIndexEntry> &SortedKeysIndex::get_index() {

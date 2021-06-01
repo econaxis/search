@@ -9,8 +9,6 @@
 
 namespace fs = std::filesystem;
 
-constexpr unsigned int MATCHALL_BONUS = 5;
-
 
 /**
  * Compares the shorter string against the longer string, checking if shorter is a prefix of longer.
@@ -18,6 +16,8 @@ constexpr unsigned int MATCHALL_BONUS = 5;
  * @return a score that means how well they match. A complete match (shorter == longer) will return CUTOFF_MAX;
  */
 static unsigned int string_prefix_compare(const std::string &shorter, const std::string &longer) {
+    // Score multiplier in case a word matches all (vs. only a prefix match)
+    constexpr float MATCHALL_BONUS = 2;
     // Returns true if shorter is the prefix of longer.
     // e.g. shorter: "str" and longer: "string" returns true.
     auto ls = longer.size();
@@ -29,25 +29,26 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
     float divider = 5.F / (ls - ss + 5);
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
-            return i * divider;
+            return i * i * divider;
         }
     }
-    const auto score = ss * divider;
-    if (ss == ls) return MATCHALL_BONUS + score;
+    const auto score = ss * ss * divider;
+    if (ss == ls) return MATCHALL_BONUS * score;
     else return score;
 }
 
 
 template<typename Iterator>
 int compute_average(Iterator begin, Iterator end) {
+
     auto sum = std::accumulate(begin, end, 0);
 
     auto len = std::max(end - begin, 1L);
-    auto avg =  sum / len;
+    auto avg = sum / len;
     auto max_elem = std::max_element(begin, end);
 
-    if(len > 20) avg += (*max_elem - avg) * 0.5;
-    else if (len < 10) avg /= 2;
+    if (len > 10) avg += (*max_elem - avg) * 0.75;
+    else if (len < 3) avg /= 2;
 
     return avg;
 }
@@ -82,10 +83,14 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     outputs.reserve(50);
 
     while (terms_pos <= file_end->terms_pos) {
-        // Preview the WIE without loading everything into memory.
+        // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
+        // and since majority of keys don't fit within our criteria, previewing reduces computation and memory.
         auto preview = Serializer::preview_work_index_entry(terms);
         terms_pos = preview.terms_pos;
 
+
+        // If the preview fits within the score cutoff, then we seek back to the previewed position and read the whole thing into memory
+        // to process it.
         auto min_cutoff_score = compute_average(output_score.begin(), output_score.end());
         if (auto score = string_prefix_compare(term, preview.key); score >= min_cutoff_score) {
             // Seek back to original previewed position.
@@ -98,7 +103,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             auto init = (DocumentPositionPointer_v2 *) alignedbuf.get();
             auto tot_score = 0;
             for (auto i = init; i < init + size; i++) {
-                float coefficient = std::log10(i->frequency) * 2 + 1;
+                float coefficient = std::log10(i->frequency + 0.8) + 0.8;
                 i->frequency = coefficient * score;
                 tot_score += i->frequency;
             }

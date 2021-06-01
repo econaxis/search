@@ -91,10 +91,10 @@ int main(int argc, char *argv[]) {
     initialize_directory_variables();
 
 
-//    if (argc == 1) {
-//        while (GeneralIndexer::read_some_files() != 0) {};
-//        return 1;
-//    };
+    if (argc == 1 ) {
+        while (GeneralIndexer::read_some_files() != 0) {};
+        return 1;
+    };
 
 
     auto[indices, filemap] = load_all_indices();

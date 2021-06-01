@@ -146,6 +146,8 @@ pub fn get_server(state: ApplicationState) -> BoxFuture<'static, Result<(), hype
     let state = Arc::from(state);
 
     let make_svc = make_service_fn(move |_conn| {
+        // Since this outer closure is called everytime a new TCP connection comes in,
+        // we have to clone the state into us.
         let state = state.clone();
         // service_fn converts our function into a `Service`
         async move {
@@ -153,6 +155,8 @@ pub fn get_server(state: ApplicationState) -> BoxFuture<'static, Result<(), hype
                 tokio::spawn(async {
                     println!("Spawned task");
                 });
+                // Since this inner closure is called everytime a request is made (from the same TCP connection),
+                // have to clone the state again.
                 route_request(req, state.clone())
             }))
         }

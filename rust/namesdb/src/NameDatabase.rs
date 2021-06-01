@@ -1,6 +1,6 @@
 extern crate rust;
 
-use std::{borrow::Borrow, hash::Hash, fs::{File, self}, iter::FromIterator, ffi::OsStr, collections::{HashSet}, path::{Path}, io};
+use std::{borrow::Borrow, hash::Hash, fs::{File, self}, iter::FromIterator, ffi::OsStr, collections::{HashSet}, path::{Path}};
 use std::path::{PathBuf};
 use std::{env};
 use std::io::{BufReader, BufRead};
@@ -15,7 +15,7 @@ use std::str::FromStr;
 #[derive(Default, Debug)]
 pub struct NamesDatabase {
     set: HashSet<DocIDFilePair>,
-    json_path: PathBuf
+    json_path: PathBuf,
 }
 
 mod public_ffi {
@@ -29,7 +29,7 @@ mod public_ffi {
 
     #[no_mangle]
     pub extern fn register_temporary_file(ndb: *mut NamesDatabase, path: *const c_char, docid: u32) {
-        unsafe {&mut *ndb}.insert(c_char_to_str(path), docid);
+        unsafe { &mut *ndb }.insert(c_char_to_str(path), docid);
     }
 
     #[no_mangle]
@@ -48,7 +48,7 @@ mod public_ffi {
 
     #[no_mangle]
     pub extern fn drop_name_database(ndb: *mut NamesDatabase) {
-        unsafe {&mut *ndb}.drop_serialize();
+        unsafe { &mut *ndb }.drop_serialize();
         unsafe { Box::from_raw(ndb) };
     }
 }
@@ -58,6 +58,7 @@ fn pretty_serialize(d: &HashSet<DocIDFilePair>) {
     let outfile = fs::File::create("/tmp/file_metadata.pretty.json").unwrap();
     serde_json::to_writer_pretty(outfile, &d).unwrap();
 }
+
 #[cfg(not(debug_assertions))]
 fn pretty_serialize(_: &HashSet<DocIDFilePair>) {}
 
@@ -80,12 +81,12 @@ impl NamesDatabase {
 
         Self {
             set: processed_data,
-            json_path
+            json_path,
         }
     }
 
     pub fn insert(&mut self, path: &str, id: u32) {
-        self.set.insert(DocIDFilePair {docid: id, path: PathBuf::from_str(path).unwrap(), ..Default::default()});
+        self.set.insert(DocIDFilePair { docid: id, path: PathBuf::from_str(path).unwrap(), ..Default::default() });
     }
 
     pub fn from_json_file(json_path: &Path) -> Self {

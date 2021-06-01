@@ -41,17 +41,17 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
 
 template<typename Iterator>
 int compute_average(Iterator begin, Iterator end) {
+    if(end - begin < 6) return 8;
 
-    auto sum = std::accumulate(begin, end, 0);
+    unsigned int sum = 0, square = 0;
 
-    auto len = std::max(end - begin, 1L);
-    auto avg = sum / len;
-    auto max_elem = std::max_element(begin, end);
+    for(auto i = begin; i < end; i++) {
+        sum += *i;
+        square += *i * *i;
+    }
+    sum += end - begin;
 
-    if (len > 10) avg += (*max_elem - avg) * 0.75;
-    else if (len < 3) avg /= 2;
-
-    return avg;
+    return square / sum;
 }
 
 
@@ -107,7 +107,9 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
                 i->frequency = coefficient * score;
                 tot_score += i->frequency;
             }
-            outputs.emplace_back(init, init + size);
+            TopDocs td(init, init+size);
+            td.add_term_str(preview.key);
+            outputs.push_back(std::move(td));
             output_score.emplace_back(tot_score / size);
         }
     }
@@ -119,7 +121,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
         // Append only words that are above average score, as determined by cutoff.
         if (output_score[i] >= score_cutoff) {
-            outputs[0].append_multi(outputs[i].begin(), outputs[i].end(), false);
+            outputs[0].append_multi(outputs[i]);
         }
     }
     return outputs[0];
@@ -165,7 +167,7 @@ TopDocs SortedKeysIndexStub::collection_merge_search(std::vector<SortedKeysIndex
     for (auto &index : indices) {
         auto temp = index.search_many_terms(search_terms);
 
-        if (temp.size()) joined.append_multi(temp.begin(), temp.end());
+        if (temp.size()) joined.append_multi(temp);
     };
 
     joined.merge_similar_docs();

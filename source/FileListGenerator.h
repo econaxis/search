@@ -4,7 +4,7 @@
 #include "rust-interface.h"
 #include <iostream>
 constexpr std::string_view LOCKFILE = "/tmp/search-total-files-list.lock";
-constexpr unsigned int MAX_FILES_PER_INDEX = 10000;
+constexpr unsigned int MAX_FILES_PER_INDEX = 50000;
 
 namespace FileListGenerator {
     using FilePairs = std::vector<DocIDFilePair>;

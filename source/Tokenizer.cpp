@@ -24,15 +24,20 @@ std::vector<WordPos> clean_string(std::string &file) {
 
     unsigned int last_end = -1;
     bool is_in_word = false;
+    bool is_in_xml = false;
     for (unsigned int i = 0; i < file.size(); i++) {
-        if (std::isalpha(file[i])) {
+        if (file[i] == '<') {
+            is_in_xml = true;
+        } else if (file[i] == '>') {
+            is_in_xml = false;
+        } else if (is_in_xml) {
+            continue;
+        } else if (std::isalpha(file[i])) {
             if (!is_in_word) {
                 is_in_word = true;
                 last_end = i;
             }
-        }
-
-        if (!std::isalpha(file[i])) {
+        } else if (!std::isalpha(file[i])) {
             if (is_in_word) {
                 result.push_back({last_end, i});
 
@@ -40,6 +45,8 @@ std::vector<WordPos> clean_string(std::string &file) {
                 is_in_word = false;
             }
         }
+
+
     }
     return result;
 }

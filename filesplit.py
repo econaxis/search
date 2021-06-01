@@ -12,13 +12,12 @@ import hashlib
 from multiprocessing import Pool
 
 
-def download():
-    for i in arr:
-        print("Extracting ", i)
-        url = f"https://bulkdata.uspto.gov/data/patent/application/redbook/fulltext/2020/{i}"
-        r = requests.get(url, stream=True)
-        z = zipfile.ZipFile(io.BytesIO(r.content))
-        z.extractall(".")
+def download(i):
+    print("Extracting ", i)
+    url = f"https://bulkdata.uspto.gov/data/patent/application/redbook/fulltext/2019/{i}"
+    r = requests.get(url, stream=True)
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    z.extractall(".")
 
 
 def process(filename):
@@ -35,30 +34,33 @@ def process(filename):
     startpos = 0
 
     while True:
-        endpos = f.find("<?xml", startpos + 1)
-        if endpos == -1:
-            break
+        try:
+            endpos = f.find("<?xml", startpos + 1)
+            if endpos == -1:
+                break
 
-        elem = etree.fromstring(f[startpos:endpos].encode("ascii"), parser)
-        xmlfile = elem.get("file")
+            elem = etree.fromstring(f[startpos:endpos].encode("ascii"), parser)
+            xmlfile = elem.get("file")
 
-        if xmlfile:
-            digest = hashlib.md5(xmlfile.encode("ascii")).hexdigest()
+            if xmlfile:
+                digest = hashlib.md5(xmlfile.encode("ascii")).hexdigest()
 
-            path = digest[0:2] + "/" + digest[2:4] + "/"
+                path = digest[0:2] + "/" + digest[2:4] + "/"
 
-            os.makedirs(path, exist_ok=True)
+                os.makedirs(path, exist_ok=True)
 
-            print(xmlfile)
+                print(xmlfile)
 
-            file = open(path + xmlfile, "w")
-            file.write(f[startpos:endpos])
-            a = 5
-        startpos = endpos
+                file = open(path + xmlfile, "w")
+                file.write(f[startpos:endpos])
+                a = 5
+            startpos = endpos
+        except Exception as e:
+            print(e)
     os.rename(filename, filename + "PROCESSED")
 
 
-pool = multiprocessing.Pool(processes=4)
+pool = multiprocessing.Pool(processes=8)
 
 
 def _process():
@@ -66,7 +68,8 @@ def _process():
 
 
 def _download():
-    urls = ["ipa201231.zip", "ipa201224.zip", "ipa201217.zip", "ipa201210.zip", "ipa201203.zip", "ipa201126.zip", "ipa201119.zip", "ipa201112.zip", "ipa201105.zip", "ipa201029.zip", "ipa201022.zip", "ipa201015.zip", "ipa201008.zip", "ipa201001.zip", "ipa200924.zip", "ipa200917.zip", "ipa200910.zip", "ipa200903.zip", "ipa200827.zip", "ipa200820.zip", "ipa200813.zip", "ipa200806.zip", "ipa200730.zip", "ipa200723.zip", "ipa200716.zip", "ipa200709.zip", "ipa200702.zip", "ipa200625.zip", "ipa200618.zip", "ipa200611.zip", "ipa200604.zip", "ipa200528.zip", "ipa200521.zip", "ipa200514.zip", "ipa200507.zip", "ipa200430.zip", "ipa200423.zip", "ipa200416.zip", "ipa200409.zip", "ipa200402.zip", "ipa200326.zip", "ipa200319.zip", "ipa200312.zip", "ipa200305.zip", "ipa200227.zip", "ipa200220.zip", "ipa200213.zip", "ipa200206.zip", "ipa200130.zip", "ipa200123.zip", "ipa200116.zip", "ipa200109.zip", "ipa200102.zip",]
+    urls = ["ipa191226.zip", "ipa191219.zip", "ipa191212.zip", "ipa191205.zip", "ipa191128.zip", "ipa191121.zip", "ipa191114.zip", "ipa191107.zip", "ipa191031.zip", "ipa191024.zip", "ipa191017.zip", "ipa191010.zip", "ipa191003.zip", "ipa190926.zip", "ipa190919.zip", "ipa190912.zip", "ipa190905.zip", "ipa190829.zip", "ipa190822_r1.zip", "ipa190822_r2.zip", "ipa190822.zip", "ipa190815.zip", "ipa190815_r2.zip", "ipa190815_r1.zip", "ipa190808_r1.zip", "ipa190808.zip", "ipa190801.zip", "ipa190801_r1.zip", "ipa190725.zip", "ipa190718.zip", "ipa190711.zip", "ipa190704.zip", "ipa190627.zip", "ipa190620.zip", "ipa190613.zip", "ipa190606.zip", "ipa190530.zip", "ipa190523.zip", "ipa190516.zip", "ipa190509.zip", "ipa190502.zip", "ipa190425.zip", "ipa190418.zip", "ipa190411.zip", "ipa190404.zip", "ipa190328.zip", "ipa190321.zip", "ipa190314.zip", "ipa190307.zip", "ipa190228.zip", "ipa190221.zip", "ipa190214.zip", "ipa190207.zip", "ipa190131.zip", "ipa190124.zip", "ipa190117.zip", "ipa190110.zip", "ipa190103.zip"]
     pool.map(download, urls)
 
-_process()
+_download()
+

@@ -106,7 +106,7 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
             assert(pair.document_id < 1 << 27);
             pair.document_id |= curtag;
         }
-        if (temp.size()) joined.append_multi(temp.begin(), temp.end());
+        if (temp.size()) joined.append_multi(temp);
     }
 
     joined.sort_by_frequencies();

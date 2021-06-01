@@ -111,7 +111,7 @@ bool unroll_binary_search_find(const DocumentPositionPointer_v2 *&begin, const D
 
 TopDocs backup(std::vector<TopDocs> &results) {
     for (int i = 1; i < results.size(); i++) {
-        results[0].append_multi(results[i].begin(), results[i].end(), true);
+        results[0].append_multi(results[i]);
     }
     results[0].sort_by_frequencies();
     return results[0];

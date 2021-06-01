@@ -11,7 +11,6 @@
 
 struct PreviewResult {
     std::streampos frequencies_pos;
-    std::streampos terms_pos;
     std::streampos positions_pos;
     std::string key;
 };

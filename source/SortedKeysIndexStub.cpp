@@ -6,6 +6,7 @@
 #include "Serializer.h"
 #include <cmath>
 #include <numeric>
+#include "Constants.h"
 
 namespace fs = std::filesystem;
 
@@ -71,6 +72,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     terms.seekg(terms_pos);
     Serializer::read_str(terms); // First key string
     auto frequencies_pos = Serializer::read_vnum(terms); // Frequencies position
+    auto max_terms_read = (file_end - file_start) * STUB_INTERVAL;
 
     frequencies.seekg(frequencies_pos);
 
@@ -82,12 +84,10 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     std::vector<int> output_score;
     outputs.reserve(50);
 
-    while (terms_pos <= file_end->terms_pos) {
+    while (max_terms_read-- || terms.tellg() < file_end->terms_pos) {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
         // and since majority of keys don't fit within our criteria, previewing reduces computation and memory.
         auto preview = Serializer::preview_work_index_entry(terms);
-        terms_pos = preview.terms_pos;
-
 
         // If the preview fits within the score cutoff, then we seek back to the previewed position and read the whole thing into memory
         // to process it.
@@ -139,8 +139,6 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
 
 
 constexpr std::size_t BUFLEN = 100000;
-
-#include "Constants.h"
 
 SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix),
                                                                filemap((indice_files_dir / ("filemap-" + suffix))) {

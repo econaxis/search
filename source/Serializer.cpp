@@ -163,10 +163,13 @@ Serializer::read_work_index_entry(std::istream &frequencies, std::istream &terms
 PreviewResult Serializer::preview_work_index_entry(std::istream &terms) {
 
     std::string key = read_str(terms);
+    int term_read_count = 0;
     auto frequencies_pos = read_vnum(terms);
+    term_read_count+=terms.gcount();
     auto positions_pos = read_vnum(terms); // positions_pos, currently unused at this stage.
+    term_read_count+=terms.gcount();
 
-    return {frequencies_pos, terms.tellg(), positions_pos, key};
+    return {frequencies_pos, positions_pos, key};
 }
 
 #include <immintrin.h>
@@ -244,7 +247,7 @@ StubIndexEntry Serializer::read_stub_index_entry_v2(std::istream &frequencies, s
 
 
 std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istream &frequencies, std::istream &terms) {
-    constexpr int INTERVAL = 16; // read only every Nth entry.
+    constexpr int INTERVAL = STUB_INTERVAL; // read only every Nth entry.
     assert(frequencies.tellg() == 0 && terms.tellg() == 0);
 
     auto num_entries = Serializer::read_vnum(frequencies);

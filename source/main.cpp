@@ -69,7 +69,7 @@ load_all_indices() {
 
         indices.emplace_back(line);
 
-        if (indices.size() >= 3) break;
+        if (indices.size() >= 7) break;
     }
 
 
@@ -91,10 +91,10 @@ int main(int argc, char *argv[]) {
     initialize_directory_variables();
 
 
-    if (argc == 1) {
-        while (GeneralIndexer::read_some_files() != 0) {};
-        return 1;
-    };
+//    if (argc == 1) {
+//        while (GeneralIndexer::read_some_files() != 0) {};
+//        return 1;
+//    };
 
 
     auto[indices, filemap] = load_all_indices();

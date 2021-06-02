@@ -35,10 +35,10 @@ std::pair<Compactor::ReadState, std::string> Compactor::read_and_mark_line(std::
     if (line[0] == '#') {
         return read_and_mark_line(stream); //recursive call.
     } else {
-        stream.seekg(before_read);
-        insert_string(stream, "# joined ");
+//        stream.seekg(before_read);
+//        insert_string(stream, "# joined ");
 //         Use up the remaining line
-        std::getline(stream, line);
+//        std::getline(stream, line);
 
         return {Compactor::ReadState::GOOD, line};
     }
@@ -126,7 +126,7 @@ std::vector<DocIDFilePair> merge_filepairs(std::vector<DocIDFilePair> &one, std:
     return merged;
 }
 
-
+// todo: return pair so we can delete the files later.
 std::optional<std::string> Compactor::compact_two_files() {
     using namespace Serializer;
     std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
@@ -180,6 +180,7 @@ std::optional<std::string> Compactor::compact_two_files() {
     WordIndexEntry wie{INVALIDATED, {}}, wie1{INVALIDATED, {}};
     // All streams are at position 4 bytes from beginning, where data starts.
     while (true) {
+        std::cout<<"Remaining: "<<len<<" "<<len1<<"\n";
         if (wie.key == INVALIDATED && len) {
             // Need to refill this key.
             wie = streamset.read();

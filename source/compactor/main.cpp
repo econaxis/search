@@ -29,8 +29,7 @@ int main(int argc, char *argv[]) {
             if (joined_suffix) {
                 Compactor::test_makes_sense(joined_suffix.value());
                 assert(IndexFileLocker::acquire_lock_file());
-                std::ofstream index_file(indice_files_dir / "index_files");
-                index_file.seekp(0, std::ios_base::end);
+                std::fstream index_file(indice_files_dir / "index_files", std::ios_base::app);
                 index_file << joined_suffix.value() << "\n";
                 IndexFileLocker::release_lock_file();
 

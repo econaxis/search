@@ -1,7 +1,12 @@
 
 #ifndef GAME_LOCKFILE_H
 #define GAME_LOCKFILE_H
+
 #include <filesystem>
+#include <string>
+#include <string_view>
+#include <fstream>
+
 constexpr std::string_view LOCKFILE = "/tmp/search-total-files-list.lock";
 
 namespace IndexFileLocker {
@@ -9,10 +14,10 @@ namespace IndexFileLocker {
 
     bool acquire_lock_file() {
         using namespace std::chrono;
-        if (fs::exists(fs::path(LOCKFILE))) {
+        if (fs::exists(LOCKFILE)) {
             return false;
         } else {
-            std::ofstream ofs(LOCKFILE);
+            std::ofstream ofs(std::string{LOCKFILE});
             auto now = system_clock::now();
             auto now1 = system_clock::to_time_t(now);
             ofs << std::put_time(std::localtime(&now1), "%c");
@@ -22,7 +27,7 @@ namespace IndexFileLocker {
     }
 
     void release_lock_file() {
-	fs::remove(fs::path(LOCKFILE));
+        fs::remove(fs::path(LOCKFILE));
     }
 
 };

@@ -90,6 +90,8 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         int b = stream.good();
         int c = stream.eof();
         std::cout << "Error: not a valid number; " << a << b << c;
+        throw std::runtime_error("Error: not a valid number");
+//        return 1<<31;
     }
 
     return holder;
@@ -131,7 +133,6 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
      *      20 * 32 bits for the document id (all 123) and 20 * 32 bits for the document position.
      */
     serialize_vnum(positions, ie.files.size(), false);
-    auto prev_i = DocumentPositionPointer{0, 0};
     for (auto i = ie.files.begin(); i != ie.files.end(); i++) {
         serialize_vnum(positions, i->document_id, false);
         serialize_vnum(positions, i->document_position, false);

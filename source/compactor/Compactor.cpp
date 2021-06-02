@@ -1,4 +1,5 @@
 #include <filesystem>
+#include "IndexFileLocker.h"
 #include "compactor/Compactor.h"
 #include <fstream>
 #include <iostream>
@@ -130,8 +131,11 @@ std::optional<std::string> Compactor::compact_two_files() {
     using namespace Serializer;
     std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
     assert(index_file);
+
+    assert(IndexFileLocker::acquire_lock_file());
     auto[err_state1, suffix] = read_and_mark_line(index_file);
     auto[err_state2, suffix1] = read_and_mark_line(index_file);
+    IndexFileLocker::release_lock_file();
 
     assert(err_state2 == ReadState::GOOD && err_state1 == err_state2);
 
@@ -222,8 +226,10 @@ std::optional<std::string> Compactor::compact_two_files() {
         serialize_vnum(stream, newsize, true);
     });
 
+    assert(IndexFileLocker::acquire_lock_file());
     index_file.seekp(0, std::ios_base::end);
     index_file << joined_suffix << "\n";
+    IndexFileLocker::release_lock_file();
 
     std::cout << "Compacted to " << joined_suffix << "\n";
     return joined_suffix;

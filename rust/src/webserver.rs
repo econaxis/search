@@ -113,12 +113,12 @@ async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Res
         .body(jsonout).unwrap())
 }
 
-fn parse_url_query(uri: &hyper::Uri, query_term: &str) -> Result<Vec<String>, io::Error> {
+fn parse_url_query<'a>(uri: &'a hyper::Uri, query_term: &str) -> Result<Vec<&'a str>, io::Error> {
     let query = uri.query().ok_or(io::Error::new(io::ErrorKind::Other, "Can't pull query"))?;
     let match_indices = query.match_indices(query_term).next().
         ok_or(io::Error::new(ErrorKind::Other, format!("{} query not found", query_term)))?.0;
 
-    let query: Vec<String> = query[match_indices + query_term.len()..].split(|x| x == '+').map(|x| x.to_string()).collect();
+    let query: Vec<&'a str> = query[match_indices + query_term.len()..].split(|x| x == '+').collect();
     debug!(parsed = ?query);
 
     Ok(query)
@@ -129,7 +129,8 @@ async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Resul
     let uri = req.uri().path();
     if uri.starts_with("/search") {
         let q = parse_url_query(req.uri(), "?q=")?;
-        handle_request(data.deref(), &*q).await
+        Ok(Response::new(Body::from("f")))
+        // handle_request(data.deref(), q).await
     } else if uri.starts_with("/highlight") {
         let q = parse_url_query(req.uri(), "?id=")?.into_iter().next().ok_or(make_err("ID not found"))?;
         let q: u32 = q.parse().map_err(|_| make_err(&*format!("Couldn't parse int: {}", q)))?;

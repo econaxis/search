@@ -145,6 +145,8 @@ std::optional<std::string> Compactor::compact_two_files() {
     auto joined_suffix = suffix + "-" + suffix1;
     auto ostreamset = open_file_set<std::fstream>(joined_suffix, true);
 
+    std::cout<<"Trying to compact: "<<joined_suffix<<"\n";
+
     auto filepairs = Serializer::read_filepairs(streamset.filemap);
     auto filepairs1 = Serializer::read_filepairs(streamset1.filemap);
 
@@ -226,12 +228,7 @@ std::optional<std::string> Compactor::compact_two_files() {
         serialize_vnum(stream, newsize, true);
     });
 
-    assert(IndexFileLocker::acquire_lock_file());
-    index_file.seekp(0, std::ios_base::end);
-    index_file << joined_suffix << "\n";
-    IndexFileLocker::release_lock_file();
 
-    std::cout << "Compacted to " << joined_suffix << "\n";
     return joined_suffix;
 }
 
@@ -253,6 +250,7 @@ void Compactor::test_makes_sense(const std::string &suffix) {
     while (check_stream_good(dynamic_cast<std::ifstream &>(frequencies))) {
         len--;
         wie = read_work_index_entry(frequencies, terms, positions);
+        assert(std::is_sorted(wie.files.begin(), wie.files.end()));
         serialize_work_index_entry(ofrequencies, oterms, opositions, wie);
     }
     assert(len == 0);

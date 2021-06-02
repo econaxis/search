@@ -81,7 +81,7 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         byte = byte >> 4;
         bigholder = (bigholder << 4) | byte;
 
-        if (holder > (2 >> 31)) {
+        if (holder > (1 >> 31)) {
             throw std::runtime_error("64 bit number can't be coerced to 32 bits");
         }
         holder = static_cast<uint32_t>(bigholder);
@@ -90,7 +90,7 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         int b = stream.good();
         int c = stream.eof();
         std::cout << "Error: not a valid number; " << a << b << c;
-        throw std::runtime_error("Error: not a valid number");
+        throw std::runtime_error("Error: not a valid number " + std::to_string(a) + " " + std::to_string(c));
 //        return 1<<31;
     }
 

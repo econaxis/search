@@ -3,7 +3,7 @@
 #include <filesystem>
 #include "rust-interface.h"
 #include <iostream>
-constexpr std::string_view LOCKFILE = "/tmp/search-total-files-list.lock";
+#include "IndexFileLocker.h"
 constexpr unsigned int MAX_FILES_PER_INDEX = 50000;
 
 namespace FileListGenerator {
@@ -11,18 +11,6 @@ namespace FileListGenerator {
     namespace fs = std::filesystem;
     NamesDatabase *ndb = nullptr;
 
-    bool acquire_lock_file() {
-        using namespace std::chrono;
-        if (fs::exists(LOCKFILE)) {
-            return false;
-        } else {
-            std::ofstream ofs(data_files_dir / LOCKFILE);
-            auto now = system_clock::now();
-            auto now1 = system_clock::to_time_t(now);
-            ofs << std::put_time(std::localtime(&now1), "%c");
-        }
-        return true;
-    }
 
     void init_names_db() {
         assert(ndb == nullptr);
@@ -32,16 +20,16 @@ namespace FileListGenerator {
 
 
     FilePairs from_file() {
-        if (!ndb) init_names_db();
-
-        FilePairs filepairs;
-        auto dir_it = std::ifstream(data_files_dir / "total-files-list");
-
-        while (!acquire_lock_file()) {
+        while (!IndexFileLocker::acquire_lock_file()) {
             using namespace std::chrono_literals;
             std::cerr << "Blocking: lock file already exists\n";
             std::this_thread::sleep_for(10s);
         }
+
+        FilePairs filepairs;
+        auto dir_it = std::ifstream(data_files_dir / "total-files-list");
+
+        if (!ndb) init_names_db();
         uint32_t doc_id_counter = 1;
         std::string file_line;
         auto cur_size = 0ULL;
@@ -71,7 +59,7 @@ namespace FileListGenerator {
         ndb = nullptr;
 
         // Release the lock file.
-        fs::remove(LOCKFILE);
+	IndexFileLocker::release_lock_file();
 
         return filepairs;
     }

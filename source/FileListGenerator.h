@@ -18,7 +18,8 @@ namespace FileListGenerator {
         ndb = new_name_database(path.c_str());
     }
 
-
+    // Creates a list of files to index.
+    // Deals with multiple processes by acquiring a lock file.
     FilePairs from_file() {
         while (!IndexFileLocker::acquire_lock_file()) {
             using namespace std::chrono_literals;
@@ -49,7 +50,7 @@ namespace FileListGenerator {
             cur_size+= fs::file_size(abspath);
 
             // Don't index more than x files or 500MB at a time.
-            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > 3e8) break;
+            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > 5e8) break;
             doc_id_counter++;
 //            register_temporary_file(ndb, file_line.c_str(), doc_id_counter);
             filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});

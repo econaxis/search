@@ -129,8 +129,8 @@ async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Resul
     let uri = req.uri().path();
     if uri.starts_with("/search") {
         let q = parse_url_query(req.uri(), "?q=")?;
-        Ok(Response::new(Body::from("f")))
-        // handle_request(data.deref(), q).await
+        let q: Vec<String> = q.iter().map(|x| x.to_string()).collect();
+        handle_request(data.deref(), q.as_slice()).await
     } else if uri.starts_with("/highlight") {
         let q = parse_url_query(req.uri(), "?id=")?.into_iter().next().ok_or(make_err("ID not found"))?;
         let q: u32 = q.parse().map_err(|_| make_err(&*format!("Couldn't parse int: {}", q)))?;

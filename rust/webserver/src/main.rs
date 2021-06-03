@@ -48,8 +48,7 @@ fn setup_logging() {
     }
 }
 
-const suffices: [&str; 24] = ["oPV3-\0", "JX9vH\0", "D59V9\0", "WDHnk\0", "j493v\0", "k7FSu\0", "tg_2O\0", "vz1R3\0", "dLABs\0", "nPoty\0", "pEgBu\0", "-be7U\0", "pxVOI\0", "EcEAk\0", "yyQfQ\0", "Xo25c\0", "Sx0s2\0", "sUj-F\0", "fyuQf\0", "WpHIH-hBvUn\0", "6uVWX-c5H8m\0", "f0FRh-3Gw1R\0", "c4WUJ-od7Ew\0", "UgD0W-G_78v\0", ];
-
+const suffices: [&str; 28] = ["-6hPk--fBi2-1AXWf-1I-v2\0", "-m1eu--x27H\0", "007Q2-07d0W\0", "09Bh4-0CPUM\0", "0C_XD-0FKHk\0", "0GjnV-0vC-V\0", "1KPHc-1NIR2-1ODd5-1SH0Q\0", "1X53f-1_eOr-1x6Rr-23tuq\0", "2Cd6o-2Ck2K\0", "2DRxd-2EF1V\0", "2ERdD-2Pc6Y\0", "2ThGI-2TlGQ\0", "2jcnf-2kZe1-2uXiy-345Pi\0", "39Wk1-3SGe9-3TCj6-3Tww6\0", "3YPZL-3hT5C-3kC2J-4-dYP\0", "40hMg-42uFe-48Se7-4F4kK\0", "4MJRG-4SB8O\0", "4VwhL-4X7Cn\0", "4Y0WM-4gRJF-4kWig-4x5Z1\0", "5-zvj-55dHo\0", "5M-CI-5Q1bU\0", "5UoCA-5Y-lE-5pXVT-60HHO\0", "61JCz-69OTH-6HwDy-6Wszn\0", "6ZdyN-6cI5f\0", "6ZdyN-6cI5f-6hvij-77dNI\0", "6hvij-77dNI\0", "7D4Oq-7DmYH\0", "7D4Oq-7DmYH-7Pnxv-7RHZw\0"];
 fn main() -> io::Result<()> {
     setup_logging();
 
@@ -59,7 +58,7 @@ fn main() -> io::Result<()> {
     //     .unwrap();
     // builder.set_certificate_chain_file("/home/henry/127.0.0.1+1.pem").unwrap();
     unsafe { cffi::initialize_dir_vars() };
-    let iw: Vec<_> = suffices[0..0].chunks(4).map(|chunk| {
+    let iw: Vec<_> = suffices.chunks(4).map(|chunk| {
         IndexWorker::IndexWorker::new(chunk)
     }).collect();
 

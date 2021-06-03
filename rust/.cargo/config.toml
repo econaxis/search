@@ -9,6 +9,9 @@ unstable-options = true
 [env]
 DATA_FILES_DIR = "/mnt/nfs/extra/gutenberg/"
 
+[build]
+target-dir="target"
+
 
 [target.x86_64-unknown-linux-gnu]
 linker = "/usr/bin/clang"

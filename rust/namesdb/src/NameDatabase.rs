@@ -1,10 +1,9 @@
-extern crate rust;
 
 use std::{borrow::Borrow, hash::Hash, fs::{File, self}, iter::FromIterator, ffi::OsStr, collections::{HashSet}, path::{Path}};
 use std::path::{PathBuf};
 use std::{env};
 use std::io::{BufReader, BufRead};
-use rust::cffi::{DocIDFilePair, get_filepairs};
+use webserver::cffi::{DocIDFilePair, get_filepairs};
 use regex::Regex;
 pub use public_ffi::*;
 use serde::Serialize;

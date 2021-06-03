@@ -1,28 +1,7 @@
 [workspace]
-members = ["namesdb"]
-default-members=["namesdb"]
+members = ["namesdb", "webserver"]
+default-members=["namesdb", "webserver"]
 
 
-[package]
-name = "rust"
-version = "0.1.0"
-edition = "2018"
-build = "src/build.rs"
 
-[dependencies]
-serde = { version = "1.0", features = ["derive"] }
-regex = "1"
-serde_json = "1.0.64"
-aho-corasick = "0.7.18"
-futures = "0.3.15"
-tokio = { version = "^1", features = ["full"] }
-tracing = { version = "^0.1.26", features = ["log"] }
-tracing-subscriber = "^0.2"
-log = "^0.4"
-hyper = { version = "^0.14", features = ["full"] }
-hyper-router = "^0.5"
-env_logger = "^0.8"
-
-[profile.dev]
-rpath = true
 

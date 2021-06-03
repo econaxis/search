@@ -659,9 +659,9 @@ version = "0.1.0"
 dependencies = [
  "regex 1.5.4",
  "rmp-serde",
- "rust",
  "serde",
  "serde_json",
+ "webserver",
 ]
 
 [[package]]
@@ -915,24 +915,6 @@ dependencies = [
  "byteorder",
  "rmp",
  "serde",
-]
-
-[[package]]
-name = "rust"
-version = "0.1.0"
-dependencies = [
- "aho-corasick 0.7.18",
- "env_logger",
- "futures 0.3.15",
- "hyper 0.14.8",
- "hyper-router",
- "log",
- "regex 1.5.4",
- "serde",
- "serde_json",
- "tokio 1.6.0",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1418,6 +1400,24 @@ name = "wasi"
 version = "0.10.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
+
+[[package]]
+name = "webserver"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick 0.7.18",
+ "env_logger",
+ "futures 0.3.15",
+ "hyper 0.14.8",
+ "hyper-router",
+ "log",
+ "regex 1.5.4",
+ "serde",
+ "serde_json",
+ "tokio 1.6.0",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "winapi"

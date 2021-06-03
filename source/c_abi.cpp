@@ -150,10 +150,14 @@ void search_index_top_n(SortedKeysIndexStub *index, RustVec *output_buffer, int 
 }
 
 SortedKeysIndexStub *load_one_index(const char *suffix_name) {
-
-    std::string suffix = suffix_name;
-    auto ssk = new SortedKeysIndexStub(suffix);
-    return ssk;
+    try {
+        std::string suffix = suffix_name;
+        auto ssk = new SortedKeysIndexStub(suffix);
+        return ssk;
+    } catch (const std::exception &e) {
+        std::cerr << "C library exception: " << e.what() << "\n";
+        throw e;
+    }
 }
 
 void delete_one_index(SortedKeysIndexStub *ssk) {

@@ -8,6 +8,8 @@
 #include <numeric>
 #include "Constants.h"
 
+// TODO: implement tiered postings list for quicker retrieval of very large indexes.
+
 namespace fs = std::filesystem;
 
 

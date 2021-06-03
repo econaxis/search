@@ -8,6 +8,7 @@
 #include <numeric>
 #include "DocumentPositionPointer.h"
 #include "CustomAllocatedVec.h"
+#include "DocumentsTier.h"
 
 struct PreviewResult {
     std::streampos frequencies_pos;
@@ -45,9 +46,9 @@ struct WordIndexEntry {
     std::string key;
     std::vector<DocumentPositionPointer> files;
 
-    std::vector<std::pair<uint32_t, uint32_t>> get_frequencies_vector() const {
+    std::vector<DocumentFrequency> get_frequencies_vector() const {
         assert(std::is_sorted(files.begin(), files.end()));
-        std::vector<std::pair<uint32_t, uint32_t>> freq_data;
+        std::vector<DocumentFrequency> freq_data;
         std::size_t prev_same_idx = 0;
         for (std::size_t i = 0; i <= files.size(); i++) {
             if (i == files.size()) {
@@ -66,29 +67,6 @@ struct WordIndexEntry {
         return freq_data;
     }
 
-    static void test() {
-        WordIndexEntry wa{"fdsacv", {}};
-        wa.files = {
-                {1, 2},
-                {1, 8},
-                {1, 3},
-                {1, 21},
-                {1, 22},
-                {1, 32},
-                {1, 52},
-                {1, 25},
-                {21, 25},
-                {21, 25},
-                {21, 25},
-                {31, 25},
-                {31, 25},
-        };
-
-        auto res = wa.get_frequencies_vector();
-        assert(res[0] == std::pair(1U, 8U));
-        assert(res[1] == std::pair(21U, 3U));
-        assert(res[2] == std::pair(31U, 2U));
-    }
 
 };
 

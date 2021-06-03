@@ -10,6 +10,7 @@
 
 class SortedKeysIndex;
 
+
 namespace Serializer {
 
     void serialize_str(std::ostream &stream, const std::string &str);
@@ -25,7 +26,7 @@ namespace Serializer {
 
     std::vector<DocIDFilePair> read_filepairs(std::istream &stream);
 
-    void serialize_vnum(std::ostream &stream, uint32_t number, bool pad32);
+    void serialize_vnum(std::ostream &stream, uint32_t number, bool pad32 = false);
 
     void serialize(const std::string& suffix, const SortedKeysIndex &index);
 
@@ -42,6 +43,8 @@ namespace Serializer {
 
     PreviewResult preview_work_index_entry(std::istream &terms);
     int read_work_index_entry_v2_optimized(std::istream &frequencies, __m256 *buffer);
+
+    void read_packed_u32_chunk(std::istream &frequencies, int length, uint32_t *buffer);
 };
 
 namespace Serializer::ffi {

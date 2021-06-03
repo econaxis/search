@@ -35,12 +35,12 @@ target_include_directories(general-indexer PUBLIC source extern extern/mio/inclu
 
 target_link_libraries(general-indexer PRIVATE pthread ${CMAKE_BINARY_DIR}/libnamesdb.so)
 
-add_executable(search source/main.cpp source/PositionsSolver.cpp source/PositionsSolver.h)
+add_executable(search source/main.cpp source/PositionsSolver.cpp source/PositionsSolver.h source/TermsListSearcher.cpp source/DocumentsTier.cpp)
 target_link_libraries(search PRIVATE search-share general-indexer)
 
 
 add_executable(compactor source/compactor/main.cpp)
-target_link_libraries(compactor PRIVATE search-share)
+target_link_libraries(compactor PRIVATE search-share pthread)
 
 add_library(c-search-abi SHARED source/c_abi.cpp)
 target_link_libraries(c-search-abi PRIVATE search-share)
@@ -54,7 +54,7 @@ add_custom_target(rust-web-server
         DEPENDS
         "${CMAKE_SOURCE_DIR}/rust/src")
 
-file(GLOB rust-sources rust/src/*)
+file(GLOB rust-sources rust/webserver/src/*)
 
 set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
 
@@ -66,7 +66,7 @@ endif()
 add_custom_target(
         rust-server ALL
         COMMAND ${rust-build-command}
-        DEPENDS ${CMAKE_SOURCE_DIR}/rust/src
+        DEPENDS ${CMAKE_SOURCE_DIR}/rust/webserver/src
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
 )
 

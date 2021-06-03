@@ -9,6 +9,7 @@
 #include "DocumentPositionPointer.h"
 #include "CustomAllocatedVec.h"
 #include "DocumentsTier.h"
+#include "DocumentFrequency.h"
 
 struct PreviewResult {
     std::streampos frequencies_pos;
@@ -20,7 +21,7 @@ struct WordIndexEntry_v2 {
     std::string key;
     uint32_t term_pos;
 
-    std::vector<DocumentPositionPointer_v2> files;
+    std::vector<DocumentFrequency> files;
 };
 
 struct WordIndexEntry_unsafe {

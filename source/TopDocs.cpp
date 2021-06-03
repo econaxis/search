@@ -37,24 +37,24 @@ void TopDocs::merge_similar_docs() {
     // Merge similar docs.
     for (auto &doc : docs) {
         if (doc.document_id != prev_doc.document_id) {
-            prev_doc.frequency += collected_score;
+            prev_doc.document_freq += collected_score;
             prev_doc = doc;
             collected_score = 0;
         } else {
-            collected_score += doc.frequency;
+            collected_score += doc.document_freq;
 
             // Invalidate the document's information.
-            doc.frequency = 0;
+            doc.document_freq = 0;
             doc.document_id = 0;
             deleted_any = true;
         }
         prev_doc = doc;
     }
-    prev_doc.frequency = collected_score;
+    prev_doc.document_freq = collected_score;
 
     if (deleted_any)
         docs.erase(std::remove_if(begin(), end(), [](const auto &t) {
-            return t.frequency == 0 || t.document_id == 0;
+            return t.document_freq == 0 || t.document_id == 0;
         }), end());
 
 }
@@ -64,6 +64,6 @@ void TopDocs::merge_similar_docs() {
 void TopDocs::sort_by_frequencies() {
     auto partial_end = std::min(end(), begin() + 50);
     std::partial_sort(begin(), partial_end, end(), [](auto &t, auto &t1) {
-        return t.frequency < t1.frequency;
+        return t.document_freq < t1.document_freq;
     });
 }

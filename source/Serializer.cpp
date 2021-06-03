@@ -3,6 +3,7 @@
 #include "Constants.h"
 #include "SortedKeysIndex.h"
 #include "DocumentsTier.h"
+#include "DocumentFrequency.h"
 
 
 void Serializer::serialize(std::ostream &stream, const DocIDFilePair &p) {
@@ -173,7 +174,7 @@ int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
 
     if (num_files > MAX_FILES_PER_TERM) {
         auto excess = num_files - MAX_FILES_PER_TERM;
-        frequencies.ignore(excess * sizeof(DocumentPositionPointer_v2));
+        frequencies.ignore(excess * sizeof(DocumentFrequency));
         num_files = MAX_FILES_PER_TERM;
     }
 
@@ -190,11 +191,13 @@ void Serializer::read_packed_u32_chunk(std::istream& frequencies, int length, ui
     auto end = (uint32_t *) buffer + length;
     auto start = (uint32_t *) buffer;
 
+    // since we're using unaligned SIMD operations, we'll lose a bit of performance but remove the
+    // alignment constraint
     for (; start + 8 < end; start += 8) {
-        auto s256 = _mm256_load_si256(reinterpret_cast<const __m256i *>(start));
+        auto s256 = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(start));
         s256 = _mm256_srai_epi32(s256, 3);
 
-        _mm256_store_si256(reinterpret_cast<__m256i *>(start), s256);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(start), s256);
     }
 
     for (; start < end; start++) {

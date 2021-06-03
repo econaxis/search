@@ -32,26 +32,6 @@ struct DocumentPositionPointer {
 };
 
 
-struct DocumentPositionPointer_v2 {
-    uint32_t document_id;
-    uint32_t frequency;
-
-    bool operator<(const DocumentPositionPointer_v2& other) const {
-        return document_id < other.document_id;
-    }
-    bool operator<=(const DocumentPositionPointer_v2& other) const {
-        return document_id <= other.document_id;
-    }
-    bool operator==(const DocumentPositionPointer_v2& other) const {
-        return (document_id == other.document_id);
-    }
-    bool operator!=(const DocumentPositionPointer_v2& other) const {
-        return (document_id != other.document_id);
-    }
-
-    DocumentPositionPointer_v2(uint32_t a, uint32_t b) : document_id(a), frequency(b) {};
-    DocumentPositionPointer_v2() = default;
-};
 std::ostream &operator<<(std::ostream &os, std::vector<DocumentPositionPointer> vec);
 
 

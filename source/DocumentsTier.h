@@ -5,42 +5,14 @@
 #ifndef GAME_DOCUMENTSTIER_H
 #define GAME_DOCUMENTSTIER_H
 
-#include <iterator>
-#include <type_traits>
 #include <vector>
 #include <ostream>
+#include <optional>
+#include "DocumentFrequency.h"
 #include <cassert>
 
-struct DocumentFrequency {
-    uint32_t document_id;
-    uint32_t document_freq;
+using SingleDocumentsTier = std::vector<DocumentFrequency>;
 
-    DocumentFrequency(uint32_t a, uint32_t b) : document_id(a), document_freq(b) {};
-
-    bool operator<(const DocumentFrequency &other) const {
-        return document_id < other.document_id;
-    }
-
-    static bool FreqSorter(const DocumentFrequency &one, const DocumentFrequency &two) {
-        return one.document_freq < two.document_freq;
-    }
-};
-
-struct SingleDocumentsTier {
-    std::vector<DocumentFrequency> data;
-
-    SingleDocumentsTier() = default;
-
-    // Iterator constructor
-    // Enables construction from a slice of a range
-    template<class I>
-    SingleDocumentsTier(I begin, I end) {
-        data = std::vector<DocumentFrequency>{begin, end};
-    }
-    std::size_t size() const {
-        return data.size();
-    }
-};
 
 class WordIndexEntry;
 
@@ -53,6 +25,7 @@ namespace MultiDocumentsTier {
         std::istream& frequencies;
 
         std::optional<SingleDocumentsTier> read_next();
+        TierIterator (std::istream&);
     };
 
     // Constructs a MultiDocumentsTier instance and serializes it.

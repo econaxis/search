@@ -1,6 +1,7 @@
 #include <robin_hood/robin_hood.h>
 #include <cassert>
 #include "DocumentsMatcher.h"
+#include "DocumentFrequency.h"
 #include <unordered_map>
 #include <fstream>
 #include <bitset>
@@ -61,7 +62,7 @@ using namespace std::chrono;
 }
 
 
-using DPP = DocumentPositionPointer_v2;
+using DPP = DocumentFrequency;
 static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *value) {
     auto prediction = end;
 
@@ -85,8 +86,8 @@ static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *v
     return prediction;
 }
 
-bool unroll_binary_search_find(const DocumentPositionPointer_v2 *&begin, const DocumentPositionPointer_v2 *end,
-                               const DocumentPositionPointer_v2 *value) {
+bool unroll_binary_search_find(const DocumentFrequency *&begin, const DocumentFrequency *end,
+                               const DocumentFrequency *value) {
     auto *optfind = begin;
 
     // Manually code up first and second positions, they happen 90% of the time.
@@ -140,24 +141,6 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
     std::vector<const TopDocs::value_type *> walkers, enders;
     for (auto &t: results) {
-//        auto beg = (uint32_t *) t.begin().base();
-//        auto end = (uint32_t *) t.end().base();
-//        for (auto i = beg; i < end; i += 32) {
-//            __m256i first = _mm256_loadu_si256((__m256i *) i);
-//            __m256i second = _mm256_loadu_si256((__m256i *) (i+8));
-//            __m256i third = _mm256_loadu_si256((__m256i *) (i + 16));
-//            __m256i fourth = _mm256_loadu_si256((__m256i *) (i+24));
-//            __m256i packed = _mm256_packus_epi32(first, second);
-//            __m256i packed1 = _mm256_packus_epi32(third, fourth);
-//            __m256i permuted = _mm256_permute4x64_epi64(packed, 0b00100111);
-//            __m256i permuted1 = _mm256_permute4x64_epi64(packed1, 0b00100111);
-//            __m256i joined_all = _mm256_packus_epi32(permuted, permuted1);
-//            __m256i reordered = _mm256_permute4x64_epi64(joined_all, 0b00100111);
-//
-//            _mm256_store_si256(cur_iterator, reordered);
-//            cur_iterator++;
-//        }
-
         walkers.push_back(t.begin().base());
         enders.push_back(t.end().base());
     }
@@ -182,7 +165,7 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
                 // Add a bonus for document matching more than one query term.
                 // Add the frequency of the found term.
-                acculumated_score += (walkers[idx] - 1)->frequency;
+                acculumated_score += (walkers[idx] - 1)->document_freq;
             } else {
                 exists_in_all = false;
                 break;
@@ -191,16 +174,16 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
         if (exists_in_all) {
             // Walk vector again to find the positions.
-            pair->frequency = acculumated_score;
+            pair->document_freq = acculumated_score;
         } else {
-            pair->frequency = 0;
+            pair->document_freq = 0;
             pair->document_id = 0; // Exclude from view.
         }
     }
 
     exit_loop:;
 
-    min_docs.docs.erase(std::remove(min_docs.begin(), min_docs.end(), DocumentPositionPointer_v2{0, 0}),
+    min_docs.docs.erase(std::remove(min_docs.begin(), min_docs.end(), DocumentFrequency{0, 0}),
                         min_docs.docs.end());
 
     if (min_docs.size() < 5) {

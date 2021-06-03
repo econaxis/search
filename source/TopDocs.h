@@ -4,8 +4,9 @@
 #include <cstring>
 #include <vector>
 #include <cassert>
-#include "DocumentPositionPointer.h"
+#include "DocumentFrequency.h"
 #include "CustomAllocatedVec.h"
+#include "DocumentFrequency.h"
 #include <type_traits>
 #include <set>
 
@@ -22,8 +23,8 @@ class TopDocs {
                                   OutputIt d_first);
 
 public:
-    std::vector<DocumentPositionPointer_v2> docs;
-    using value_type = DocumentPositionPointer_v2;
+    std::vector<DocumentFrequency> docs;
+    using value_type = DocumentFrequency;
 
     TopDocs() = default;
 
@@ -74,8 +75,8 @@ OutputIt TopDocs::merge_combine(InputIt1 first1, InputIt1 last1, InputIt2 first2
             ++first1;
         } else {
             // They are equals.
-            DocumentPositionPointer_v2 merged = *first1;
-            merged.frequency += (*first2).frequency;
+            auto merged = *first1;
+            merged.document_freq += (*first2).document_freq;
 
             *d_first = merged;
             d_first++;

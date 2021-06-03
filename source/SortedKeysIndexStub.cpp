@@ -7,6 +7,7 @@
 #include <cmath>
 #include <numeric>
 #include "Constants.h"
+#include "DocumentFrequency.h"
 
 // TODO: implement tiered postings list for quicker retrieval of very large indexes.
 
@@ -102,12 +103,12 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
 
             // Do some processing with the data.
-            auto init = (DocumentPositionPointer_v2 *) alignedbuf.get();
+            auto init = (DocumentFrequency *) alignedbuf.get();
             auto tot_score = 0;
             for (auto i = init; i < init + size; i++) {
-                float coefficient = std::log10(i->frequency + 0.8) + 0.8;
-                i->frequency = coefficient * score;
-                tot_score += i->frequency;
+                float coefficient = std::log10(i->document_freq + 0.8) + 0.8;
+                i->document_freq = coefficient * score;
+                tot_score += i->document_freq;
             }
             TopDocs td(init, init+size);
             td.add_term_str(preview.key);

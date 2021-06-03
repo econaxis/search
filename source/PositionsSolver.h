@@ -3,9 +3,9 @@
 #include "TopDocs.h"
 
 namespace PositionsSolver {
-    TopDocs rescore_with_positions(const TopDocs& td, std::ifstream& positions, std::ifstream& terms) {
-        
-    }
+//    TopDocs rescore_with_positions(const TopDocs& td, std::ifstream& positions, std::ifstream& terms) {
+//
+//    }
 };
 
 

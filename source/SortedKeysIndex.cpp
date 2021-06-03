@@ -48,7 +48,7 @@ void SortedKeysIndex::check_dups() {
         auto prev = 0;
         for(auto& [docid, pos] : wie.files) {
             if (docid* 14343 + pos == prev) {
-                int a = 5;
+                throw std::runtime_error("Duplicate found");
             } else {
                 prev = docid * 14343 + pos;
             }

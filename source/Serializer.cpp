@@ -189,11 +189,8 @@ int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
         num_files = MAX_FILES_PER_TERM;
     }
 
-    // These VInts are padded to 4 byte or 32 bit integers, so we can do this.
-    frequencies.read(reinterpret_cast<char *>(mybuffer), num_files * sizeof(DocumentPositionPointer_v2));
-
-    auto end = (uint32_t *) mybuffer + num_files * 2;
-    auto start = (uint32_t *) mybuffer;
+    auto *intbuffer = (uint32_t *) buffer;
+    read_packed_u32_chunk(frequencies, num_files * 2,  intbuffer);
 
     for (; start + 8 < end; start += 8) {
         auto s256 = _mm256_load_si256(reinterpret_cast<const __m256i *>(start));
@@ -207,6 +204,24 @@ int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
     }
 
     return num_files;
+}
+
+void Serializer::read_packed_u32_chunk(std::istream& frequencies, int length, uint32_t* buffer) {
+    frequencies.read(reinterpret_cast<char *>(buffer), length * sizeof(uint32_t));
+
+    auto end = (uint32_t *) buffer + length;
+    auto start = (uint32_t *) buffer;
+
+    for (; start + 8 < end; start += 8) {
+        auto s256 = _mm256_load_si256(reinterpret_cast<const __m256i *>(start));
+        s256 = _mm256_srai_epi32(s256, 3);
+
+        _mm256_store_si256(reinterpret_cast<__m256i *>(start), s256);
+    }
+
+    for (; start < end; start++) {
+        *start >>= 3;
+    }
 }
 
 WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {

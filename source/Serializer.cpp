@@ -1,3 +1,4 @@
+#include "PositionsSearcher.h"
 #include <iostream>
 #include "Serializer.h"
 #include "Constants.h"
@@ -121,40 +122,8 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
     // Serialize frequencies data.
     MultiDocumentsTier::serialize(ie, frequencies);
 
-    /**
-     * The positions file should be an array, where each element corresponds to a WordIndexEntry.
-     *      Each element: [number of elements = n]
-     *              Then, n repeats of: [document_id] [document_position]
-     *
-     *      The number of elements = sum of all frequencies for this WordIndexEntry in the frequencies file.
-     *      Problem/TODO: There is a lot of duplicated data because we're storing document_id for each position entry.
-     *      For example, document with id = 123 that contains the word "the" in 20 places would require
-     *      20 * 32 bits for the document id (all 123) and 20 * 32 bits for the document position.
-     */
-    serialize_vnum(positions, ie.files.size(), false);
-    auto prev_docid = 0;
-    std::stringstream output_buf;
-    for (auto &file : ie.files) {
-        serialize_vnum(output_buf, file.document_id - prev_docid, false);
-        prev_docid = file.document_id;
-    }
-    auto prev_pos = 0;
-    for (auto &file : ie.files) {
-        uint32_t mypos;
-        if(file.document_position < prev_pos) {
-            mypos = file.document_position;
-            prev_pos = mypos;
-            mypos |= 1<<31;
-        } else {
-            mypos = file.document_position - prev_pos;
-            prev_pos = file.document_position;
-        }
-        serialize_vnum(output_buf, mypos, false);
-    }
-    auto buflen = output_buf.tellp();
-    serialize_vnum(positions, buflen, false);
-    output_buf.seekg(0);
-    positions<<output_buf.rdbuf();
+    // Serialize positions data.
+    PositionsSearcher::serialize_positions(positions, ie);
 }
 
 

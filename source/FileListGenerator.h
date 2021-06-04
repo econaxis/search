@@ -4,7 +4,7 @@
 #include "rust-interface.h"
 #include <iostream>
 #include "IndexFileLocker.h"
-constexpr unsigned int MAX_FILES_PER_INDEX = 100000;
+constexpr unsigned int MAX_FILES_PER_INDEX = 10000;
 
 namespace FileListGenerator {
     using FilePairs = std::vector<DocIDFilePair>;

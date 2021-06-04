@@ -30,9 +30,10 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         source/Constants.cpp source/Base26Num.cpp
         source/FPStub.cpp
         source/DocumentsTier.cpp
+        source/PositionsSearcher.cpp
         source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h source/dict_strings.h source/ResultsPrinter.cpp source/ResultsPrinter.h source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/TopDocs.h source/CustomAllocatedVec.cpp source/CustomAllocatedVec.h)
 target_include_directories(search-share PUBLIC source extern extern/mio/include)
-target_include_directories(general-indexer PUBLIC source extern extern/mio/include)
+target_include_directories(general-indexer PUBLIC source extern extern/mio/include )
 
 target_link_libraries(general-indexer PRIVATE pthread ${CMAKE_BINARY_DIR}/libnamesdb.so)
 

@@ -68,6 +68,8 @@ std::optional<SingleDocumentsTier> MultiDocumentsTier::TierIterator::read_next()
         return std::nullopt;
     }
 
+    frequencies.seekg(read_position);
+
     SingleDocumentsTier output;
     uint num_elems;
 
@@ -79,17 +81,38 @@ std::optional<SingleDocumentsTier> MultiDocumentsTier::TierIterator::read_next()
     std::vector<uint32_t> buffer(num_elems);
     // Read in the document ids
     read_packed_u32_chunk(frequencies, num_elems, buffer.data());
-    for (int i = 0; i < num_elems; i++) output[i].document_id = buffer[i];
+    auto prevdocid = 0;
+    for (int i = 0; i < num_elems; i++) {
+        output[i].document_id = buffer[i] + prevdocid;
+        prevdocid = output[i].document_id;
+    }
 
     // Read in the frequencies
     read_packed_u32_chunk(frequencies, num_elems, buffer.data());
     for (int i = 0; i < num_elems; i++) output[i].document_freq = buffer[i];
     remaining--;
 
+    read_position = frequencies.tellg();
     return output;
+}
+
+SingleDocumentsTier MultiDocumentsTier::TierIterator::read_all() {
+    SingleDocumentsTier out;
+    while(true) {
+        auto a = read_next();
+        if(!a) break;
+        out.insert(out.end(), a->begin(), a->end());
+    }
+    std::sort(out.begin(), out.end());
+    return out;
 }
 
 MultiDocumentsTier::TierIterator::TierIterator(std::istream &frequencies) : frequencies(frequencies) {
     remaining = Serializer::read_vnum(frequencies);
     read_position = frequencies.tellg();
+}
+
+
+void MultiDocs_test() {
+
 }

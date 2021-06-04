@@ -4,12 +4,14 @@
 #include <string>
 #include <fstream>
 #include "Constants.h"
-
 #include <robin_hood/robin_hood.h>
 
 struct WordPos {
     unsigned int start, end;
 };
+
+static bool check_stop_words(const std::string &s, int bi, int ei);
+
 
 int Tokenizer::clean_token_to_index(std::string &token) {
     remove_punctuation(token);
@@ -40,10 +42,13 @@ std::vector<WordPos> clean_string(std::string &file) {
         } else if (!std::isalpha(file[i])) {
             if (is_in_word) {
                 // Limit word length to 10;
-                if(i - last_end > 10) {
+                if (i - last_end > 10) {
                     last_end = i - 10;
                 }
-                result.push_back({last_end, i});
+
+                if (!check_stop_words(file, last_end, i)) {
+                    result.push_back({last_end, i});
+                }
 
                 last_end = -1;
                 is_in_word = false;
@@ -93,5 +98,24 @@ void Tokenizer::remove_punctuation(std::string &a) {
     for (auto &c : a) {
         c = (char) std::toupper(c);
     }
+}
+
+
+bool check_stop_words(const std::string &s, int bi, int ei) {
+    static constexpr std::string_view stopwords[] = {"I", "ME", "MY", "MYSELF", "WE", "OUR", "OURS", "OURSELVES", "YOU",
+                                              "YOUR", "YOURS", "HE", "HIM", "HIS", "HIMSELF", "SHE", "HER",
+                                              "HERS", "IT", "ITS", "ITSELF", "THEY", "THEM", "THEIR", "THEIRS", "WHAT",
+                                              "WHICH", "WHO", "WHOM", "THIS", "THAT", "THESE", "THOSE", "AM", "IS",
+                                              "ARE", "WAS", "WERE", "BE", "BEEN", "BEING", "HAVE", "HAS", "HAD", "DO",
+                                              "DOES", "DID", "DOING", "A", "AN", "THE", "AND", "BUT", "IF", "OR", "AS",
+                                              "UNTIL", "WHILE", "OF", "AT", "BY", "FOR", "WITH", "ABOUT", "INTO",
+                                              "THROUGH", "ABOVE", "BELOW", "TO", "FROM", "IN", "OUT", "ON", "OFF",
+                                              "OVER", "UNDER", "AGAIN", "ONCE", "HERE", "THERE", "WHEN", "WHERE", "WHY",
+                                              "HOW", "ALL", "ANY", "BOTH", "EACH", "FEW", "MORE", "MOST", "OTHER",
+                                              "SOME", "SUCH", "NO", "NOR", "NOT", "ONLY", "OWN", "SAME", "SO", "THAN",
+                                              "TOO", "VERY", "S", "T", "CAN", "WILL", "JUST", "DON"};
+    static const robin_hood::unordered_set<std::string_view> stw{stopwords, stopwords + 110};
+    auto strv = std::string_view(s).substr(bi, ei - bi);
+    return stw.find(strv) != stw.end();
 }
 

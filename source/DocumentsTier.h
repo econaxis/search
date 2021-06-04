@@ -26,6 +26,8 @@ namespace MultiDocumentsTier {
 
         std::optional<SingleDocumentsTier> read_next();
         TierIterator (std::istream&);
+
+        SingleDocumentsTier read_all();
     };
 
     // Constructs a MultiDocumentsTier instance and serializes it.

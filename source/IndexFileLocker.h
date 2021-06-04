@@ -2,6 +2,7 @@
 #ifndef GAME_LOCKFILE_H
 #define GAME_LOCKFILE_H
 
+#include "Constants.h"
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -29,6 +30,14 @@ namespace IndexFileLocker {
     void release_lock_file() {
         fs::remove(fs::path(LOCKFILE));
     }
+
+    void move_all(std::string old_suffix, std::string new_suffix) {
+        fs::rename(indice_files_dir/ ("filemap-" + old_suffix), indice_files_dir/ ("filemap-" +new_suffix));
+        fs::rename(indice_files_dir/ ("terms-" + old_suffix), indice_files_dir/ ("terms-" +new_suffix));
+        fs::rename(indice_files_dir/ ("frequencies-" + old_suffix), indice_files_dir/ ("frequencies-" +new_suffix));
+        fs::rename(indice_files_dir/ ("positions-" + old_suffix), indice_files_dir/ ("positions-" +new_suffix));
+    }
+
 
 };
 

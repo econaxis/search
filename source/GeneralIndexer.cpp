@@ -195,12 +195,6 @@ int GeneralIndexer::read_some_files() {
     return 1;
 }
 
-void move_all(std::string old_suffix, std::string new_suffix) {
-    fs::rename(indice_files_dir/ ("filemap-" + old_suffix), indice_files_dir/ ("filemap-" +new_suffix));
-    fs::rename(indice_files_dir/ ("terms-" + old_suffix), indice_files_dir/ ("terms-" +new_suffix));
-    fs::rename(indice_files_dir/ ("frequencies-" + old_suffix), indice_files_dir/ ("frequencies-" +new_suffix));
-    fs::rename(indice_files_dir/ ("positions-" + old_suffix), indice_files_dir/ ("positions-" +new_suffix));
-}
 
 void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
                                      const FilePairs &filepairs) {// Multiple indices output possible. Check them.
@@ -218,7 +212,7 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     Serializer::serialize(temp_suffix, master);
 
     // once it's done we copy temp to real.
-    move_all(temp_suffix, suffix);
+    IndexFileLocker::move_all(temp_suffix, suffix);
 
     // Put these new indices to the index_files list
     std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);

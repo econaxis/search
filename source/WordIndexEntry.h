@@ -47,6 +47,15 @@ struct WordIndexEntry {
     std::string key;
     std::vector<DocumentPositionPointer> files;
 
+    void merge_into(const WordIndexEntry& other) {
+        assert(other.key == key);
+        assert(files.back().document_id < other.files.front().document_id);
+        assert(std::is_sorted(files.begin(), files.end()));
+        assert(std::is_sorted(other.files.begin(), other.files.end()));
+
+        files.insert(files.end(), other.files.begin(), other.files.end());
+    }
+
     std::vector<DocumentFrequency> get_frequencies_vector() const {
         assert(std::is_sorted(files.begin(), files.end()));
         std::vector<DocumentFrequency> freq_data;

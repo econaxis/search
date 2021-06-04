@@ -132,17 +132,10 @@ Serializer::read_work_index_entry(std::istream &frequencies, std::istream &terms
     // Frequencies data is useles, so we just use this function to consume the stream.
     WordIndexEntry_v2 wie2 = read_work_index_entry_v2(frequencies, terms);
 
-    int num_positions = read_vnum(positions);
-    WordIndexEntry wie{wie2.key, {}};
-    wie.files.reserve(num_positions);
+    // then read the positions
+    auto dpp = PositionsSearcher::read_positions_all(positions);
 
-    while (num_positions--) {
-        auto number = read_vnum(positions);
-        auto freq = read_vnum(positions);
-
-        wie.files.emplace_back(number, freq);
-    }
-
+    WordIndexEntry wie {wie2.key, dpp};
     return wie;
 }
 
@@ -162,20 +155,22 @@ constexpr auto MAX_FILES_PER_TERM = SortedKeysIndexStub::MAX_FILES_PER_TERM;
 
 int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
                                                    __m256 *buffer) {
-// TODO: no padding allowed for terms element with frequencies pos and positions pos.
-    auto num_files = read_vnum(frequencies);
+    return -1;
 
-    if (num_files > MAX_FILES_PER_TERM) {
-        auto excess = num_files - MAX_FILES_PER_TERM;
-        frequencies.ignore(excess * sizeof(DocumentFrequency));
-        num_files = MAX_FILES_PER_TERM;
-    }
-
-    auto *intbuffer = (uint32_t *) buffer;
-    read_packed_u32_chunk(frequencies, num_files * 2, intbuffer);
-
-
-    return num_files;
+    // TODO: no padding allowed for terms element with frequencies pos and positions pos.
+//    auto num_files = read_vnum(frequencies);
+//
+//    if (num_files > MAX_FILES_PER_TERM) {
+//        auto excess = num_files - MAX_FILES_PER_TERM;
+//        frequencies.ignore(excess * sizeof(DocumentFrequency));
+//        num_files = MAX_FILES_PER_TERM;
+//    }
+//
+//    auto *intbuffer = (uint32_t *) buffer;
+//    read_packed_u32_chunk(frequencies, num_files * 2, intbuffer);
+//
+//
+//    return num_files;
 }
 
 void Serializer::read_packed_u32_chunk(std::istream &frequencies, int length, uint32_t *buffer) {
@@ -198,23 +193,22 @@ void Serializer::read_packed_u32_chunk(std::istream &frequencies, int length, ui
     }
 }
 
+
+// cooperate with MultiDocumentsTier stream wrapper to iterate through frequency-sorted blocks.
 WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
     unsigned int term_pos = terms.tellg();
     auto key = read_str(terms);
     auto frequencies_pos = read_vnum(terms);
     read_vnum(terms); // positions_pos
 
+
+
     frequencies.seekg(frequencies_pos);
 
-    auto num_files = read_vnum(frequencies);
-
     WordIndexEntry_v2 out{key, term_pos, {}};
-    out.files.reserve(num_files);
-    while (num_files--) {
-        auto docid = read_vnum(frequencies);
-        auto freq = read_vnum(frequencies);
-        out.files.emplace_back(docid, freq);
-    }
+
+    out.files = MultiDocumentsTier::TierIterator(frequencies).read_all();
+
     assert(std::is_sorted(out.files.begin(), out.files.end()));
     // These VInts are padded to 4 bytes, so we can do this.
 //    frequencies.read(reinterpret_cast<char *>(out.files.data()), num_files * 2 * sizeof(uint32_t));

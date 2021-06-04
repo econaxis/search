@@ -13,7 +13,6 @@ namespace GeneralIndexer {
     int read_some_files();
 
 
-
     void persist_indices(const SortedKeysIndex &master, const std::vector<DocIDFilePair> &filepairs);
 
     void test_serialization();

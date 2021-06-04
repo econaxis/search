@@ -7,6 +7,7 @@
 #include "SortedKeysIndex.h"
 #include "Serializer.h"
 #include "Constants.h"
+#include "IndexFileLocker.h"
 
 namespace fs = std::filesystem;
 
@@ -165,6 +166,7 @@ std::optional<std::string> Compactor::compact_two_files() {
     }
 
     auto joined_suffix = suffix + "-" + suffix1;
+    auto temp_joined_suffix = "TEMP-" + joined_suffix;
 
     std::cout << "Trying to compact: " << joined_suffix << "\n";
 
@@ -192,7 +194,7 @@ std::optional<std::string> Compactor::compact_two_files() {
     uint32_t len1 = streamset1.getlen();
 
 
-    auto ostreamset = open_file_set<std::fstream>(joined_suffix, true);
+    auto ostreamset = open_file_set<std::fstream>(temp_joined_suffix, true);
     serialize(ostreamset.filemap, merged_filepair);
 
     // Temporarily pad the beginning of the file with the number of elements
@@ -204,7 +206,7 @@ std::optional<std::string> Compactor::compact_two_files() {
     WordIndexEntry wie{INVALIDATED, {}}, wie1{INVALIDATED, {}};
     // All streams are at position 4 bytes from beginning, where data starts.
     while (true) {
-        std::cout << "Remaining: " << len << " " << len1 << "\r";
+        if (len1 % 100 == 0) std::cout << "Remaining: " << len << " " << len1 << "\r";
         if (wie.key == INVALIDATED && len) {
             // Need to refill this key.
             wie = streamset.read();
@@ -240,8 +242,8 @@ std::optional<std::string> Compactor::compact_two_files() {
             assert(wie.key != INVALIDATED);
 
             newsize++;
-            std::copy(wie1.files.begin(), wie1.files.end(), std::back_inserter(wie.files));
-            std::sort(wie.files.begin(), wie.files.end());
+
+            wie.merge_into(wie1);
             ostreamset.serialize(wie);
             wie.key = INVALIDATED;
             wie1.key = INVALIDATED;
@@ -255,6 +257,9 @@ std::optional<std::string> Compactor::compact_two_files() {
 
     streamset.remove_all();
     streamset1.remove_all();
+
+    // Move all to valid location
+    IndexFileLocker::move_all(temp_joined_suffix, joined_suffix);
 
     index_file.seekg(0, std::ios_base::end);
     index_file << joined_suffix << "\n";
@@ -280,7 +285,7 @@ void Compactor::test_makes_sense(const std::string &suffix) {
     assert(frequencies && terms && positions);
 
     auto ostreamset = open_file_set<std::fstream>(suffix + "-COPY_DEBUG", true);
-    auto&[ofrequencies, oterms, opositions, ofilemap, _suffix1] = ostreamset;
+    auto&[ofrequencies, oterms, opositions, ofilemap, __suffix1] = ostreamset;
     ostreamset.apply_to_all([=](auto &stream) {
         serialize_vnum(stream, len, true);
     });

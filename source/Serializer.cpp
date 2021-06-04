@@ -11,10 +11,16 @@ void Serializer::serialize(std::ostream &stream, const DocIDFilePair &p) {
     serialize_str(stream, p.file_name);
 }
 
-void Serializer::serialize(std::ostream &stream, const std::vector<DocIDFilePair> &vp) {
-    serialize_vnum(stream, vp.size(), false);
+void Serializer::serialize(std::string suffix, const std::vector<DocIDFilePair> &vp) {
+    std::ofstream filemapstream(indice_files_dir / ("filemap-" + suffix), std::ios_base::binary);
 
-    for (const auto &i: vp) serialize(stream, i);
+    serialize(filemapstream, vp);
+}
+
+void Serializer::serialize(std::ostream &filemapstream, const std::vector<DocIDFilePair> &vp) {
+    serialize_vnum(filemapstream, vp.size(), false);
+
+    for (const auto &i: vp) serialize(filemapstream, i);
 }
 
 void Serializer::serialize_str(std::ostream &stream, const std::string &str) {
@@ -126,11 +132,29 @@ void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostr
      *      20 * 32 bits for the document id (all 123) and 20 * 32 bits for the document position.
      */
     serialize_vnum(positions, ie.files.size(), false);
+    auto prev_docid = 0;
+    std::stringstream output_buf;
     for (auto &file : ie.files) {
-        serialize_vnum(positions, file.document_id, false);
-        serialize_vnum(positions, file.document_position, false);
+        serialize_vnum(output_buf, file.document_id - prev_docid, false);
+        prev_docid = file.document_id;
     }
-
+    auto prev_pos = 0;
+    for (auto &file : ie.files) {
+        uint32_t mypos;
+        if(file.document_position < prev_pos) {
+            mypos = file.document_position;
+            prev_pos = mypos;
+            mypos |= 1<<31;
+        } else {
+            mypos = file.document_position - prev_pos;
+            prev_pos = file.document_position;
+        }
+        serialize_vnum(output_buf, mypos, false);
+    }
+    auto buflen = output_buf.tellp();
+    serialize_vnum(positions, buflen, false);
+    output_buf.seekg(0);
+    positions<<output_buf.rdbuf();
 }
 
 
@@ -179,13 +203,13 @@ int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
     }
 
     auto *intbuffer = (uint32_t *) buffer;
-    read_packed_u32_chunk(frequencies, num_files * 2,  intbuffer);
+    read_packed_u32_chunk(frequencies, num_files * 2, intbuffer);
 
 
     return num_files;
 }
 
-void Serializer::read_packed_u32_chunk(std::istream& frequencies, int length, uint32_t* buffer) {
+void Serializer::read_packed_u32_chunk(std::istream &frequencies, int length, uint32_t *buffer) {
     frequencies.read(reinterpret_cast<char *>(buffer), length * sizeof(uint32_t));
 
     auto end = (uint32_t *) buffer + length;

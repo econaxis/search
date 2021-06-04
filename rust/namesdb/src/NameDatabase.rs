@@ -64,8 +64,9 @@ fn pretty_serialize(_: &HashSet<DocIDFilePair>) {}
 impl NamesDatabase {
     pub fn new(metadata_path: &Path) -> Self {
         let json_path = metadata_path.join("file_metadata.msgpack");
+        let json_length = fs::metadata(&json_path).map_or(0, |x| x.len());
         let mut processed_data: HashSet<DocIDFilePair> = {
-            if json_path.exists() {
+            if json_length > 5 {
                 println!("Reusing same JSON metadata file");
                 let cur_data = Self::from_json_file(&json_path);
                 cur_data.set

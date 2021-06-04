@@ -20,8 +20,6 @@ namespace Serializer {
 
     void serialize(std::ostream &stream, const DocIDFilePair &p);
 
-    void serialize(std::ostream &stream, const std::vector<DocIDFilePair> &vp);
-
     DocIDFilePair read_pair(std::istream &stream);
 
     std::vector<DocIDFilePair> read_filepairs(std::istream &stream);
@@ -45,6 +43,10 @@ namespace Serializer {
     int read_work_index_entry_v2_optimized(std::istream &frequencies, __m256 *buffer);
 
     void read_packed_u32_chunk(std::istream &frequencies, int length, uint32_t *buffer);
+
+    void serialize(std::string suffix, const std::vector<DocIDFilePair> &vp);
+
+    void serialize(std::ostream &filemapstream, const std::vector<DocIDFilePair> &vp);
 };
 
 namespace Serializer::ffi {

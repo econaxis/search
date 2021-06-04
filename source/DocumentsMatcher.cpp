@@ -66,19 +66,21 @@ using DPP = DocumentFrequency;
 static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *value) {
     auto prediction = end;
 
-    auto difference = end - start;
+    auto difference = end - start - 1;
 
-    if (difference > 3 && *value < *(start + 2)) {
+    // algorithm similar to galloping or exponential search.
+    // we use galloping to find the most optimal right bound of the binary search.
+    if (difference > 2 && *value < *(start + 2)) {
         prediction = start + 2;
-    } else if (difference > 65 && *value < *(start + 64)) {
+    } else if (difference > 64 && *value < *(start + 64)) {
         prediction = start + 64;
-    } else if (difference > 129 && *value < *(start + 128)) {
+    } else if (difference > 128 && *value < *(start + 128)) {
         prediction = start + 128;
-    } else if (difference > 513 && *value < *(start + 512)) {
+    } else if (difference > 512 && *value < *(start + 512)) {
         prediction = start + 512;
-    } else if (difference > 1025 && *value < *(start + 1024)) {
+    } else if (difference > 1024 && *value < *(start + 1024)) {
         prediction = start + 1024;
-    } else if (difference > 4097 && *value < *(start + 4096)) {
+    } else if (difference > 4096 && *value < *(start + 4096)) {
         prediction = start + 4096;
     }
 
@@ -156,6 +158,7 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
         for (auto &[_result_size, idx] : sorted_sizes) {
             if (walkers[idx] >= enders[idx]) {
                 // Exhausted one means exhausted all.
+                // Have to use goto to exit out of two loop levels (alternative would be checking a boolean)
                 goto exit_loop;
             }
 

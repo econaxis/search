@@ -4,7 +4,7 @@
 #include "rust-interface.h"
 #include <iostream>
 #include "IndexFileLocker.h"
-constexpr unsigned int MAX_FILES_PER_INDEX = 50000;
+constexpr unsigned int MAX_FILES_PER_INDEX = 100000;
 
 namespace FileListGenerator {
     using FilePairs = std::vector<DocIDFilePair>;
@@ -42,10 +42,10 @@ namespace FileListGenerator {
                 continue;
             }
             auto abspath = data_files_dir / "data" / file_line;
-            if (!fs::exists(abspath) || !fs::is_regular_file(abspath)) {
-                std::cerr << "Path " << abspath.c_str() << " nonexistent\n";
-                continue;
-            }
+//            if (!fs::exists(abspath) || !fs::is_regular_file(abspath)) {
+//                std::cerr << "Path " << abspath.c_str() << " nonexistent\n";
+//                continue;
+//            }
 
             cur_size+= fs::file_size(abspath);
 

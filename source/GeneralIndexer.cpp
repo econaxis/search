@@ -181,7 +181,6 @@ int GeneralIndexer::read_some_files() {
     if(!a0.empty()) a1.merge_into(SortedKeysIndex(std::move(a0)));
 
     if (a1.get_index().empty()) return 0;
-    a1.check_dups();
 
 
     a1.sort_and_group_shallow();
@@ -190,11 +189,17 @@ int GeneralIndexer::read_some_files() {
     // This could take a long time (many sorts), and there's no memory-conservation advantage,
     // so we only need to do it at the end.
     a1.sort_and_group_all();
-    a1.check_dups();
     persist_indices(a1, fp);
 
     filecontentproducer.join();
     return 1;
+}
+
+void move_all(std::string old_suffix, std::string new_suffix) {
+    fs::rename(indice_files_dir/ ("filemap-" + old_suffix), indice_files_dir/ ("filemap-" +new_suffix));
+    fs::rename(indice_files_dir/ ("terms-" + old_suffix), indice_files_dir/ ("terms-" +new_suffix));
+    fs::rename(indice_files_dir/ ("frequencies-" + old_suffix), indice_files_dir/ ("frequencies-" +new_suffix));
+    fs::rename(indice_files_dir/ ("positions-" + old_suffix), indice_files_dir/ ("positions-" +new_suffix));
 }
 
 void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
@@ -207,10 +212,13 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
         suffix += random_b64_str(50);
     }
     std::cout << "Persisting files to disk - " << suffix << "\n";
-    auto filemap_path = "filemap-" + suffix;
-    std::ofstream filemapstream(indice_files_dir / filemap_path, std::ios_base::binary);
-    Serializer::serialize(filemapstream, filepairs);
-    Serializer::serialize(suffix, master);
+
+    auto temp_suffix = "TEMP-" + suffix;
+    Serializer::serialize(temp_suffix, filepairs);
+    Serializer::serialize(temp_suffix, master);
+
+    // once it's done we copy temp to real.
+    move_all(temp_suffix, suffix);
 
     // Put these new indices to the index_files list
     std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);

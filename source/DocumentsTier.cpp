@@ -3,6 +3,7 @@
 #include "Serializer.h"
 #include "DocumentFrequency.h"
 #include <ostream>
+#include <iostream>
 
 static constexpr auto BLOCKSIZE = 256;
 
@@ -22,6 +23,8 @@ void MultiDocumentsTier::serialize(const WordIndexEntry &wie, std::ostream &freq
         std::sort(window_beg, end);
 
         data.emplace_back(window_beg, end);
+
+        window_beg += BLOCKSIZE;
 
         if (end == array.end()) break;
     }

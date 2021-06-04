@@ -269,9 +269,13 @@ void Compactor::test_makes_sense(const std::string &suffix) {
     using namespace Serializer;
 
     std::cout << "Checking " << suffix << "\n";
+
     auto streamset = open_file_set<std::ifstream>(suffix);
     int len = streamset.getlen();
     auto&[frequencies, terms, positions, filemap, _suffix] = streamset;
+
+    auto filepairs = Serializer::read_filepairs(filemap);
+
 
     assert(frequencies && terms && positions);
 

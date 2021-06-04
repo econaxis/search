@@ -57,7 +57,7 @@ void Serializer::serialize_vnum(std::ostream &stream, uint32_t number, bool pad3
         write_num(static_cast<uint32_t>(number));
     } else if (number <= uint64max && !pad32) { // not supported
         uint64_t num64 = ((uint64_t) number) << 4;
-        number |= 1 << 3;
+        num64 |= 1 << 3;
         write_num(num64);
     } else {
         std::cout << "Number: " << number << "\n";
@@ -86,7 +86,7 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         holder = (holder << 5) | byte;
     } else if (byte & 1 << 3) {
         uint64_t bigholder = 0;
-        stream.read(reinterpret_cast<char *>(bigholder), 7);
+        stream.read(reinterpret_cast<char *>(&bigholder), 7);
         byte = byte >> 4;
         bigholder = (bigholder << 4) | byte;
 

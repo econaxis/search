@@ -86,6 +86,8 @@ load_all_indices() {
     return ret;
 }
 
+
+
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
     initialize_directory_variables();

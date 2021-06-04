@@ -11,7 +11,12 @@
 
 namespace fs = std::filesystem;
 
+void Compactor_test();
+
 int main(int argc, char *argv[]) {
+
+    Compactor_test();
+
     initialize_directory_variables();
 
 

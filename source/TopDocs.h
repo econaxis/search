@@ -32,6 +32,7 @@ public:
         included_terms.insert(std::move(term));
     }
 
+    TopDocs(std::vector<DocumentFrequency> docs): docs(std::move(docs)) {};
 
     TopDocs(value_type *ibegin, value_type *iend) {
         docs.resize(iend - ibegin);

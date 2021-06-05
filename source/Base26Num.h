@@ -20,6 +20,8 @@ struct Base26Num {
         if (other.num >= num)  return *this;
         else return Base26Num{num - other.num};
     }
+
+    Base26Num fiddle(int idx);
 };
 
 #endif //GAME_BASE26NUM_H

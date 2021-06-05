@@ -89,11 +89,11 @@ std::vector<WordIndexEntry_unsafe> Tokenizer::index_string_file(std::string file
 }
 
 void Tokenizer::remove_punctuation(std::string &a) {
-    a.erase(std::remove_if(a.begin(), a.end(), [](char c) {
-        int asciicode = static_cast<int>(c);
-        if (asciicode > 90) asciicode -= 32;
-        return !(asciicode >= 65 && asciicode <= 90);
-    }), a.end());
+//    a.erase(std::remove_if(a.begin(), a.end(), [](char c) {
+//        int asciicode = static_cast<int>(c);
+//        if (asciicode > 90) asciicode -= 32;
+//        return !(asciicode >= 65 && asciicode <= 90);
+//    }), a.end());
 
     for (auto &c : a) {
         c = (char) std::toupper(c);

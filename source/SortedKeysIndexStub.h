@@ -36,6 +36,9 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
 #include "DocIDFilePair.h"
 #include <immintrin.h>
 #include "FPStub.h"
+#include "WordIndexEntry.h"
+#include "DocumentPositionPointer.h"
+
 /**
  * Similar to SortedKeysIndex, but it only loads a specific subset of the index into memory.
  * For example, it loads only every 64th term into memory. The string is converted to a base26 number (as the string
@@ -46,13 +49,14 @@ class SortedKeysIndexStub {
 private:
 
     mutable std::unique_ptr<__m256[]> alignedbuf;
-    mutable std::ifstream frequencies, terms;
+    mutable std::ifstream frequencies, terms, positions;
 
 
     std::string suffix;
     FPStub filemap;
     std::unique_ptr<char[]> buffer;
 
+    std::optional<PreviewResult> seek_to_term(const std::string &term) const;
 
 public:
 
@@ -77,6 +81,8 @@ public:
     collection_merge_search(std::vector<SortedKeysIndexStub> &indices, const std::vector<std::string> &search_terms);
 
     SortedKeysIndexStub(const SortedKeysIndexStub& other);
+
+    std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
 };
 
 

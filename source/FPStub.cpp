@@ -17,7 +17,7 @@ FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
 }
 
 std::string FPStub::query(int docid) const {
-    int loc = docid / interval - 1;
+    int loc = std::max(docid / interval - 1, 0);
     if(loc > diffvec.size()) {
         return "File not found";
     }

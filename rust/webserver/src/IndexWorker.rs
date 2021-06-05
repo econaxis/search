@@ -126,7 +126,7 @@ impl IndexWorker {
                     let chars: Vec<*const c_char> = chars.iter().map(|x| x.as_ptr()).collect();
                     let chars: *const *const c_char = chars.as_ptr();
 
-                    let outputvec = VecDPP::new();
+                    let mut outputvec = VecDPP::new();
                     let indices_ptrptr: Vec<*const cffi::ctypes::SortedKeysIndexStub> = thread_indices.iter().map(|x| *x.as_ref()).collect();
 
 
@@ -144,8 +144,9 @@ impl IndexWorker {
                     // let mut filenames_hash = HashSet::new();
 
                     let _sp = span!(Level::DEBUG, "Get filenames").entered();
+                    outputvec.truncate(25);
 
-                    for i in &*outputvec {
+                    for i in outputvec.deref() {
                         let len = unsafe {
                             cffi::query_for_filename(*thread_indices[i.2 as usize].as_ref(), i.0 as u32, buf.as_ptr() as *const c_char, buf.len() as u32)
                         } as usize;

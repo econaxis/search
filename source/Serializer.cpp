@@ -5,7 +5,16 @@
 #include "SortedKeysIndex.h"
 #include "DocumentsTier.h"
 #include "DocumentFrequency.h"
+#include <execinfo.h>
 
+void print_backtrace() {
+    void *tracePtrs[15];
+    auto count = backtrace(tracePtrs, 15);
+    char** funcnames = backtrace_symbols(tracePtrs, count);
+    for(int i = 0; i < count; i++) {
+        std::cout<<"Backtrace: "<<funcnames[i]<<"\n";
+    }
+}
 
 void Serializer::serialize(std::ostream &stream, const DocIDFilePair &p) {
     serialize_vnum(stream, p.document_id, false);
@@ -61,6 +70,7 @@ void Serializer::serialize_vnum(std::ostream &stream, uint32_t number, bool pad3
         write_num(num64);
     } else {
         std::cout << "Number: " << number << "\n";
+        print_backtrace();
         throw std::runtime_error("Number too big");
     }
 }

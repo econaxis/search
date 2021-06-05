@@ -57,6 +57,7 @@ struct StreamSet {
     stream_t positions;
     stream_t filemap;
     std::string suffix;
+    std::unique_ptr<char[]> buffer;
 
     WordIndexEntry read() {
         return Serializer::read_work_index_entry(frequencies, terms, positions);
@@ -92,6 +93,8 @@ struct StreamSet {
     }
 };
 
+static constexpr auto BUFLEN = 4000;
+
 template<typename T>
 StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
     auto inoutbinary = std::ios_base::binary | std::ios_base::out;
@@ -101,8 +104,13 @@ StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
             .terms = T(make_path("terms", suffix), inoutbinary),
             .positions = T(make_path("positions", suffix), inoutbinary),
             .filemap = T(make_path("filemap", suffix), inoutbinary),
-            .suffix = suffix
+            .suffix = suffix,
+            .buffer = std::make_unique<char[]>(BUFLEN * 3)
     };
+
+    set.frequencies.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 0, BUFLEN);
+    set.terms.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 1, BUFLEN);
+    set.positions.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 2, BUFLEN);
 
     if (!(set.frequencies.good() && set.terms.good() && set.positions.good())) {
         throw std::runtime_error("File cannot be opened " + suffix);
@@ -172,6 +180,8 @@ std::optional<std::string> Compactor::compact_two_files() {
 
     auto filepairs = Serializer::read_filepairs(streamset.filemap);
     auto filepairs1 = Serializer::read_filepairs(streamset1.filemap);
+
+    std::cout << "Greatest id: " << filepairs.back().document_id << " " << filepairs1.back().document_id << "\n";
 
     auto upgrade_ids = [&](auto &iterable) {
         // Upgrade all documents from 1 to avoid ID duplication
@@ -277,15 +287,13 @@ void Compactor::test_makes_sense(const std::string &suffix) {
 
     auto streamset = open_file_set<std::ifstream>(suffix);
     int len = streamset.getlen();
-    auto&[frequencies, terms, positions, filemap, _suffix] = streamset;
 
-    auto filepairs = Serializer::read_filepairs(filemap);
+    auto filepairs = Serializer::read_filepairs(streamset.filemap);
 
 
-    assert(frequencies && terms && positions);
+    assert(streamset.frequencies && streamset.terms && streamset.positions);
 
     auto ostreamset = open_file_set<std::fstream>(suffix + "-COPY_DEBUG", true);
-    auto&[ofrequencies, oterms, opositions, ofilemap, __suffix1] = ostreamset;
     ostreamset.apply_to_all([=](auto &stream) {
         serialize_vnum(stream, len, true);
     });
@@ -301,11 +309,11 @@ void Compactor::test_makes_sense(const std::string &suffix) {
         fs::remove(make_path("filemap", suffix));
         return;
     }
-    while (check_stream_good(dynamic_cast<std::ifstream &>(terms)) && len > 0) {
+    while (check_stream_good(dynamic_cast<std::ifstream &>(streamset.terms)) && len > 0) {
         len--;
 
         if (len % 1000 == 0) std::cout << "Checking " << len << "\r";
-        wie = read_work_index_entry(frequencies, terms, positions);
+        wie = read_work_index_entry(streamset.frequencies, streamset.terms, streamset.positions);
         assert(std::is_sorted(wie.files.begin(), wie.files.end()));
 //        serialize_work_index_entry(ofrequencies, oterms, opositions, wie);
     }

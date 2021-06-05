@@ -172,8 +172,6 @@ int GeneralIndexer::read_some_files() {
 
             // Merge the unsafe, quick holding structure into the main index.
             a1.merge_into(SortedKeysIndex(a0));
-            // Only need to sort and group (merge similar terms into the same vector) every few iterations.
-            if (a1.get_index().size() > 5000 && a1.get_index().size() % 10 == 0) a1.sort_and_group_shallow();
             // Reset the holding vector to its empty state, ready for more indexing.
             a0 = remake_vector();
         }

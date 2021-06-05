@@ -44,6 +44,8 @@ target_link_libraries(search PRIVATE search-share general-indexer)
 add_executable(compactor source/compactor/main.cpp)
 target_link_libraries(compactor PRIVATE search-share pthread)
 
+target_link_options(compactor PRIVATE -rdynamic)
+
 add_library(c-search-abi SHARED source/c_abi.cpp)
 target_link_libraries(c-search-abi PRIVATE search-share)
 

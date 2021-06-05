@@ -8,29 +8,27 @@
 using namespace Serializer;
 
 
+// If you try to read this MAGIC_NUM with normal vnum format, you'll get an error.
+constexpr uint32_t MAGIC_NUM = 0xFFADCFF0;
+
+
 void PositionsSearcher::serialize_positions(std::ostream &positions, const WordIndexEntry &ie) {
-    auto prev_docid = 0;
-    std::streampos prevpositionbuf = 0;
-    auto prev_doc_position = 0;
-    auto num_docs = 0;
-    std::stringstream docidbuf, positionbuf;
+    // Document ID limits are implicit from the positions file.
+    // Both are sorted.
+
+    assert(std::is_sorted(ie.files.begin(), ie.files.end()));
+
+    std::stringstream positionbuf;
     for (auto &file : ie.files) {
-        if (file.document_id != prev_docid) {
-            num_docs++;
-            serialize_vnum(docidbuf, file.document_id - prev_docid, true);
-            serialize_vnum(docidbuf, positionbuf.tellp() - prevpositionbuf, true);
-            prev_doc_position = 0;
-            prevpositionbuf = positionbuf.tellp();
-            prev_docid = file.document_id;
-        }
-        serialize_vnum(positionbuf, file.document_position - prev_doc_position);
-        prev_doc_position = file.document_position;
+        serialize_vnum(positionbuf, file.document_position);
     }
-    serialize_vnum(positions, num_docs);
-    positions << docidbuf.rdbuf();
-    serialize_vnum(positions, positionbuf.tellp());
+
+    // Serialize magic num to help in debugging, make sure we aren't reading the wrong frame.
+    positions.write(reinterpret_cast<const char*>(&MAGIC_NUM), 4);
     positions << positionbuf.rdbuf();
 }
+
+
 
 std::vector<DocumentPositionPointer> PositionsSearcher::read_positions_all(std::istream &positions) {
     auto num_files = read_vnum(positions);
@@ -45,9 +43,11 @@ std::vector<DocumentPositionPointer> PositionsSearcher::read_positions_all(std::
         prevposition += pos;
         docids[i] = std::pair{prevdocid, prevposition};
     }
-    auto poslength = read_vnum(positions);
+    auto totalposblocklen = read_vnum(positions);
     auto posstart = positions.tellg();
-    docids[num_files] = std::pair{0, poslength};
+    docids[num_files] = std::pair{0, totalposblocklen};
+
+
 
 
     std::vector<DocumentPositionPointer> output;
@@ -64,6 +64,8 @@ std::vector<DocumentPositionPointer> PositionsSearcher::read_positions_all(std::
     }
     return output;
 }
+
+
 
 
 static const std::vector<DocumentPositionPointer> a = {

@@ -43,3 +43,13 @@ Base26Num::Base26Num(std::string from) {
         num += (from[i] - 'A' + 1) * alphabet_pow[MAX_CHARS - i - 1];
     }
 }
+
+Base26Num Base26Num::fiddle(int idx) {
+    assert(std::abs(idx) < MAX_CHARS);
+    assert(idx != 0);
+
+    auto absidx = std::abs(idx);
+    int sign = !std::signbit(idx);
+
+    return Base26Num{num + sign * alphabet_pow[MAX_CHARS - (idx - 1) - 1]};
+}

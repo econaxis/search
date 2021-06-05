@@ -1,4 +1,4 @@
-
+#include "PositionsSearcher.h"
 #include <iostream>
 #include "SortedKeysIndexStub.h"
 #include "DocumentsMatcher.h"
@@ -44,11 +44,11 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
 
 template<typename Iterator>
 int compute_average(Iterator begin, Iterator end) {
-    if(end - begin < 6) return 8;
+    if (end - begin < 6) return 8;
 
     unsigned int sum = 0, square = 0;
 
-    for(auto i = begin; i < end; i++) {
+    for (auto i = begin; i < end; i++) {
         sum += *i;
         square += *i * *i;
     }
@@ -58,9 +58,43 @@ int compute_average(Iterator begin, Iterator end) {
 }
 
 
+std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string &term) const {
+    auto file_start = std::lower_bound(index->begin(), index->end(), Base26Num(term));
+    auto file_end = std::upper_bound(index->begin(), index->end(), Base26Num(term));
+
+    if (file_start == index->end()) { return std::nullopt; }
+
+    // We assume that the positions of `terms` and `frequencies` are indetermined.
+    // Therefore, we seek to the correct location as determined by the file_start StubIndEntry,
+    // read the frequencies_pos, then seek the `frequencies` stream to that location.
+    // Now, we have both streams at the correct location.
+    auto terms_pos = file_start->terms_pos;
+    terms.seekg(terms_pos);
+
+    while (terms.tellg() < file_end->terms_pos) {
+        auto preview = Serializer::preview_work_index_entry(terms);
+        if (preview.key.compare(term) == 0) {
+            return preview;
+        }
+    }
+    return std::nullopt;
+}
+
+
+std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string& term) const {
+    auto loc = seek_to_term(term);
+    if(!loc) {
+        return {};
+    } else {
+        positions.seekg(loc->positions_pos);
+        return PositionsSearcher::read_positions_all(positions);
+    }
+}
+
+
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
-    auto file_start = std::lower_bound(index->begin(), index->end(), Base26Num(term)) - 1;
-    auto file_end = std::upper_bound(index->begin(), index->end(), Base26Num(term)) + 1;
+    auto file_start = std::lower_bound(index->begin(), index->end(), Base26Num(term).fiddle(-3)) - 1;
+    auto file_end = std::upper_bound(index->begin(), index->end(), Base26Num(term).fiddle(3)) + 1;
 
     file_start = std::clamp(file_start, index->begin(), index->end());
     file_end = std::clamp(file_end, index->begin(), index->end());
@@ -100,20 +134,23 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             frequencies.seekg(preview.frequencies_pos);
 
             // Read the work index entry from the correct, seeked position.
-            auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
+//            auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
+//            auto wie = Serializer::read_work_index_entry_v2(frequencies, terms);
 
-            // Do some processing with the data.
-            auto init = (DocumentFrequency *) alignedbuf.get();
+            auto wie = WordIndexEntry_v2{preview.key, static_cast<uint32_t>(terms.tellg()), {}};
+            wie.files = MultiDocumentsTier::TierIterator(frequencies).read_all();
+
+
             auto tot_score = 0;
-            for (auto i = init; i < init + size; i++) {
-                float coefficient = std::log10(i->document_freq + 0.8) + 0.8;
-                i->document_freq = coefficient * score;
-                tot_score += i->document_freq;
+            for(auto& i : wie.files) {
+                float coefficient = std::log10(i.document_freq + 0.8) + 0.75;
+                i.document_freq = coefficient * score;
+                tot_score += i.document_freq;
             }
-            TopDocs td(init, init+size);
+            TopDocs td(std::move(wie.files));
             td.add_term_str(preview.key);
+            output_score.emplace_back(tot_score / td.size());
             outputs.push_back(std::move(td));
-            output_score.emplace_back(tot_score / size);
         }
     }
 
@@ -183,6 +220,7 @@ SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : fil
         indice_files_dir / ("filemap-" + other.suffix)) {
     frequencies = std::ifstream(indice_files_dir / ("frequencies-" + other.suffix), std::ios_base::binary);
     terms = std::ifstream(indice_files_dir / ("terms-" + other.suffix), std::ios_base::binary);
+    positions = std::ifstream(indice_files_dir / ("positions-" + other.suffix), std::ios_base::binary);
     assert(this->frequencies && this->terms);
 
     // Setup read cache buffer

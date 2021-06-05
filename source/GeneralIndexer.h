@@ -7,9 +7,17 @@
 #include <sstream>
 #include "WordIndexEntry.h"
 #include "Serializer.h"
-#include <filesystem>
+#include <atomic>
+#include <queue>
+#include "SortedKeysIndex.h"
+#include <condition_variable>
+
+struct SyncedQueue;
 
 namespace GeneralIndexer {
+
+
+
     int read_some_files();
 
 
@@ -18,7 +26,11 @@ namespace GeneralIndexer {
     void test_serialization();
 
     void test_searching();
-}
 
+    SortedKeysIndex thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents);
+
+    SortedKeysIndex
+    thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file);
+}
 
 #endif //GAME_GENERALINDEXER_H

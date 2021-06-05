@@ -4,7 +4,7 @@
 #include <iostream>
 #include "Serializer.h"
 #include "PositionsSearcher.h"
-#include <cstdlib>
+
 using namespace Serializer;
 
 
@@ -24,25 +24,24 @@ void PositionsSearcher::serialize_positions(std::ostream &positions, const WordI
     }
 
     // Serialize magic num to help in debugging, make sure we aren't reading the wrong frame.
-    positions.write(reinterpret_cast<const char*>(&MAGIC_NUM), 4);
+    positions.write(reinterpret_cast<const char *>(&MAGIC_NUM), 4);
     positions << positionbuf.rdbuf();
 }
 
 
-
 std::vector<DocumentPositionPointer>
-PositionsSearcher:: read_positions_all(std::istream &positions, const std::vector<DocumentFrequency> &freq_list) {
+PositionsSearcher::read_positions_all(std::istream &positions, const std::vector<DocumentFrequency> &freq_list) {
     uint32_t magic_num;
-    positions.read(reinterpret_cast<char*>(&magic_num), 4);
+    positions.read(reinterpret_cast<char *>(&magic_num), 4);
     assert(magic_num == MAGIC_NUM);
 
     std::vector<DocumentPositionPointer> out;
-    for(auto& df : freq_list) {
+    for (auto &df : freq_list) {
         auto docs_left = df.document_freq;
 
-        while(docs_left--) {
+        while (docs_left--) {
             auto pos = read_vnum(positions);
-            out.emplace_back(df.document_id,pos);
+            out.emplace_back(df.document_id, pos);
         }
     }
 
@@ -51,37 +50,17 @@ PositionsSearcher:: read_positions_all(std::istream &positions, const std::vecto
 }
 
 
-
-
-static std::vector<DocumentPositionPointer> a = {
-        {1,    2},
-        {9,    123212},
-        {9,    12433232},
-        {9,    42323232},
-        {11,   552},
-        {91,   2533},
-        {91,   25323},
-        {91,   53432},
-        {9112, 2231},
-        {9112, 22311},
-        {9112, 222311},
-        {9112, 224331},
-        {9112, 552231},
-        {9112, 662231},
-        {9112, 772231},
-        {9112, 882231},
-
-};
+static std::vector<DocumentPositionPointer> a {};
 
 #include "DocumentsTier.h"
 #include <ctime>
-
+#include <cstdlib>
 void Push_random_test() {
     std::srand(std::time(nullptr));
     int num = 100000;
-    uint maxint = 1<<31;
-    while(num--) {
-        a.emplace_back(std::rand() % (num/9) + (1<<25), std::rand() % maxint);
+    uint maxint = 1 << 31;
+    while (num--) {
+        a.emplace_back(std::rand() % (num / 9) + (1 << 25), std::rand() % maxint);
     }
     std::sort(a.begin(), a.end());
 }
@@ -90,8 +69,8 @@ void Push_random_test() {
 void Compactor_test() {
     Push_random_test();
 
-    WordIndexEntry wie {
-        "test", a
+    WordIndexEntry wie{
+            "test", a
     };
     std::stringstream positions, frequencies;
     PositionsSearcher::serialize_positions(positions, wie);
@@ -101,7 +80,7 @@ void Compactor_test() {
     auto sd = ti.read_all();
     auto test = PositionsSearcher::read_positions_all(positions, sd);
 
-    std::cout<<positions.str();
+    std::cout << positions.str();
     assert(test == a);
     exit(0);
 }

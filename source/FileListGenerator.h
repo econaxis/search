@@ -4,7 +4,7 @@
 #include "rust-interface.h"
 #include <iostream>
 #include "IndexFileLocker.h"
-constexpr unsigned int MAX_FILES_PER_INDEX = 2000;
+constexpr unsigned int MAX_FILES_PER_INDEX = 200000;
 
 namespace FileListGenerator {
     using FilePairs = std::vector<DocIDFilePair>;
@@ -50,7 +50,7 @@ namespace FileListGenerator {
             cur_size+= fs::file_size(abspath);
 
             // Don't index more than x files or 500MB at a time.
-            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > 1e9) break;
+            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > 2e9) break;
             doc_id_counter++;
 //            register_temporary_file(ndb, file_line.c_str(), doc_id_counter);
             filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});

@@ -24,22 +24,6 @@ struct WordIndexEntry_v2 {
     SingleDocumentsTier files;
 };
 
-struct WordIndexEntry_unsafe {
-    std::string key;
-    using VecType = CustomAllocatedVec<DocumentPositionPointer, 3, 50000>;
-    VecType files;
-
-    WordIndexEntry_unsafe(std::string key, const std::vector<DocumentPositionPointer>& f) : key(std::move(key)), files() {
-        for (const auto &i : f) {
-            files.push_back(i);
-        }
-    }
-
-    WordIndexEntry_unsafe() : key("a"), files() {};
-
-
-};
-
 /**
  * Each WordIndexEntry is a list of files that contain the word "key" + where the file has that word.
  */

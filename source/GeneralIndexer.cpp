@@ -1,4 +1,5 @@
 #include "GeneralIndexer.h"
+#include <future>
 #include "SortedKeysIndex.h"
 #include "Tokenizer.h"
 #include "random_b64_gen.h"
@@ -47,7 +48,6 @@ struct SyncedQueue {
         cv.wait(lock, c);
     }
 };
-
 
 void queue_produce_file_contents_tar(std::vector<std::string> tarnames, SyncedQueue &contents,
                                      std::atomic_bool &done_flag) {
@@ -105,25 +105,13 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
 }
 
 
-void reduce_word_index_entries(std::vector<WordIndexEntry_unsafe> &op1,
-                               std::vector<WordIndexEntry_unsafe> op2) {
-    for (auto &i : op2) {
-        op1.push_back(std::move(i));
-    }
-}
-
-std::vector<WordIndexEntry_unsafe> remake_vector() {
-    auto a = std::vector<WordIndexEntry_unsafe>();
-    a.reserve(11000);
-    return a;
-}
 
 
 int GeneralIndexer::read_some_files() {
     // Vector of file paths and generated, incremental ID.
     const FilePairs fp = FileListGenerator::from_file();
 
-    if(fp.empty()) return 0;
+    if (fp.empty()) return 0;
 
     int progress_counter = 0;
 
@@ -143,43 +131,17 @@ int GeneralIndexer::read_some_files() {
     std::thread filecontentproducer(queue_produce_file_contents, std::ref(file_contents), std::ref(fp),
                                     std::ref(done_flag));
 
-    auto a0 = remake_vector();
-    while (file_contents.size() || !done_flag) {
-        if (!file_contents.size()) {
-            file_contents.wait_for([&]() {
-                return file_contents.size() > 3 || done_flag;
-            });
-        }
-        if (!file_contents.size() && done_flag) continue;
-        auto[contents, docidfilepair] = file_contents.pop();
-        if (progress_counter++ % (fp.size() / 5000 + 1) == 0) {
-            std::cout << "Done " << progress_counter * 100 / fp.size() << "% " << progress_counter << "\r"
-                      << std::flush;
-        }
 
-        auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
-
-        reduce_word_index_entries(a0, std::move(temp));
-        // `a0` is our "holding zone" for recently indexed files. It is a vector of all tokens and their positions in each file.
-        // When a0 gets too full, we want to copy its data into the main index `a1`. Here, all similar tokens from different files
-        // will be merged.
-        //
-        // The reason we need a holding location for a0 is because at the indexing stage, we'll make many tiny vectors (one for each term),
-        // which is very inefficient. Therefore, in `a0`, we use some unsafe pool memory allocation to speed indexing up. Then, periodically,
-        // we'll copy that unsafe memory into safe, STL vector-managed memory. Plus, the memory pool `ContiguousAllocator`
-        // only has a fixed size which will runtime crash if we exceed it.
-        if (a0.size() > 10000) {
-
-            // Merge the unsafe, quick holding structure into the main index.
-            a1.merge_into(SortedKeysIndex(a0));
-            // Reset the holding vector to its empty state, ready for more indexing.
-            a0 = remake_vector();
-        }
+    std::vector<std::future<SortedKeysIndex>> threads;
+    for (int i = 0; i < 4; i++) {
+        threads.emplace_back(std::async(std::launch::async | std::launch::deferred, [&]() {
+            return thread_process_files(done_flag, file_contents, fp.size() / 4);
+        }));
     }
-    if(!a0.empty()) a1.merge_into(SortedKeysIndex(std::move(a0)));
-
+    for(auto& fut : threads) {
+        a1.merge_into(fut.get());
+    }
     if (a1.get_index().empty()) return 0;
-
 
     a1.sort_and_group_shallow();
 
@@ -191,6 +153,27 @@ int GeneralIndexer::read_some_files() {
 
     filecontentproducer.join();
     return 1;
+}
+
+SortedKeysIndex GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file) {
+    SortedKeysIndex a1;
+    while (file_contents.size() || !done_flag) {
+        if (!file_contents.size()) {
+            file_contents.wait_for([&]() {
+                return file_contents.size() > 3 || done_flag;
+            });
+        }
+        if (!file_contents.size() && done_flag) continue;
+        auto[contents, docidfilepair] = file_contents.pop();
+        if (docidfilepair.document_id % 50 == 0) {
+            std::cout << "Done " <<  docidfilepair.document_id * 100 / each_max_file << "% "<< "\r"
+                      << std::flush;
+        }
+
+        auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
+        a1.merge_into(SortedKeysIndex(temp));
+    }
+    return a1;
 }
 
 
@@ -215,25 +198,4 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     // Put these new indices to the index_files list
     std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
     index_file << suffix << "\n";
-}
-
-// Various debug testing functions.
-void GeneralIndexer::test_serialization() {
-    std::vector<WordIndexEntry_unsafe> a;
-    std::uniform_int_distribution<uint> dist(0, 10); // ASCII table codes for normal characters.
-    for (int i = 0; i < 1000; i++) {
-        std::vector<DocumentPositionPointer> t;
-        int iters = 100;
-        while (iters--) t.push_back({dist(randgen()), 100});
-        auto s = random_b64_str(10000);
-        Tokenizer::clean_token_to_index(s);
-        a.push_back({s, t});
-    }
-
-    SortedKeysIndex index(a);
-    Serializer::serialize("test_serialization", index);
-
-    std::ifstream frequencies(data_files_dir / "indices" / "frequencies-test_serialization");
-    std::ifstream terms(data_files_dir / "indices" / "terms-test_serialization");
-    auto t = Serializer::read_sorted_keys_index_stub_v2(frequencies, terms);
 }

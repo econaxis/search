@@ -9,7 +9,7 @@
 #include <set>
 
 namespace Tokenizer {
-    std::vector<WordIndexEntry_unsafe> index_string_file(std::string file, uint32_t docid);
+    std::vector<WordIndexEntry> index_string_file(std::string file, uint32_t docid);
 
 
 

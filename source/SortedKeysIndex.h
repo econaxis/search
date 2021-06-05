@@ -19,7 +19,7 @@ public:
 
     std::vector<WordIndexEntry> &get_index();
 
-    explicit SortedKeysIndex(std::vector<WordIndexEntry_unsafe> index);
+    explicit SortedKeysIndex(std::vector<WordIndexEntry> index);
 
     SortedKeysIndex() = default;
 

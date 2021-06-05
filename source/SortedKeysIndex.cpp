@@ -2,13 +2,7 @@
 #include "SortedKeysIndex.h"
 
 
-SortedKeysIndex::SortedKeysIndex(std::vector<WordIndexEntry_unsafe> index)  {
-    this->index.reserve(index.size());
-    for(auto & i : index) {
-        std::vector<DocumentPositionPointer> a (i.files.begin(), i.files.end());
-        this->index.push_back(WordIndexEntry{i.key, std::move(a)});
-    }
-}
+SortedKeysIndex::SortedKeysIndex(std::vector<WordIndexEntry> index) : index(std::move(index)){}
 
 void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
     std::move(other.index.begin(), other.index.end(), std::back_inserter(index));

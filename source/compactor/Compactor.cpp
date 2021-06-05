@@ -330,5 +330,7 @@ std::pair<Compactor::ReadState, std::string> Compactor::read_line(std::ifstream 
     } else {
         return {Compactor::ReadState::GOOD, line};
     }
+
+
 }
 

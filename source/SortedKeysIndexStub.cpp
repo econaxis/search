@@ -87,7 +87,9 @@ std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term
         return {};
     } else {
         positions.seekg(loc->positions_pos);
-        return PositionsSearcher::read_positions_all(positions);
+        frequencies.seekg(loc->frequencies_pos);
+        auto freq_list = MultiDocumentsTier::TierIterator(frequencies).read_all();
+        return PositionsSearcher::read_positions_all(positions, freq_list);
     }
 }
 

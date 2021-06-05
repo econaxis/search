@@ -143,7 +143,7 @@ Serializer::read_work_index_entry(std::istream &frequencies, std::istream &terms
     WordIndexEntry_v2 wie2 = read_work_index_entry_v2(frequencies, terms);
 
     // then read the positions
-    auto dpp = PositionsSearcher::read_positions_all(positions);
+    auto dpp = PositionsSearcher::read_positions_all(positions, wie2.files);
 
     WordIndexEntry wie {wie2.key, dpp};
     return wie;

@@ -4,7 +4,7 @@
 #include <iostream>
 #include "Serializer.h"
 #include "PositionsSearcher.h"
-
+#include <cstdlib>
 using namespace Serializer;
 
 
@@ -30,45 +30,30 @@ void PositionsSearcher::serialize_positions(std::ostream &positions, const WordI
 
 
 
-std::vector<DocumentPositionPointer> PositionsSearcher::read_positions_all(std::istream &positions) {
-    auto num_files = read_vnum(positions);
-    std::vector<std::pair<int, int>> docids(num_files + 1);
+std::vector<DocumentPositionPointer>
+PositionsSearcher:: read_positions_all(std::istream &positions, const std::vector<DocumentFrequency> &freq_list) {
+    uint32_t magic_num;
+    positions.read(reinterpret_cast<char*>(&magic_num), 4);
+    assert(magic_num == MAGIC_NUM);
 
-    auto prevdocid = 0, prevposition = 0;
-    for (int i = 0; i < num_files; i++) {
-        auto docid = read_vnum(positions);
-        auto pos = read_vnum(positions);
+    std::vector<DocumentPositionPointer> out;
+    for(auto& df : freq_list) {
+        auto docs_left = df.document_freq;
 
-        prevdocid += docid;
-        prevposition += pos;
-        docids[i] = std::pair{prevdocid, prevposition};
-    }
-    auto totalposblocklen = read_vnum(positions);
-    auto posstart = positions.tellg();
-    docids[num_files] = std::pair{0, totalposblocklen};
-
-
-
-
-    std::vector<DocumentPositionPointer> output;
-    for (auto pair = docids.begin(); pair < docids.end() - 1; pair++) {
-        positions.seekg(pair->second + posstart);
-        auto endpos = (pair + 1)->second;
-
-        auto prevdocpos = 0;
-        while (positions.tellg() < endpos + posstart) {
+        while(docs_left--) {
             auto pos = read_vnum(positions);
-            prevdocpos += pos;
-            output.emplace_back(pair->first, prevdocpos);
+            out.emplace_back(df.document_id,pos);
         }
     }
-    return output;
+
+    return out;
+
 }
 
 
 
 
-static const std::vector<DocumentPositionPointer> a = {
+static std::vector<DocumentPositionPointer> a = {
         {1,    2},
         {9,    123212},
         {9,    12433232},
@@ -89,7 +74,22 @@ static const std::vector<DocumentPositionPointer> a = {
 };
 
 #include "DocumentsTier.h"
+#include <ctime>
+
+void Push_random_test() {
+    std::srand(std::time(nullptr));
+    int num = 100000;
+    uint maxint = 1<<31;
+    while(num--) {
+        a.emplace_back(std::rand() % (num/9) + (1<<25), std::rand() % maxint);
+    }
+    std::sort(a.begin(), a.end());
+}
+
+
 void Compactor_test() {
+    Push_random_test();
+
     WordIndexEntry wie {
         "test", a
     };
@@ -98,14 +98,10 @@ void Compactor_test() {
     MultiDocumentsTier::serialize(wie, frequencies);
 
     MultiDocumentsTier::TierIterator ti(frequencies);
-    while(true) {
-        auto i = ti.read_next();
-        if(!i) break;
-        for(auto& [a, b] : i.value()) std::cout<<a<<" "<<b<<"\n";
-    }
-    auto test = PositionsSearcher::read_positions_all(positions);
+    auto sd = ti.read_all();
+    auto test = PositionsSearcher::read_positions_all(positions, sd);
 
     std::cout<<positions.str();
     assert(test == a);
-//    exit(0);
+    exit(0);
 }

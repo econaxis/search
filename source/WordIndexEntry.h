@@ -21,7 +21,7 @@ struct WordIndexEntry_v2 {
     std::string key;
     uint32_t term_pos;
 
-    std::vector<DocumentFrequency> files;
+    SingleDocumentsTier files;
 };
 
 struct WordIndexEntry_unsafe {

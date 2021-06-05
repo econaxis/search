@@ -7,6 +7,11 @@
 
 #include <istream>
 #include "DocumentPositionPointer.h"
+#include "DocumentFrequency.h"
+
+using SingleDocumentsTier = std::vector<DocumentFrequency>;
+
+
 
 struct WordIndexEntry;
 
@@ -17,7 +22,8 @@ namespace PositionsSearcher {
 
     std::vector<uint32_t> read_positions(std::istream &positions, uint32_t document_id);
 
-    std::vector<DocumentPositionPointer> read_positions_all(std::istream &positions);
+    std::vector<DocumentPositionPointer>
+    read_positions_all(std::istream &positions, const SingleDocumentsTier &freq_list);
 };
 
 

@@ -5,7 +5,7 @@
 #include "ContiguousAllocator.h"
 #include <mutex>
 
-template<typename T, int block_size = 7, int num_blocks = 10000>
+template<typename T, int block_size = 1, int num_blocks = 1>
 class CustomAllocatedVec {
     static ContiguousAllocator<T> &get_default_allocator() {
         static ContiguousAllocator<T> def{block_size, num_blocks};

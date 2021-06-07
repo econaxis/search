@@ -8,12 +8,13 @@
 #include "CustomAllocatedVec.h"
 #include "DocumentFrequency.h"
 #include <type_traits>
-#include <set>
+#include <unordered_map>
+#include "DocumentsTier.h"
 
 
 class TopDocs {
 
-    std::set<std::string> included_terms;
+    std::unordered_map<std::string, MultiDocumentsTier::TierIterator> included_terms;
 
 
     // From https://en.cppreference.com/w/cpp/algorithm/merge
@@ -28,11 +29,31 @@ public:
 
     TopDocs() = default;
 
-    void add_term_str(std::string term) {
-        included_terms.insert(std::move(term));
+    void add_term_str(std::string term, MultiDocumentsTier::TierIterator it) {
+        included_terms.emplace(std::move(term), std::move(it));
     }
 
-    TopDocs(std::vector<DocumentFrequency> docs): docs(std::move(docs)) {};
+    bool extend_from_tier_iterator(int how_many = 2) {
+        std::vector<DocumentFrequency> extended;
+        bool has_more = false;
+        for (auto &[k, ti] : included_terms) {
+            for (int i = 0; i < how_many; i++) {
+                auto n = ti.read_next();
+                if (n) {
+                    extended.insert(extended.end(), n->begin(), n->end());
+                    has_more = true;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        std::sort(extended.begin(), extended.end());
+        append_multi(TopDocs(extended));
+        return has_more;
+    }
+
+    TopDocs(std::vector<DocumentFrequency> docs) : docs(std::move(docs)) {};
 
     TopDocs(value_type *ibegin, value_type *iend) {
         docs.resize(iend - ibegin);
@@ -41,13 +62,17 @@ public:
 
     // Iterator implementations to match the interface of vector
     // Also allows for range based for loops, which is convenient.
-    std::vector<value_type>::const_iterator begin() const {return docs.begin();}
+    std::vector<value_type>::const_iterator begin() const { return docs.begin(); }
+
     std::vector<value_type>::const_iterator end() const { return docs.end(); }
+
     std::vector<value_type>::iterator begin() { return docs.begin(); }
+
     std::vector<value_type>::iterator end() { return docs.end(); }
+
     std::size_t size() const { return docs.size(); }
 
-    void append_multi(const TopDocs& other);
+    void append_multi(TopDocs other);
 
 
     void merge_similar_docs();
@@ -88,8 +113,6 @@ OutputIt TopDocs::merge_combine(InputIt1 first1, InputIt1 last1, InputIt2 first2
     d_first = std::copy(first2, last2, d_first);
     return d_first;
 }
-
-
 
 
 #endif //GAME_TOPDOCS_H

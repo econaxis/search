@@ -63,6 +63,7 @@ using namespace std::chrono;
 
 
 using DPP = DocumentFrequency;
+
 static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *value) {
     auto prediction = end;
 
@@ -112,7 +113,7 @@ bool unroll_binary_search_find(const DocumentFrequency *&begin, const DocumentFr
 }
 
 
-TopDocs backup(std::vector<TopDocs> &results) {
+TopDocs DocumentsMatcher::backup(std::vector<TopDocs> &results) {
     for (int i = 1; i < results.size(); i++) {
         results[0].append_multi(results[i]);
     }
@@ -150,6 +151,8 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
     if (!min_docs.size()) return TopDocs();
 
+    TopDocs accepted_list;
+
     // Cutoff must be above the average score.
     for (auto pair = min_docs.begin(); pair != min_docs.end(); pair++) {
         bool exists_in_all = true;
@@ -177,24 +180,12 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
         if (exists_in_all) {
             // Walk vector again to find the positions.
-            pair->document_freq = acculumated_score;
-        } else {
-            pair->document_freq = 0;
-            pair->document_id = 0; // Exclude from view.
+            accepted_list.docs.emplace_back(pair->document_id, acculumated_score);
         }
     }
 
     exit_loop:;
 
-    min_docs.docs.erase(std::remove(min_docs.begin(), min_docs.end(), DocumentFrequency{0, 0}),
-                        min_docs.docs.end());
-
-    if (min_docs.size() < 5) {
-        return min_docs;
-//        return backup(results);
-    } else {
-        return min_docs;
-
-    }
+    return accepted_list;
 
 }

@@ -1,6 +1,6 @@
 #include "TopDocs.h"
 
-void TopDocs::append_multi(const TopDocs &other) {
+void TopDocs::append_multi(TopDocs other) {
     const auto iend = other.end();
     const auto ibegin = other.begin();
 
@@ -17,7 +17,7 @@ void TopDocs::append_multi(const TopDocs &other) {
     docs = std::move(merged);
 
     // Copy their included terms to ours.
-    for(auto& str : other.included_terms) add_term_str(str);
+    for(auto& [str, iter] : other.included_terms) add_term_str(std::move(str), std::move(iter));
 }
 
 

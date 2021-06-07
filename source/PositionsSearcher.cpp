@@ -59,7 +59,7 @@ void Push_random_test() {
     std::srand(std::time(nullptr));
     int num = 100000;
     uint maxint = 1 << 31;
-    while (num--) {
+    while (num-- > 10) {
         a.emplace_back(std::rand() % (num / 9) + (1 << 25), std::rand() % maxint);
     }
     std::sort(a.begin(), a.end());

@@ -35,7 +35,11 @@ struct SyncedQueue {
     }
 
     std::pair<std::string, DocIDFilePair> pop() {
-        auto l = get_lock();
+        std::unique_lock lock(mutex);
+        cv.wait(lock, [&] {
+            return this->size();
+        });
+
         auto b = queue.front();
         queue.pop();
         cv.notify_one();
@@ -77,13 +81,13 @@ void queue_produce_file_contents_tar(std::vector<std::string> tarnames, SyncedQu
 
 void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepairs,
                                  std::atomic_bool &done_flag) {
-    for (auto &entry : filepairs) {
-        auto abspath = data_files_dir / "data" / entry.file_name;
+    for (auto entry = filepairs.begin(); entry != filepairs.end(); entry++) {
+        auto abspath = data_files_dir / "data" / entry->file_name;
 
         auto len = fs::file_size(abspath);
         std::ifstream file(abspath);
         if (!file.is_open()) {
-            std::cout << "Couldn't open file " << entry.file_name << "!\n";
+            std::cout << "Couldn't open file " << entry->file_name << "!\n";
         }
         std::string filestr(len, ' ');
         file.read(filestr.data(), len);
@@ -92,19 +96,23 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
             filestr.append((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         }
 
-        if (contents.size() > 10) {
+
+        if (entry->document_id % 50 == 0) {
+            std::cout << (entry - filepairs.begin() - contents.size()) * 100 / filepairs.size() << "%\r" << std::flush;
+        }
+
+        if (contents.size() > 30) {
             contents.wait_for([&] {
                 return contents.size() <= 3;
             });
         }
 
-        contents.push({std::move(filestr), entry});
+        contents.push({std::move(filestr), *entry});
     }
+    std::cout<<"Finished\n";
     done_flag = true;
     contents.cv.notify_all();
 }
-
-
 
 
 int GeneralIndexer::read_some_files() {
@@ -113,7 +121,6 @@ int GeneralIndexer::read_some_files() {
 
     if (fp.empty()) return 0;
 
-    int progress_counter = 0;
 
     // Vector of arrays with custom allocator.
     SortedKeysIndex a1;
@@ -133,14 +140,17 @@ int GeneralIndexer::read_some_files() {
 
 
     std::vector<std::future<SortedKeysIndex>> threads;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         threads.emplace_back(std::async(std::launch::async | std::launch::deferred, [&]() {
-            return thread_process_files(done_flag, file_contents, fp.size() / 4);
+            return thread_process_files(done_flag, file_contents, fp.size() / 5);
         }));
     }
-    for(auto& fut : threads) {
-        a1.merge_into(fut.get());
-    }
+    for (auto &fut : threads) a1.merge_into(fut.get());
+
+
+    filecontentproducer.join();
+
+
     if (a1.get_index().empty()) return 0;
 
     a1.sort_and_group_shallow();
@@ -151,11 +161,11 @@ int GeneralIndexer::read_some_files() {
     a1.sort_and_group_all();
     persist_indices(a1, fp);
 
-    filecontentproducer.join();
     return 1;
 }
 
-SortedKeysIndex GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file) {
+SortedKeysIndex
+GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file) {
     SortedKeysIndex a1;
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
@@ -165,13 +175,11 @@ SortedKeysIndex GeneralIndexer::thread_process_files(const std::atomic_bool &don
         }
         if (!file_contents.size() && done_flag) continue;
         auto[contents, docidfilepair] = file_contents.pop();
-        if (docidfilepair.document_id % 50 == 0) {
-            std::cout << "Done " <<  docidfilepair.document_id * 100 / each_max_file << "% "<< "\r"
-                      << std::flush;
-        }
 
         auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
         a1.merge_into(SortedKeysIndex(temp));
+
+        if (a1.get_index().size() % 100 == 0) a1.sort_and_group_shallow();
     }
     return a1;
 }
@@ -196,6 +204,8 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     IndexFileLocker::move_all(temp_suffix, suffix);
 
     // Put these new indices to the index_files list
-    std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
-    index_file << suffix << "\n";
+    IndexFileLocker::do_lambda([&] {
+        std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
+        index_file << suffix << "\n";
+    });
 }

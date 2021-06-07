@@ -51,5 +51,5 @@ Base26Num Base26Num::fiddle(int idx) {
     auto absidx = std::abs(idx);
     int sign = !std::signbit(idx);
 
-    return Base26Num{num + sign * alphabet_pow[MAX_CHARS - (idx - 1) - 1]};
+    return Base26Num{num + sign * alphabet_pow[MAX_CHARS - (absidx - 1) - 1]};
 }

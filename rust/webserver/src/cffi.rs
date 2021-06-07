@@ -23,6 +23,7 @@ pub mod ctypes {
 
 // Contains FFI declarations for connecting to C++ shared library.
 #[link(name = "c-search-abi")]
+#[allow(unused)]
 extern "C" {
     fn create_ifstream_from_path(path: *const c_char) -> *const ctypes::ifstream;
     fn deallocate_ifstream(stream: *const ctypes::ifstream);

@@ -6,6 +6,8 @@
 namespace DocumentsMatcher {
 
     TopDocs AND(std::vector<TopDocs> &results);
+
+    TopDocs backup(std::vector<TopDocs> &results);
 };
 
 #endif //GAME_DOCUMENTSMATCHER_H

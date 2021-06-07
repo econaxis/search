@@ -35,12 +35,13 @@ std::pair<Compactor::ReadState, std::string> Compactor::read_and_mark_line(std::
 
     if (line[0] == '#') {
         return read_and_mark_line(stream); //recursive call.
+    } else if (line.size() > 150) {
+        return read_and_mark_line(stream);
     } else {
         stream.seekg(before_read);
         insert_string(stream, "# joined ");
-//         Use up the remaining line
+        //         Use up the remaining line
         std::getline(stream, line);
-
         return {Compactor::ReadState::GOOD, line};
     }
 }
@@ -93,7 +94,7 @@ struct StreamSet {
     }
 };
 
-static constexpr auto BUFLEN = 4000;
+static constexpr auto BUFLEN = 4096000;
 
 template<typename T>
 StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
@@ -105,12 +106,11 @@ StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
             .positions = T(make_path("positions", suffix), inoutbinary),
             .filemap = T(make_path("filemap", suffix), inoutbinary),
             .suffix = suffix,
-            .buffer = std::make_unique<char[]>(BUFLEN * 3)
+            .buffer = std::make_unique<char[]>(BUFLEN * 5)
     };
 
-    set.frequencies.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 0, BUFLEN);
-    set.terms.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 1, BUFLEN);
-    set.positions.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 2, BUFLEN);
+    set.positions.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 0, BUFLEN);
+    set.frequencies.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 4, BUFLEN);
 
     if (!(set.frequencies.good() && set.terms.good() && set.positions.good())) {
         throw std::runtime_error("File cannot be opened " + suffix);
@@ -153,7 +153,7 @@ std::optional<std::string> Compactor::compact_two_files() {
     std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
     assert(index_file);
 
-    assert(IndexFileLocker::acquire_lock_file());
+    IndexFileLocker::acquire_lock_file();
     auto[err_state1, suffix] = read_and_mark_line(index_file);
     auto[err_state2, suffix1] = read_and_mark_line(index_file);
     IndexFileLocker::release_lock_file();
@@ -271,8 +271,10 @@ std::optional<std::string> Compactor::compact_two_files() {
     // Move all to valid location
     IndexFileLocker::move_all(temp_joined_suffix, joined_suffix);
 
-    index_file.seekg(0, std::ios_base::end);
-    index_file << joined_suffix << "\n";
+    IndexFileLocker::do_lambda([&] {
+        index_file.seekg(0, std::ios_base::end);
+        index_file << joined_suffix << "\n";
+    });
 
     return joined_suffix;
 }
@@ -283,12 +285,13 @@ std::optional<std::string> Compactor::compact_two_files() {
 void Compactor::test_makes_sense(const std::string &suffix) {
     using namespace Serializer;
 
-    std::cout << "Checking " << suffix << "\n";
-
     auto streamset = open_file_set<std::ifstream>(suffix);
     int len = streamset.getlen();
 
     auto filepairs = Serializer::read_filepairs(streamset.filemap);
+
+    assert(filepairs.size());
+    return;
 
 
     assert(streamset.frequencies && streamset.terms && streamset.positions);
@@ -300,7 +303,7 @@ void Compactor::test_makes_sense(const std::string &suffix) {
 
     WordIndexEntry wie;
 
-    if (len < 5) {
+    if (len < 5 || filepairs.size() < 5) {
         std::cout << "Too short, failed compactation detected\n";
 
         fs::remove(make_path("frequencies", suffix));
@@ -312,7 +315,6 @@ void Compactor::test_makes_sense(const std::string &suffix) {
     while (check_stream_good(dynamic_cast<std::ifstream &>(streamset.terms)) && len > 0) {
         len--;
 
-        if (len % 1000 == 0) std::cout << "Checking " << len << "\r";
         wie = read_work_index_entry(streamset.frequencies, streamset.terms, streamset.positions);
         assert(std::is_sorted(wie.files.begin(), wie.files.end()));
 //        serialize_work_index_entry(ofrequencies, oterms, opositions, wie);

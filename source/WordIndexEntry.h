@@ -68,6 +68,9 @@ inline bool operator<(const WordIndexEntry &elem1, const WordIndexEntry &elem2) 
     return elem1.key < elem2.key;
 }
 
+inline bool operator==(const WordIndexEntry &elem1, const WordIndexEntry &elem2) {
+    return elem1.key == elem2.key;
+}
 
 inline bool operator<(const WordIndexEntry &elem1, const std::string &str) {
     return elem1.key < str;

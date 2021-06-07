@@ -1,4 +1,3 @@
-
 use std::{borrow::Borrow, hash::Hash, fs::{File, self}, iter::FromIterator, ffi::OsStr, collections::{HashSet}, path::{Path}};
 use std::path::{PathBuf};
 use std::{env};
@@ -47,7 +46,7 @@ mod public_ffi {
 
     #[no_mangle]
     pub extern fn drop_name_database(ndb: *mut NamesDatabase) {
-        unsafe { &mut *ndb }.drop_serialize();
+        // unsafe { &mut *ndb }.drop_serialize();
         unsafe { Box::from_raw(ndb) };
     }
 }
@@ -66,18 +65,11 @@ impl NamesDatabase {
         let json_path = metadata_path.join("file_metadata.msgpack");
         let json_length = fs::metadata(&json_path).map_or(0, |x| x.len());
         let mut processed_data: HashSet<DocIDFilePair> = {
-            if json_length > 5 {
-                println!("Reusing same JSON metadata file");
-                let cur_data = Self::from_json_file(&json_path);
-                cur_data.set
-            } else {
-                fs::File::create(&json_path).expect(&*format!("Couldn't open file {:?}", json_path));
-                HashSet::new()
-            }
+            fs::File::create(&json_path).expect(&*format!("Couldn't open file {:?}", json_path));
+            let empty_hash = HashSet::new();
+            HashSet::from_iter(generate_metadata_for_dir(metadata_path, &empty_hash))
         };
 
-        // Check if there's any new filemaps that we haven't indexed last round.
-        processed_data.extend(generate_metadata_for_dir(metadata_path, &processed_data));
 
         Self {
             set: processed_data,
@@ -115,7 +107,7 @@ impl NamesDatabase {
         self.set.serialize(&mut serializer).unwrap();
 
         // Serialize for debugging
-        pretty_serialize(&self.set);
+        // pretty_serialize(&self.set);
     }
 }
 

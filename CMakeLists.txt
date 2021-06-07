@@ -42,7 +42,7 @@ target_link_libraries(search PRIVATE search-share general-indexer)
 
 
 add_executable(compactor source/compactor/main.cpp)
-target_link_libraries(compactor PRIVATE search-share pthread)
+target_link_libraries(compactor PRIVATE search-share pthread ${CMAKE_BINARY_DIR}/libnamesdb.so)
 
 target_link_options(compactor PRIVATE -rdynamic)
 
@@ -57,6 +57,7 @@ add_custom_target(rust-library
 add_custom_target(rust-web-server
         DEPENDS
         "${CMAKE_SOURCE_DIR}/rust/src")
+
 
 file(GLOB rust-sources rust/webserver/src/*)
 

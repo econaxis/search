@@ -13,9 +13,11 @@ namespace Tokenizer {
 
 
 
-    int clean_token_to_index(std::string &token);
+    bool clean_token_to_index(std::string &token);
 
     void remove_punctuation(std::string &a);
+
+    void remove_bad_words(std::vector<std::string> &terms);
 };
 
 

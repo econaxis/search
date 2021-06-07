@@ -81,9 +81,9 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
 }
 
 
-std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string& term) const {
+std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string &term) const {
     auto loc = seek_to_term(term);
-    if(!loc) {
+    if (!loc) {
         return {};
     } else {
         positions.seekg(loc->positions_pos);
@@ -98,8 +98,8 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     auto file_start = std::lower_bound(index->begin(), index->end(), Base26Num(term).fiddle(-3)) - 1;
     auto file_end = std::upper_bound(index->begin(), index->end(), Base26Num(term).fiddle(3)) + 1;
 
-    file_start = std::clamp(file_start, index->begin(), index->end());
-    file_end = std::clamp(file_end, index->begin(), index->end());
+    file_start = std::clamp(file_start, index->begin(), index->end() - 1);
+    file_end = std::clamp(file_end, index->begin(), index->end() - 1);
 
     if (file_start == index->end()) { return TopDocs{}; }
 
@@ -140,17 +140,22 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 //            auto wie = Serializer::read_work_index_entry_v2(frequencies, terms);
 
             auto wie = WordIndexEntry_v2{preview.key, static_cast<uint32_t>(terms.tellg()), {}};
-            wie.files = MultiDocumentsTier::TierIterator(frequencies).read_all();
+            MultiDocumentsTier::TierIterator ti(frequencies);
+            wie.files = ti.read_next().value();
 
 
             auto tot_score = 0;
-            for(auto& i : wie.files) {
+            for (auto &i : wie.files) {
                 float coefficient = std::log10(i.document_freq + 0.8) + 0.75;
                 i.document_freq = coefficient * score;
                 tot_score += i.document_freq;
             }
             TopDocs td(std::move(wie.files));
-            td.add_term_str(preview.key);
+
+            // Only add high-ranking terms to the continue-list (for further retrieval if AND can't generate 50+ results)
+            if (preview.key == term || score >= 10) {
+                td.add_term_str(preview.key, ti);
+            }
             output_score.emplace_back(tot_score / td.size());
             outputs.push_back(std::move(td));
         }
@@ -171,6 +176,8 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 }
 
 TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &terms) {
+
+
     std::vector<TopDocs> all_outputs;
     all_outputs.reserve(terms.size());
 
@@ -178,7 +185,36 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
         auto result = this->search_one_term(terms[i]);
         all_outputs.push_back(std::move(result));
     };
-    return DocumentsMatcher::AND(all_outputs);
+
+    auto all_outputs_backup = all_outputs;
+
+    auto ret = DocumentsMatcher::AND(all_outputs);
+    auto max_iter = 20;
+    while (ret.size() < 30 && max_iter--) {
+        bool has_more = false;
+        for (auto &td : all_outputs) {
+            if (td.extend_from_tier_iterator(3)) has_more = true;
+        }
+
+        if (!has_more) break;
+        else {
+            ret = DocumentsMatcher::AND(all_outputs);
+        }
+    }
+    static int backup = 0;
+    static int nobackup = 0;
+    static float avgmaxiter = 10;
+    if (ret.size() < 4) {
+        backup++;
+        avgmaxiter += max_iter;
+        avgmaxiter /= 2;
+
+        return DocumentsMatcher::backup(all_outputs_backup);
+    } else {
+        nobackup++;
+        if(nobackup % 20 == 0) std::cout<<backup<<" "<<nobackup<<" "<<avgmaxiter<<"\n";
+        return ret;
+    }
 }
 
 

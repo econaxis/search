@@ -16,9 +16,11 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
     using namespace std::chrono;
 
     int NUM_SEARCHES = std::atoi(argv[1]);
-    std::uniform_int_distribution<uint> dist(0, 5460); // ASCII table codes for normal characters.
+    std::uniform_int_distribution<uint> dist(0, 5825); // ASCII table codes for normal characters.
     auto t1 = high_resolution_clock::now();
-    for (int i = 0; i < NUM_SEARCHES; i++) {
+    int i = 0;
+    while(i < NUM_SEARCHES) {
+
         auto temp = (std::string) strings[dist(randgen())];
         auto temp1 = (std::string) strings[dist(randgen())];
         auto temp2 = (std::string) strings[dist(randgen())];
@@ -31,14 +33,18 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
         Tokenizer::clean_token_to_index(temp3);
         Tokenizer::clean_token_to_index(temp4);
 
-        std::vector<std::string> query{temp, temp1, temp2, temp3};
+        std::vector<std::string> query{temp, temp1};
         TopDocs result;
-        if (temp.size() && temp1.size() && temp2.size() && temp3.size()) {
-            result = SortedKeysIndexStub::collection_merge_search(index, query);
+        if (temp.size() && temp1.size()) {
+            Tokenizer::remove_bad_words(query);
+            if(!query.empty()) {
+                result = SortedKeysIndexStub::collection_merge_search(index, query);
+                i++;
+            }
         }
 //        ResultsPrinter::print_results(result, filemap, query);
 
-        if (i % 300 == 0)
+        if (i % 30 == 0)
             std::cout << "Matched " << result.size() << " files for " << temp1 << " " << temp << " "
                       << i * 100 / NUM_SEARCHES << "%\n" << std::flush;
     }
@@ -117,5 +123,6 @@ int main(int argc, char *argv[]) {
             }
         }
         auto temp1 = SortedKeysIndexStub::collection_merge_search(indices, terms);
+        std::cout<<temp1.size()<<" matches found\n";
     }
 }

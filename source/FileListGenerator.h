@@ -1,21 +1,33 @@
 #ifndef GAME_FILELISTGENERATOR_H
 #define GAME_FILELISTGENERATOR_H
+
 #include <filesystem>
 #include "rust-interface.h"
 #include <iostream>
+#include <memory>
+#include "DocIDFilePair.h"
 #include "IndexFileLocker.h"
-constexpr unsigned int MAX_FILES_PER_INDEX = 200000;
+
+constexpr unsigned int MAX_FILES_PER_INDEX = 300000;
 
 namespace FileListGenerator {
     using FilePairs = std::vector<DocIDFilePair>;
     namespace fs = std::filesystem;
-    NamesDatabase *ndb = nullptr;
+    std::shared_ptr<NamesDatabase *> ndb{nullptr};
 
 
-    void init_names_db() {
-        assert(ndb == nullptr);
-        auto path = indice_files_dir;
-        ndb = new_name_database(path.c_str());
+    NamesDatabase *get_ndb() {
+        if (!ndb || *ndb == nullptr) {
+            auto path = indice_files_dir;
+            ndb = std::make_shared<NamesDatabase *>(new_name_database(path.c_str()));
+        }
+        return *ndb;
+    }
+
+    void delete_names_db() {
+        if(*ndb != nullptr) {
+            drop_name_database(*ndb);
+        }
     }
 
     // Creates a list of files to index.
@@ -30,15 +42,14 @@ namespace FileListGenerator {
         FilePairs filepairs;
         auto dir_it = std::ifstream(data_files_dir / "total-files-list");
 
-        if (!ndb) init_names_db();
         uint32_t doc_id_counter = 1;
         std::string file_line;
         auto cur_size = 0ULL;
         // Consume directory iterator and push into filepairs vector
         while (std::getline(dir_it, file_line)) {
-            if(search_name_database(ndb, file_line.c_str())) {
+            if (search_name_database(get_ndb(), file_line.c_str())) {
                 // Entry already exists.
-                std::cout<<"Entry "<<file_line<<" already exists\r";
+                std::cout << "Entry " << file_line << " already exists\r";
                 continue;
             }
             auto abspath = data_files_dir / "data" / file_line;
@@ -47,20 +58,18 @@ namespace FileListGenerator {
 //                continue;
 //            }
 
-            cur_size+= fs::file_size(abspath);
+            cur_size += fs::file_size(abspath);
 
             // Don't index more than x files or 500MB at a time.
-            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > 2e9) break;
+            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > 500e6) break;
             doc_id_counter++;
-//            register_temporary_file(ndb, file_line.c_str(), doc_id_counter);
+            register_temporary_file(get_ndb(), file_line.c_str(), doc_id_counter);
             filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});
         }
-        // Clean up NDB and serialize changes (temporary file registrations) to disk.
-        drop_name_database(ndb);
-        ndb = nullptr;
+        std::cout << filepairs.size() << " files will be processed\n";
 
         // Release the lock file.
-	IndexFileLocker::release_lock_file();
+        IndexFileLocker::release_lock_file();
 
         return filepairs;
     }

@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
 
+add_subdirectory(kvdb)
+
+
 add_compile_options(-march=native -Wall -Wno-ignored-attributes -fno-inline -Wno-sign-compare)
 
 add_library(general-indexer SHARED
@@ -91,3 +94,4 @@ add_custom_command(
 add_dependencies(general-indexer rust-library)
 add_dependencies(rust-library c-search-abi)
 add_dependencies(rust-server c-search-abi)
+

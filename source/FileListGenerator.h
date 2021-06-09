@@ -30,6 +30,11 @@ namespace FileListGenerator {
         }
     }
 
+    std::ifstream& get_index_files() {
+        static auto dir_it = std::ifstream(data_files_dir / "total-files-list");
+        return dir_it;
+    }
+
     // Creates a list of files to index.
     // Deals with multiple processes by acquiring a lock file.
     FilePairs from_file() {
@@ -40,7 +45,8 @@ namespace FileListGenerator {
         }
 
         FilePairs filepairs;
-        auto dir_it = std::ifstream(data_files_dir / "total-files-list");
+
+        auto& dir_it = get_index_files();
 
         uint32_t doc_id_counter = 1;
         std::string file_line;

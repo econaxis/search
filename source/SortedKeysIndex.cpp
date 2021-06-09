@@ -38,10 +38,12 @@ void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
     assert(std::is_sorted(other.index.begin(), other.index.end()));
 
     std::vector<WordIndexEntry> newmerged;
-    newmerged.reserve(other.get_index().size() + index.size());
-    merge_combine(other.index.begin(), other.index.end(), index.begin(), index.end(), std::back_inserter(newmerged));
+    newmerged.resize(other.get_index().size() + index.size());
+    auto final = merge_combine(other.index.begin(), other.index.end(), index.begin(), index.end(), newmerged.begin());
+    newmerged.resize(final- newmerged.begin());
 
     assert(std::is_sorted(newmerged.begin(), newmerged.end()));
+    other.index.clear();
     index = newmerged;
 }
 

@@ -35,15 +35,20 @@ struct SyncedQueue {
     }
 
     std::pair<std::string, DocIDFilePair> pop() {
+        using namespace std::chrono_literals;
         std::unique_lock lock(mutex);
-        cv.wait(lock, [&] {
+        auto ret = cv.wait_for(lock, 10s, [&] {
             return this->size();
         });
 
-        auto b = queue.front();
-        queue.pop();
-        cv.notify_one();
-        return b;
+        if (ret) {
+            auto b = queue.front();
+            queue.pop();
+            cv.notify_one();
+            return b;
+        } else {
+            return {"", {0, 0}};
+        }
     }
 
     template<typename Callable>
@@ -109,7 +114,7 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
 
         contents.push({std::move(filestr), *entry});
     }
-    std::cout<<"Finished\n";
+    std::cout << "Finished\n";
     done_flag = true;
     contents.cv.notify_all();
 }
@@ -166,7 +171,7 @@ int GeneralIndexer::read_some_files() {
 
 SortedKeysIndex
 GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file) {
-    SortedKeysIndex a1;
+    std::array<SortedKeysIndex, 100> reducer{};
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
             file_contents.wait_for([&]() {
@@ -176,12 +181,24 @@ GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQu
         if (!file_contents.size() && done_flag) continue;
         auto[contents, docidfilepair] = file_contents.pop();
 
-        auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
-        a1.merge_into(SortedKeysIndex(temp));
+        if(contents.empty()) break;
 
-        if (a1.get_index().size() % 100 == 0) a1.sort_and_group_shallow();
+        auto should_insert = std::min_element(reducer.begin(), reducer.end(), [](auto &i, auto &b) {
+            return i.get_index().size() < b.get_index().size();
+        });
+        auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
+
+        should_insert->merge_into(std::move(temp));
+
     }
-    return a1;
+
+    for (int i = 1; i < reducer.size(); i++) {
+        reducer[0].merge_into(std::move(reducer[i]));
+
+        assert(reducer[i].get_index().size() == 0);
+    }
+
+    return reducer[0];
 }
 
 

@@ -17,14 +17,14 @@ static Out merge_combine(InputIt first1, InputIt last1, InputIt first2, InputIt 
             return std::copy(first1, last1, d_first);
         }
         if (*first2 < *first1) {
-            *d_first = *first2;
+            *d_first = std::move(*first2);
             ++first2;
         } else if (*first1 < *first2) {
-            *d_first = *first1;
+            *d_first = std::move(*first1);
             ++first1;
         } else {
             std::move(first2->files.begin(), first2->files.end(), std::back_inserter(first1->files));
-            *d_first = *first1;
+            *d_first = std::move(*first1);
             ++first1;
             ++first2;
         }
@@ -44,7 +44,7 @@ void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
 
     assert(std::is_sorted(newmerged.begin(), newmerged.end()));
     other.index.clear();
-    index = newmerged;
+    index = std::move(newmerged);
 }
 
 

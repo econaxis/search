@@ -50,6 +50,8 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
 }
 
 
+
+
 static std::vector<DocumentPositionPointer> a {};
 
 #include "DocumentsTier.h"

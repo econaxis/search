@@ -94,7 +94,7 @@ struct StreamSet {
     }
 };
 
-static constexpr auto BUFLEN = 4096000;
+static constexpr std::size_t BUFLEN = 5e5;
 
 template<typename T>
 StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
@@ -116,7 +116,7 @@ StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
         throw std::runtime_error("File cannot be opened " + suffix);
     }
     if (!create) {
-        int len = Serializer::read_vnum(set.frequencies);
+        [[maybe_unused]] int len = Serializer::read_vnum(set.frequencies);
         assert(Serializer::read_vnum(set.terms) == len && Serializer::read_vnum(set.positions) == len);
     }
     return set;
@@ -144,7 +144,7 @@ std::vector<DocIDFilePair> merge_filepairs(std::vector<DocIDFilePair> &one, std:
 }
 
 bool check_file(StreamSet<std::fstream> &str) {
-    return fs::file_size(make_path("positions", str.suffix)) < 1e9;
+    return fs::file_size(make_path("positions", str.suffix)) < 3e9;
 }
 
 // todo: copy-on-write mechanism

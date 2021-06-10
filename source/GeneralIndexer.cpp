@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <iostream>
 #include <queue>
+#include <execinfo.h>
 
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
@@ -47,7 +48,7 @@ struct SyncedQueue {
             cv.notify_one();
             return b;
         } else {
-            return {"", {0, 0}};
+            return {"", {0, ""}};
         }
     }
 
@@ -106,7 +107,7 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
             std::cout << (entry - filepairs.begin() - contents.size()) * 100 / filepairs.size() << "%\r" << std::flush;
         }
 
-        if (contents.size() > 30) {
+        if (contents.size() > 100) {
             contents.wait_for([&] {
                 return contents.size() <= 3;
             });
@@ -152,7 +153,6 @@ int GeneralIndexer::read_some_files() {
     }
     for (auto &fut : threads) a1.merge_into(fut.get());
 
-
     filecontentproducer.join();
 
 
@@ -169,9 +169,18 @@ int GeneralIndexer::read_some_files() {
     return 1;
 }
 
+static void print_backtrace() {
+    void *tracePtrs[15];
+    auto count = backtrace(tracePtrs, 15);
+    char **funcnames = backtrace_symbols(tracePtrs, count);
+    for (int i = 0; i < count; i++) {
+        std::cout << "Backtrace: " << funcnames[i] << "\n";
+    }
+}
+
 SortedKeysIndex
 GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file) {
-    std::array<SortedKeysIndex, 100> reducer{};
+    std::array<SortedKeysIndex, 20> reducer{};
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
             file_contents.wait_for([&]() {
@@ -181,7 +190,7 @@ GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQu
         if (!file_contents.size() && done_flag) continue;
         auto[contents, docidfilepair] = file_contents.pop();
 
-        if(contents.empty()) break;
+        if (contents.empty()) break;
 
         auto should_insert = std::min_element(reducer.begin(), reducer.end(), [](auto &i, auto &b) {
             return i.get_index().size() < b.get_index().size();
@@ -194,11 +203,12 @@ GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQu
 
     for (int i = 1; i < reducer.size(); i++) {
         reducer[0].merge_into(std::move(reducer[i]));
-
         assert(reducer[i].get_index().size() == 0);
     }
-
+    std::cout << "Done merging\n";
     return reducer[0];
+//    reducer[0].sort_and_group_all();
+
 }
 
 

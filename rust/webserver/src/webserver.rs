@@ -153,9 +153,6 @@ pub fn get_server(state: ApplicationState) -> BoxFuture<'static, Result<(), hype
         // service_fn converts our function into a `Service`
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                tokio::spawn(async {
-                    println!("Spawned task");
-                });
                 // Since this inner closure is called everytime a request10.1145/1277741.1277774 is made (from the same TCP connection),
                 // have to clone the state again.
                 route_request(req, state.clone())

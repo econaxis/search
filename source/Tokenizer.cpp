@@ -45,9 +45,9 @@ std::vector<WordPos> clean_string(std::string &file) {
             continue;
         } else if (is_in_word) {
             if (!std::isalpha(file[i])) {
-                // Limit word length to 10;
-                if (i - last_end > 10) {
-                    last_end = i - 10;
+                // Limit word length to 50;
+                if (i - last_end > 50) {
+                    last_end = i - 50;
                 }
 
                 if (!check_stop_words(file, last_end, i)) {

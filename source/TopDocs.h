@@ -33,6 +33,12 @@ public:
         included_terms.emplace(std::move(term), std::move(it));
     }
 
+    auto find_terms(const std::string& term) -> std::optional<decltype(included_terms.begin())> {
+        auto it =  included_terms.find(term);
+        if (it == included_terms.end()) return std::nullopt;
+        else return it;
+    }
+
     bool extend_from_tier_iterator(int how_many = 2) {
         std::vector<DocumentFrequency> extended;
         bool has_more = false;

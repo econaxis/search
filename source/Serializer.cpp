@@ -245,7 +245,7 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
     assert(frequencies.tellg() == 0 && terms.tellg() == 0);
 
     auto num_entries = Serializer::read_vnum(frequencies);
-    auto num_entries1 = Serializer::read_vnum(terms);
+    [[maybe_unused]] auto num_entries1 = Serializer::read_vnum(terms);
 
     // Make sure the file isn't corrupted, we're getting some meaningful checks.
     assert(num_entries == num_entries1);

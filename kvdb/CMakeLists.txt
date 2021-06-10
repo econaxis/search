@@ -12,6 +12,6 @@ add_executable(mdb_dump lmdb/mdb_dump.c)
 target_link_libraries(mdb_dump PRIVATE lmdb)
 
 
-add_executable(kvdb source/main.cpp)
+add_executable(kvdb source/main.cpp source/Database.cpp source/Database.h)
 target_link_libraries(kvdb PRIVATE lmdb)
 target_include_directories(kvdb PRIVATE . source)

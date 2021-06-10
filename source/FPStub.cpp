@@ -4,7 +4,13 @@
 #include <filesystem>
 #include "FPStub.h"
 
+#include <algorithm>
+#include <robin_hood/robin_hood.h>
+
+
 FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
+    buffer = std::make_unique<char[]>(3000);
+    stream.rdbuf()->pubsetbuf(buffer.get(), 3000);
     int sz = Serializer::read_vnum(stream);
     diffvec.reserve(sz / 16 + 1);
 
@@ -13,17 +19,26 @@ FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
             diffvec.push_back(stream.tellg());
         }
         auto dfp = Serializer::read_pair(stream);
+        map.emplace(dfp.document_id, dfp.file_name);
     }
 }
 
 std::string FPStub::query(int docid) const {
-    int loc = std::max(docid / interval - 1, 0);
-    if(loc > diffvec.size()) {
-        return "File not found";
-    }
-    int dloc = diffvec.at(loc);
+//    auto loc = std::lower_bound(diffvec.begin(), diffvec.end(), docid) - 1;
+//    if(loc >= diffvec.end() || loc < diffvec.begin()) {
+//        return "File not found";
+//    }
 
-    stream.seekg(dloc);
+
+
+    auto it =  map.find(docid);
+    if(it == map.end()) return "File not found";
+    else return it->second;
+
+    auto loc = diffvec.begin() + docid - 1;
+
+    if(loc >= diffvec.end()) return "File not found";
+    stream.seekg(*loc);
 
     auto pair = Serializer::read_pair(stream);
 

@@ -83,6 +83,8 @@ public:
     SortedKeysIndexStub(const SortedKeysIndexStub& other);
 
     std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
+
+    void rerank_by_positions(std::vector<TopDocs> &tds, const std::vector<std::string> &terms);
 };
 
 

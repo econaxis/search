@@ -7,6 +7,7 @@
 #include "SortedKeysIndexStub.h"
 #include <immintrin.h>
 #include <chrono>
+#include "DocumentsMatcher.h"
 
 namespace fs = std::filesystem;
 
@@ -38,7 +39,7 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
         if (temp.size() && temp1.size()) {
             Tokenizer::remove_bad_words(query);
             if(!query.empty()) {
-                result = SortedKeysIndexStub::collection_merge_search(index, query);
+                result = DocumentsMatcher::collection_merge_search(index, query);
                 i++;
             }
         }
@@ -122,7 +123,7 @@ int main(int argc, char *argv[]) {
                 terms.emplace_back(s);
             }
         }
-        auto temp1 = SortedKeysIndexStub::collection_merge_search(indices, terms);
+        auto temp1 = DocumentsMatcher::collection_merge_search(indices, terms);
         std::cout<<temp1.size()<<" matches found\n";
     }
 }

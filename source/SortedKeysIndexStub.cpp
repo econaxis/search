@@ -94,17 +94,11 @@ std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term
 }
 
 
-void SortedKeysIndexStub::rerank_by_positions(std::vector<TopDocs> &tds, const std::vector<std::string> &terms) {
-    assert(tds.size() == terms.size());
-
+void SortedKeysIndexStub::rerank_by_positions(std::vector<TopDocs> &tds) {
     std::vector<std::vector<DocumentPositionPointer>> positions_list(tds.size());
 
     for (int i = 0; i < tds.size(); i++) {
-        if(tds[i].find_terms(terms[i])) {
-            positions_list[i] = get_positions_for_term(terms[i]);
-        } else {
-            return;
-        }
+        positions_list[i] = get_positions_for_term(tds[i].get_first_term());
     }
 
 }
@@ -169,9 +163,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             TopDocs td(std::move(wie.files));
 
             // Only add high-ranking terms to the continue-list (for further retrieval if AND can't generate 50+ results)
-            if (preview.key == term || (tot_score > 5000 && score >= 7) || (tot_score > 1000 && score >= 15)) {
-                td.add_term_str(preview.key, ti);
-            }
+            if (preview.key == term) td.add_term_str(preview.key, ti);
             output_score.emplace_back(tot_score / td.size());
             outputs.push_back(std::move(td));
         }
@@ -226,6 +218,7 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
         return DocumentsMatcher::backup(all_outputs_backup);
     } else {
         nobackup++;
+        rerank_by_positions(all_outputs);
         if (nobackup % 100 == 0) std::cout << backup << " " << nobackup << " " << avgmaxiter << "\n";
 
 
@@ -255,20 +248,7 @@ SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix),
 }
 
 
-TopDocs SortedKeysIndexStub::collection_merge_search(std::vector<SortedKeysIndexStub> &indices,
-                                                     const std::vector<std::string> &search_terms) {
-    TopDocs joined;
-    for (auto &index : indices) {
-        auto temp = index.search_many_terms(search_terms);
 
-        if (temp.size()) joined.append_multi(temp);
-    };
-
-    joined.merge_similar_docs();
-    joined.sort_by_frequencies();
-
-    return joined;
-}
 
 SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : filemap(
         indice_files_dir / ("filemap-" + other.suffix)) {
@@ -288,4 +268,9 @@ SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : fil
 
     // Copy other suffix to this suffix.
     suffix = other.suffix;
+}
+
+std::string SortedKeysIndexStub::query_filemap(uint32_t docid) const {
+    auto ret =  filemap.query(docid);
+    return ret;
 }

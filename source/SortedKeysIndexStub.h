@@ -55,36 +55,31 @@ private:
     std::string suffix;
     FPStub filemap;
     std::unique_ptr<char[]> buffer;
-
-    std::optional<PreviewResult> seek_to_term(const std::string &term) const;
-
-public:
-
-    SortedKeysIndexStub(std::string suffix);
-
-    static constexpr int MAX_FILES_PER_TERM = 100000;
     std::shared_ptr<const std::vector<StubIndexEntry>> index;
 
 
-    std::string query_filemap(uint32_t docid) const {
-        auto ret =  filemap.query(docid);
-        return ret;
-    }
-
-    SortedKeysIndexStub() = default;
-
+    std::optional<PreviewResult> seek_to_term(const std::string &term) const;
+    std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
     TopDocs search_one_term(const std::string &term) const;
+    void rerank_by_positions(std::vector<TopDocs> &tds);
+
+public:
+
+    explicit SortedKeysIndexStub(std::string suffix);
+
+    static constexpr int MAX_FILES_PER_TERM = 100000;
+
+
+    std::string query_filemap(uint32_t docid) const;
+
 
     TopDocs search_many_terms(const std::vector<std::string> &terms);
 
-    static TopDocs
-    collection_merge_search(std::vector<SortedKeysIndexStub> &indices, const std::vector<std::string> &search_terms);
+
 
     SortedKeysIndexStub(const SortedKeysIndexStub& other);
 
-    std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
 
-    void rerank_by_positions(std::vector<TopDocs> &tds, const std::vector<std::string> &terms);
 };
 
 

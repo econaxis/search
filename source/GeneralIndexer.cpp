@@ -169,15 +169,6 @@ int GeneralIndexer::read_some_files() {
     return 1;
 }
 
-static void print_backtrace() {
-    void *tracePtrs[15];
-    auto count = backtrace(tracePtrs, 15);
-    char **funcnames = backtrace_symbols(tracePtrs, count);
-    for (int i = 0; i < count; i++) {
-        std::cout << "Backtrace: " << funcnames[i] << "\n";
-    }
-}
-
 SortedKeysIndex
 GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file) {
     std::array<SortedKeysIndex, 20> reducer{};

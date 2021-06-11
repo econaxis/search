@@ -189,3 +189,18 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
     return accepted_list;
 
 }
+
+TopDocs DocumentsMatcher::collection_merge_search(std::vector<SortedKeysIndexStub> &indices,
+                                                     const std::vector<std::string> &search_terms) {
+    TopDocs joined;
+    for (auto &index : indices) {
+        auto temp = index.search_many_terms(search_terms);
+
+        if (temp.size()) joined.append_multi(temp);
+    };
+
+    joined.merge_similar_docs();
+    joined.sort_by_frequencies();
+
+    return joined;
+}

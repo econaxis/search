@@ -33,10 +33,8 @@ public:
         included_terms.emplace(std::move(term), std::move(it));
     }
 
-    auto find_terms(const std::string& term) -> std::optional<decltype(included_terms.begin())> {
-        auto it =  included_terms.find(term);
-        if (it == included_terms.end()) return std::nullopt;
-        else return it;
+    const std::string& get_first_term() const {
+        return included_terms.begin()->first;
     }
 
     bool extend_from_tier_iterator(int how_many = 2) {

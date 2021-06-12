@@ -9,9 +9,11 @@
 
 
 FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
+    assert(stream);
+
     buffer = std::make_unique<char[]>(3000);
     stream.rdbuf()->pubsetbuf(buffer.get(), 3000);
-    int sz = Serializer::read_vnum(stream);
+    uint sz = Serializer::read_vnum(stream);
     diffvec.reserve(sz / 16 + 1);
 
     for (int i = 0; i < sz; i++) {
@@ -24,18 +26,16 @@ FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
 }
 
 std::string FPStub::query(int docid) const {
-//    auto loc = std::lower_bound(diffvec.begin(), diffvec.end(), docid) - 1;
-//    if(loc >= diffvec.end() || loc < diffvec.begin()) {
-//        return "File not found";
-//    }
+    auto loc = std::lower_bound(diffvec.begin(), diffvec.end(), docid) - 1;
+    if(loc >= diffvec.end() || loc < diffvec.begin()) {
+        return "File not found";
+    }
 
 
 
     auto it =  map.find(docid);
-    if(it == map.end()) return "File not found";
-    else return it->second;
-
-    auto loc = diffvec.begin() + docid - 1;
+//    if(it == map.end()) return "File not found";
+//    else return it->second;
 
     if(loc >= diffvec.end()) return "File not found";
     stream.seekg(*loc);
@@ -49,6 +49,8 @@ std::string FPStub::query(int docid) const {
     if(pair.document_id != docid) {
         return "File not found";
     }
+
+    assert(pair.file_name == it->second);
 
     return pair.file_name;
 }

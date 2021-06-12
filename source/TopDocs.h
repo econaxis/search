@@ -33,8 +33,10 @@ public:
         included_terms.emplace(std::move(term), std::move(it));
     }
 
-    const std::string& get_first_term() const {
-        return included_terms.begin()->first;
+    const std::optional<const std::string*> get_first_term() const {
+        if(included_terms.empty()) {
+            return std::nullopt;
+        } else return &included_terms.begin()->first;
     }
 
     bool extend_from_tier_iterator(int how_many = 2) {

@@ -33,7 +33,7 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
     float divider = 5.F / (ls - ss + 5);
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
-            return i * i * divider;
+            return 0;
         }
     }
     const auto score = ss * ss * divider;
@@ -98,7 +98,13 @@ void SortedKeysIndexStub::rerank_by_positions(std::vector<TopDocs> &tds) {
     std::vector<std::vector<DocumentPositionPointer>> positions_list(tds.size());
 
     for (int i = 0; i < tds.size(); i++) {
-        positions_list[i] = get_positions_for_term(tds[i].get_first_term());
+
+        if (auto it = tds[i].get_first_term(); it) {
+            positions_list[i] = get_positions_for_term(**it);
+        } else {
+            break;
+        }
+
     }
 
 }
@@ -156,7 +162,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
             auto tot_score = 0;
             for (auto &i : wie.files) {
-                float coefficient = std::log10(i.document_freq + 0.8) + 0.75;
+                float coefficient = std::log10(i.document_freq + 3) * 2 - 0.204;
                 i.document_freq = coefficient * score;
                 tot_score += i.document_freq;
             }
@@ -171,13 +177,9 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
     if (outputs.empty()) return TopDocs{};
 
-    int score_cutoff = compute_average(output_score.begin(), output_score.end());
     for (int i = 1; i < outputs.size(); i++) {
-
         // Append only words that are above average score, as determined by cutoff.
-        if (output_score[i] >= score_cutoff) {
-            outputs[0].append_multi(outputs[i]);
-        }
+        outputs[0].append_multi(outputs[i]);
     }
     return outputs[0];
 }
@@ -218,7 +220,7 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
         return DocumentsMatcher::backup(all_outputs_backup);
     } else {
         nobackup++;
-        rerank_by_positions(all_outputs);
+//        rerank_by_positions(all_outputs);
         if (nobackup % 100 == 0) std::cout << backup << " " << nobackup << " " << avgmaxiter << "\n";
 
 
@@ -248,8 +250,6 @@ SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix),
 }
 
 
-
-
 SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : filemap(
         indice_files_dir / ("filemap-" + other.suffix)) {
     frequencies = std::ifstream(indice_files_dir / ("frequencies-" + other.suffix), std::ios_base::binary);
@@ -271,6 +271,6 @@ SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : fil
 }
 
 std::string SortedKeysIndexStub::query_filemap(uint32_t docid) const {
-    auto ret =  filemap.query(docid);
+    auto ret = filemap.query(docid);
     return ret;
 }

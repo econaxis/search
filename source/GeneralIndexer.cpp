@@ -11,13 +11,14 @@
 #include <condition_variable>
 #include <iostream>
 #include <queue>
-#include <execinfo.h>
+#include "compactor/Compactor.h"
 
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
 
 struct SyncedQueue {
-    std::queue<std::pair<std::string, DocIDFilePair>> queue;
+    using value_type = std::pair<std::string, DocIDFilePair>;
+    std::queue<value_type> queue;
     mutable std::mutex mutex;
     std::condition_variable cv;
 
@@ -29,9 +30,18 @@ struct SyncedQueue {
         return queue.size();
     };
 
-    void push(std::pair<std::string, DocIDFilePair> elem) {
+    void push(value_type elem) {
         auto l = get_lock();
         queue.push(std::move(elem));
+        cv.notify_one();
+    }
+
+    void push_multi(const auto begin, const auto end) {
+        auto l = get_lock();
+
+        for (auto i = begin; i < end; i++) {
+            queue.push(*i);
+        }
         cv.notify_one();
     }
 
@@ -87,6 +97,8 @@ void queue_produce_file_contents_tar(std::vector<std::string> tarnames, SyncedQu
 
 void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepairs,
                                  std::atomic_bool &done_flag) {
+    std::vector<SyncedQueue::value_type> thread_local_holder;
+
     for (auto entry = filepairs.begin(); entry != filepairs.end(); entry++) {
         auto abspath = data_files_dir / "data" / entry->file_name;
 
@@ -107,13 +119,18 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
             std::cout << (entry - filepairs.begin() - contents.size()) * 100 / filepairs.size() << "%\r" << std::flush;
         }
 
-        if (contents.size() > 100) {
+        if (contents.size() > 200) {
             contents.wait_for([&] {
-                return contents.size() <= 3;
+                return contents.size() <= 10;
             });
         }
 
-        contents.push({std::move(filestr), *entry});
+        thread_local_holder.emplace_back(std::move(filestr), *entry);
+
+        if(thread_local_holder.size() >= 20) {
+            contents.push_multi(thread_local_holder.begin(), thread_local_holder.end());
+            thread_local_holder.clear();
+        }
     }
     std::cout << "Finished\n";
     done_flag = true;
@@ -121,11 +138,11 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
 }
 
 
-int GeneralIndexer::read_some_files() {
+std::optional<std::string> GeneralIndexer::read_some_files() {
     // Vector of file paths and generated, incremental ID.
     const FilePairs fp = FileListGenerator::from_file();
 
-    if (fp.empty()) return 0;
+    if (fp.empty()) return std::nullopt;
 
 
     // Vector of arrays with custom allocator.
@@ -146,9 +163,9 @@ int GeneralIndexer::read_some_files() {
 
 
     std::vector<std::future<SortedKeysIndex>> threads;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 4; i++) {
         threads.emplace_back(std::async(std::launch::async | std::launch::deferred, [&]() {
-            return thread_process_files(done_flag, file_contents, fp.size() / 5);
+            return thread_process_files(done_flag, file_contents, fp.size() / 4);
         }));
     }
     for (auto &fut : threads) a1.merge_into(fut.get());
@@ -156,7 +173,7 @@ int GeneralIndexer::read_some_files() {
     filecontentproducer.join();
 
 
-    if (a1.get_index().empty()) return 0;
+    if (a1.get_index().empty()) return std::nullopt;
 
     a1.sort_and_group_shallow();
 
@@ -164,9 +181,7 @@ int GeneralIndexer::read_some_files() {
     // This could take a long time (many sorts), and there's no memory-conservation advantage,
     // so we only need to do it at the end.
     a1.sort_and_group_all();
-    persist_indices(a1, fp);
-
-    return 1;
+    return persist_indices(a1, fp);
 }
 
 SortedKeysIndex
@@ -175,7 +190,7 @@ GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQu
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
             file_contents.wait_for([&]() {
-                return file_contents.size() > 3 || done_flag;
+                return file_contents.size() > 10 || done_flag;
             });
         }
         if (!file_contents.size() && done_flag) continue;
@@ -189,22 +204,18 @@ GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQu
         auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
 
         should_insert->merge_into(std::move(temp));
-
     }
 
     for (int i = 1; i < reducer.size(); i++) {
         reducer[0].merge_into(std::move(reducer[i]));
-        assert(reducer[i].get_index().size() == 0);
+        assert(reducer[i].get_index().empty());
     }
-    std::cout << "Done merging\n";
     return reducer[0];
-//    reducer[0].sort_and_group_all();
-
 }
 
 
-void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
-                                     const FilePairs &filepairs) {// Multiple indices output possible. Check them.
+std::string GeneralIndexer::persist_indices(const SortedKeysIndex &master,
+                                            const FilePairs &filepairs) {// Multiple indices output possible. Check them.
 
     std::string suffix = random_b64_str(5);
     if (std::filesystem::is_regular_file(
@@ -226,4 +237,6 @@ void GeneralIndexer::persist_indices(const SortedKeysIndex &master,
         std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
         index_file << suffix << "\n";
     });
+
+    return suffix;
 }

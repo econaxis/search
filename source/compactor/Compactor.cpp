@@ -146,32 +146,15 @@ std::vector<DocIDFilePair> merge_filepairs(std::vector<DocIDFilePair> &one, std:
 bool check_file(StreamSet<std::fstream> &str) {
     return fs::file_size(make_path("positions", str.suffix)) < 3e9;
 }
+using namespace Serializer;
 
-// todo: copy-on-write mechanism
-std::optional<std::string> Compactor::compact_two_files() {
-    using namespace Serializer;
+std::optional<std::string> Compactor::compact_two_files(std::string& suffix, std::string& suffix1) {
     std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
-    assert(index_file);
-
-    IndexFileLocker::acquire_lock_file();
-    auto[err_state1, suffix] = read_and_mark_line(index_file);
-    auto[err_state2, suffix1] = read_and_mark_line(index_file);
-    IndexFileLocker::release_lock_file();
-
-
-    assert(err_state2 == ReadState::GOOD && err_state1 == err_state2);
 
 
     auto streamset = open_file_set<std::fstream>(suffix);
     auto streamset1 = open_file_set<std::fstream>(suffix1);
 
-    if (!check_file(streamset) || !check_file(streamset1)) {
-        // Re-add it back to index files.
-        index_file.seekg(0, std::ios_base::end);
-        index_file << suffix << "\n";
-        index_file << suffix1 << "\n";
-        return "CONTINUE";
-    }
 
     auto joined_suffix = suffix + "-" + suffix1;
     auto temp_joined_suffix = "TEMP-" + joined_suffix;
@@ -277,6 +260,35 @@ std::optional<std::string> Compactor::compact_two_files() {
     });
 
     return joined_suffix;
+}
+
+
+// todo: copy-on-write mechanism
+std::optional<std::string> Compactor::compact_two_files() {
+    using namespace Serializer;
+    std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
+    assert(index_file);
+
+    IndexFileLocker::acquire_lock_file();
+    auto[err_state1, suffix] = read_and_mark_line(index_file);
+    auto[err_state2, suffix1] = read_and_mark_line(index_file);
+    IndexFileLocker::release_lock_file();
+
+
+    assert(err_state2 == ReadState::GOOD && err_state1 == err_state2);
+
+    auto streamset = open_file_set<std::fstream>(suffix);
+    auto streamset1 = open_file_set<std::fstream>(suffix1);
+
+    if (!check_file(streamset) || !check_file(streamset1)) {
+        // Re-add it back to index files.
+        index_file.seekg(0, std::ios_base::end);
+        index_file << suffix << "\n";
+        index_file << suffix1 << "\n";
+        return "CONTINUE";
+    }
+
+    return compact_two_files(suffix, suffix1);
 }
 
 

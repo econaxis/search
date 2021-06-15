@@ -33,9 +33,9 @@ struct WordIndexEntry {
 
     void merge_into(const WordIndexEntry& other) {
         assert(other.key == key);
-        assert(files.back().document_id < other.files.front().document_id);
         assert(std::is_sorted(files.begin(), files.end()));
         assert(std::is_sorted(other.files.begin(), other.files.end()));
+        assert(files.back().document_id < other.files.front().document_id);
 
         files.insert(files.end(), other.files.begin(), other.files.end());
     }

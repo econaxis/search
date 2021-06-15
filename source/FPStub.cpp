@@ -5,18 +5,14 @@
 #include "FPStub.h"
 
 #include <algorithm>
-#include <robin_hood/robin_hood.h>
 
 
 FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
     assert(stream);
-
-    buffer = std::make_unique<char[]>(3000);
-    stream.rdbuf()->pubsetbuf(buffer.get(), 3000);
-    uint sz = Serializer::read_vnum(stream);
+    auto sz = Serializer::read_vnum(stream);
     diffvec.reserve(sz / 16 + 1);
 
-    for (int i = 0; i < sz; i++) {
+    for (auto i = 0; i < sz; i++) {
         if (i % interval == 0) {
             diffvec.push_back(stream.tellg());
         }
@@ -34,8 +30,8 @@ std::string FPStub::query(int docid) const {
 
 
     auto it =  map.find(docid);
-//    if(it == map.end()) return "File not found";
-//    else return it->second;
+    if(it == map.end()) return "File not found";
+    else return it->second;
 
     if(loc >= diffvec.end()) return "File not found";
     stream.seekg(*loc);

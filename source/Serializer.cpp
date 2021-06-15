@@ -176,7 +176,7 @@ int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
 //        num_files = MAX_FILES_PER_TERM;
 //    }
 //
-//    auto *intbuffer = (uint32_t *) buffer;
+//    auto *intbuffer = (uint32_t *) fstream_cache_buffer;
 //    read_packed_u32_chunk(frequencies, num_files * 2, intbuffer);
 //
 //

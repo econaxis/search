@@ -680,7 +680,7 @@ static txnid_t mdb_debug_start;
 	 *	@ingroup debug
 	 */
 #define DKBUF_MAXKEYSIZE ((MDB_MAXKEYSIZE) > 0 ? (MDB_MAXKEYSIZE) : 511)
-	/**	A key buffer.
+	/**	A key fstream_cache_buffer.
 	 *	@ingroup debug
 	 *	This is used for printing a hex dump of a key's contents.
 	 */
@@ -1795,7 +1795,7 @@ mdb_dbg_pgno(MDB_page *mp)
 
 /** Display a key in hexadecimal and return the address of the result.
  * @param[in] key the key to display
- * @param[in] buf the buffer to write into. Should always be #DKBUF.
+ * @param[in] buf the fstream_cache_buffer to write into. Should always be #DKBUF.
  * @return The key in hexadecimal form.
  */
 char *
@@ -4814,7 +4814,7 @@ mdb_fopen(const MDB_env *env, MDB_name *fname,
 				(void) fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
 		}
 		if (which == MDB_O_COPY && env->me_psize >= env->me_os_psize) {
-			/* This may require buffer alignment.  There is no portable
+			/* This may require fstream_cache_buffer alignment.  There is no portable
 			 * way to ask how much, so we require OS pagesize alignment.
 			 */
 # ifdef F_NOCACHE	/* __APPLE__ */
@@ -5207,7 +5207,7 @@ mdb_env_excl_lock(MDB_env *env, int *excl)
  * Share and Enjoy!	:-)
  */
 
-/** perform a 64 bit Fowler/Noll/Vo FNV-1a hash on a buffer
+/** perform a 64 bit Fowler/Noll/Vo FNV-1a hash on a fstream_cache_buffer
  * @param[in] val	value to hash
  * @param[in] len	length of value
  * @return 64 bit hash
@@ -5218,7 +5218,7 @@ mdb_hash(const void *val, size_t len)
 	const unsigned char *s = (const unsigned char *) val, *end = s + len;
 	mdb_hash_t hval = 0xcbf29ce484222325ULL;
 	/*
-	 * FNV-1a hash each octet of the buffer
+	 * FNV-1a hash each octet of the fstream_cache_buffer
 	 */
 	while (s < end) {
 		hval = (hval ^ *s++) * 0x100000001b3ULL;
@@ -10158,7 +10158,7 @@ again:
 		}
 		my->mc_wlen[toggle] = 0;
 		toggle ^= 1;
-		/* Return the empty buffer to provider */
+		/* Return the empty fstream_cache_buffer to provider */
 		my->mc_new--;
 		pthread_cond_signal(&my->mc_cond);
 	}
@@ -10167,10 +10167,10 @@ again:
 #undef DO_WRITE
 }
 
-	/** Give buffer and/or #MDB_EOF to writer thread, await unused buffer.
+	/** Give fstream_cache_buffer and/or #MDB_EOF to writer thread, await unused fstream_cache_buffer.
 	 *
 	 * @param[in] my control structure.
-	 * @param[in] adjust (1 to hand off 1 buffer) | (MDB_EOF when ending).
+	 * @param[in] adjust (1 to hand off 1 fstream_cache_buffer) | (MDB_EOF when ending).
 	 */
 static int ESECT
 mdb_env_cthr_toggle(mdb_copy *my, int adjust)

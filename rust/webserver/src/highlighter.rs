@@ -1,7 +1,7 @@
 use aho_corasick::{AhoCorasickBuilder, AhoCorasick};
 use crate::IndexWorker;
 
-use tracing::{instrument, debug, debug_span};
+use tracing::{instrument, debug, debug_span, error};
 
 
 use serde::{Serialize, Serializer};
@@ -11,7 +11,7 @@ use crate::IndexWorker::ResultsList;
 use std::collections::HashMap;
 
 
-fn highlight_matches(str: &str, aut: &AhoCorasick<u8>) -> Vec<(usize, usize)> {
+fn highlight_matches(str: &str, aut: &AhoCorasick<u16>) -> Vec<(usize, usize)> {
 
 
 
@@ -71,7 +71,7 @@ pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Ve
 
     let aut =  AhoCorasickBuilder::new().ascii_case_insensitive(true)
         .dfa(true)
-        .build_with_size::<u8, _, _>(highlight_words)
+        .build_with_size::<u16, _, _>(highlight_words)
         .expect("Number of terms too large for a `u8` DFA to support");
 
     let _highlight_span = debug_span!("Highlight matches");
@@ -83,12 +83,10 @@ pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Ve
         let _sp = debug_span!("Loading file", file = %path).entered();
         let str = IndexWorker::load_file_to_string(path.as_ref());
 
-        if str.is_none() {
-            continue;
-        }
+        if str.is_none() { continue; }
         let str = str.unwrap();
-        _sp.exit();
         let str = str.as_str();
+        _sp.exit();
 
         // Highlighting done here, we want to measure exact time it takes to highlight.
         let _sp = _highlight_span.enter();
@@ -109,7 +107,7 @@ pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Ve
         if !highlight_hits.is_empty() {
             highlights.push((path.to_owned(), highlight_hits));
         } else {
-            debug!(%path, "Couldn't find any matches");
+            error!(%path, "Couldn't find any matches");
         }
 
         // 10 highlighted files is enough for the first page. We don't need to highlight all.

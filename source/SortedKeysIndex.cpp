@@ -44,6 +44,7 @@ void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
 
     assert(std::is_sorted(newmerged.begin(), newmerged.end()));
     other.index.clear();
+    index.clear();
     index = std::move(newmerged);
 }
 
@@ -87,18 +88,6 @@ void SortedKeysIndex::sort_and_group_all() {
     });
 }
 
-void SortedKeysIndex::check_dups() {
-    for (auto &wie : index) {
-        auto prev = 0;
-        for (auto&[docid, pos] : wie.files) {
-            if (docid * 14344213 + pos == prev) {
-                throw std::runtime_error("Duplicate found");
-            } else {
-                prev = docid * 14344213 + pos;
-            }
-        }
-    }
-}
 
 std::vector<WordIndexEntry> &SortedKeysIndex::get_index() {
     return index;

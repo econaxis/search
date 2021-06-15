@@ -34,7 +34,6 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
 }
 
 #include "DocIDFilePair.h"
-#include <immintrin.h>
 #include "FPStub.h"
 #include "WordIndexEntry.h"
 #include "DocumentPositionPointer.h"
@@ -48,13 +47,11 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
 class SortedKeysIndexStub {
 private:
 
-    mutable std::unique_ptr<__m256[]> alignedbuf;
     mutable std::ifstream frequencies, terms, positions;
-
 
     std::string suffix;
     FPStub filemap;
-    std::unique_ptr<char[]> buffer;
+    std::unique_ptr<char[]> fstream_cache_buffer;
     std::shared_ptr<const std::vector<StubIndexEntry>> index;
 
 
@@ -73,9 +70,7 @@ public:
     std::string query_filemap(uint32_t docid) const;
 
 
-    TopDocs search_many_terms(const std::vector<std::string> &terms);
-
-
+    TopDocs search_many_terms(const std::vector<std::string> &terms) const;
 
     SortedKeysIndexStub(const SortedKeysIndexStub& other);
 

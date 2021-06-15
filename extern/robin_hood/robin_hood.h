@@ -442,7 +442,7 @@ public:
             ROBIN_HOOD_LOG("std::free")
             std::free(ptr);
         } else {
-            ROBIN_HOOD_LOG("add to buffer")
+            ROBIN_HOOD_LOG("add to fstream_cache_buffer")
             add(ptr, numBytes);
         }
     }

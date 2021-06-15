@@ -21,7 +21,7 @@ namespace fs = std::filesystem;
  */
 static unsigned int string_prefix_compare(const std::string &shorter, const std::string &longer) {
     // Score multiplier in case a word matches all (vs. only a prefix match)
-    constexpr float MATCHALL_BONUS = 2;
+    constexpr float MATCHALL_BONUS = 10 / 3;
     // Returns true if shorter is the prefix of longer.
     // e.g. shorter: "str" and longer: "string" returns true.
     auto ls = longer.size();
@@ -30,7 +30,7 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
 
     if (ls < ss) return 0;
 
-    float divider = 5.F / (ls - ss + 5);
+    float divider = 2.F / (ls - ss + 2);
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
             return 0;
@@ -53,6 +53,8 @@ int compute_average(Iterator begin, Iterator end) {
         square += *i * *i;
     }
     sum += end - begin;
+
+    sum *= 1.5;
 
     return square / sum;
 }
@@ -162,14 +164,23 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
             auto tot_score = 0;
             for (auto &i : wie.files) {
-                float coefficient = std::log10(i.document_freq + 3) * 2 - 0.204;
+                float coefficient = std::log10(i.document_freq) + 1;
                 i.document_freq = coefficient * score;
                 tot_score += i.document_freq;
+
+                if(i.document_id == 139155) {
+                    auto test = get_positions_for_term(wie.key);
+                    std::cout<<test.size()<<"139155 REACHED 0X\n";
+                    bool dummy = true;
+                }
             }
             TopDocs td(std::move(wie.files));
 
             // Only add high-ranking terms to the continue-list (for further retrieval if AND can't generate 50+ results)
-            if (preview.key == term) td.add_term_str(preview.key, ti);
+            if (score >= 30) td.add_term_str(preview.key, ti);
+
+            if (preview.key == term) { /* Early return because we matched exactly the term we were looking for.*/ return td; }
+
             output_score.emplace_back(tot_score / td.size());
             outputs.push_back(std::move(td));
         }
@@ -178,14 +189,13 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     if (outputs.empty()) return TopDocs{};
 
     for (int i = 1; i < outputs.size(); i++) {
-        // Append only words that are above average score, as determined by cutoff.
         outputs[0].append_multi(outputs[i]);
     }
     return outputs[0];
 }
 
 
-TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &terms) {
+TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &terms) const {
     std::vector<TopDocs> all_outputs;
     all_outputs.reserve(terms.size());
 
@@ -194,6 +204,11 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
         all_outputs.push_back(std::move(result));
     };
 
+    // We'll do operations on all_outputs, adding to it lesser-frequencied documents.
+    // If we can't find enough documents that match an AND boolean query, then we'll
+    // switch to the backup OR boolean query. When we do OR, we only want the top documents matching.
+    // Thus, we copy this and back it up, in case we need to do an OR on the original,
+    // high-frequencied document set.
     auto all_outputs_backup = all_outputs;
 
     auto ret = DocumentsMatcher::AND(all_outputs);
@@ -209,27 +224,15 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
             ret = DocumentsMatcher::AND(all_outputs);
         }
     }
-    static int backup = 0;
-    static int nobackup = 0;
-    static float avgmaxiter = 10;
-    if (ret.size() < 10) {
-        backup++;
-        avgmaxiter += max_iter;
-        avgmaxiter /= 2;
-
-        return DocumentsMatcher::backup(all_outputs_backup);
-    } else {
-        nobackup++;
+    if (ret.size() < 10) return DocumentsMatcher::backup(all_outputs_backup);
+    else {
 //        rerank_by_positions(all_outputs);
-        if (nobackup % 100 == 0) std::cout << backup << " " << nobackup << " " << avgmaxiter << "\n";
-
-
         return ret;
     }
 }
 
 
-constexpr std::size_t BUFLEN = 100000;
+constexpr std::size_t BUFLEN = 1000;
 
 SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix),
                                                                filemap((indice_files_dir / ("filemap-" + suffix))) {
@@ -238,12 +241,9 @@ SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix),
     assert(this->frequencies && this->terms);
 
 
-    // Setup read cache buffer
-    buffer = std::make_unique<char[]>(BUFLEN);
-    this->frequencies.rdbuf()->pubsetbuf(buffer.get(), BUFLEN);
-
-    // Setup documents holding location buffer (aligned).
-    alignedbuf = std::make_unique<__m256[]>(MAX_FILES_PER_TERM * 2 / 8);
+    // Setup read cache fstream_cache_buffer
+    fstream_cache_buffer = std::make_unique<char[]>(BUFLEN);
+    this->frequencies.rdbuf()->pubsetbuf(fstream_cache_buffer.get(), BUFLEN);
 
     index = std::make_shared<const std::vector<StubIndexEntry>>(
             Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms));
@@ -257,12 +257,9 @@ SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : fil
     positions = std::ifstream(indice_files_dir / ("positions-" + other.suffix), std::ios_base::binary);
     assert(this->frequencies && this->terms);
 
-    // Setup read cache buffer
-    buffer = std::make_unique<char[]>(BUFLEN);
-    this->frequencies.rdbuf()->pubsetbuf(buffer.get(), BUFLEN);
-
-    // Setup documents holding location buffer (aligned).
-    alignedbuf = std::make_unique<__m256[]>(MAX_FILES_PER_TERM * 2 / 8);
+    // Setup read cache fstream_cache_buffer
+    fstream_cache_buffer = std::make_unique<char[]>(BUFLEN);
+    this->frequencies.rdbuf()->pubsetbuf(fstream_cache_buffer.get(), BUFLEN);
 
     index = other.index;
 
@@ -271,6 +268,5 @@ SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : fil
 }
 
 std::string SortedKeysIndexStub::query_filemap(uint32_t docid) const {
-    auto ret = filemap.query(docid);
-    return ret;
+    return filemap.query(docid);
 }

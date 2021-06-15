@@ -49,12 +49,8 @@
 
         if (signal.aborted || mycounter!==curcounter) return;
 
-        latency = window.performance.now();
         let highlight = await fetch("/highlight/?id=" + id, {signal});
-        latency = window.performance.now() - latency;
         highlight = await highlight.json();
-
-
 
         for (v in highlight) {
             for (hg in highlight[v]) {

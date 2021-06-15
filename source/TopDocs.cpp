@@ -17,7 +17,7 @@ void TopDocs::append_multi(TopDocs other) {
     docs = std::move(merged);
 
     // Copy their included terms to ours.
-    for(auto& [str, iter] : other.included_terms) add_term_str(std::move(str), std::move(iter));
+    for(auto& [str, iter] : other.included_terms) add_term_str(str, iter);
 }
 
 

@@ -18,6 +18,8 @@ namespace Compactor {
     std::optional<std::string> compact_two_files();
 
     void test_makes_sense(const std::string& suffix);
+
+    std::optional<std::string> compact_two_files(std::string &one, std::string &two);
 };
 
 

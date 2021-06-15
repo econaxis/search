@@ -17,6 +17,7 @@ use tracing::{debug,Level, span};
 use crate::elapsed_span;
 use crate::highlighter::{highlight_files, serialize_response_to_json};
 use crate::IndexWorker::{IndexWorker, ResultsList};
+use std::fs;
 
 pub struct HighlightRequest {
     query: Vec<String>,
@@ -124,6 +125,10 @@ fn parse_url_query<'a>(uri: &'a hyper::Uri, query_term: &str) -> Result<Vec<&'a 
     Ok(query)
 }
 
+fn return_index_html() -> Result<Response<Body>, io::Error> {
+    let idx_html = fs::read_to_string("../website/index.html")?;
+    Ok(Response::builder().body(idx_html.into()).unwrap())
+}
 
 async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Result<Response<Body>, io::Error> {
     let uri = req.uri().path();
@@ -135,6 +140,8 @@ async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Resul
         let q = parse_url_query(req.uri(), "id=")?.into_iter().next().ok_or(make_err("ID not found"))?;
         let q: u32 = q.parse().map_err(|_| make_err(&*format!("Couldn't parse int: {}", q)))?;
         highlight_handler(data.deref(), q).await
+    } else if uri == "/" || uri == "/index"{
+        return_index_html()
     } else {
         Err(io::Error::new(ErrorKind::Other, format!("no matching path found for {}", uri)))
     }

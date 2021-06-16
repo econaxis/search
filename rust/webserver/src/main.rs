@@ -51,10 +51,14 @@ fn open_index_files() -> Vec<String> {
     let i_f = File::open(i_fpath).unwrap();
     let bufreader = BufReader::new(i_f);
 
-    bufreader.lines().map(|l| {
+    bufreader.lines().filter_map(|l| {
         let mut l = l.unwrap();
-        l.push('\0');
-        l
+        if l.chars().next().map(|c| c != '#').unwrap_or(false) {
+            l.push('\0');
+            Some(l)
+        } else {
+            None
+        }
     }).collect()
 }
 
@@ -69,7 +73,7 @@ fn main() -> io::Result<()> {
     let chunk_size = indices.len() / 4;
 
     let iw: Vec<_> = indices.chunks(chunk_size).filter_map(|chunk| {
-        chunk.get(0).map(|c| c != "#").and_then(|x| x.then(|| IndexWorker::IndexWorker::new(chunk)))
+            Some(IndexWorker::IndexWorker::new(chunk))
     }).collect();
 
     let appstate = webserver::ApplicationState {

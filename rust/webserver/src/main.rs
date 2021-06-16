@@ -68,14 +68,14 @@ fn main() -> io::Result<()> {
 
     let chunk_size = indices.len() / 4;
 
-    let iw: Vec<_> = indices.chunks(chunk_size).map(|chunk| {
-        IndexWorker::IndexWorker::new(chunk)
+    let iw: Vec<_> = indices.chunks(chunk_size).filter_map(|chunk| {
+        chunk.get(0).map(|c| c != "#").and_then(|x| x.then(|| IndexWorker::IndexWorker::new(chunk)))
     }).collect();
 
     let appstate = webserver::ApplicationState {
         iw,
         highlighting_jobs: Arc::new(Default::default()),
-        jobs_counter: Default::default()
+        jobs_counter: Default::default(),
     };
 
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();

@@ -28,15 +28,15 @@ fn make_err(str: &str) -> io::Error {
     io::Error::new(io::ErrorKind::Other, str)
 }
 
-pub struct ApplicationState<'a> {
-    pub iw: Vec<IndexWorker<'a>>,
+pub struct ApplicationState {
+    pub iw: Vec<IndexWorker>,
     pub highlighting_jobs: Arc<Mutex<HashMap<u32, HighlightRequest>>>,
     pub jobs_counter: AtomicU32,
 }
 
-unsafe impl<'a> Send for ApplicationState<'a> {}
+unsafe impl<'a> Send for ApplicationState {}
 
-async fn broadcast_query<'a>(indices: &[IndexWorker<'a>], query: &[String]) -> ResultsList {
+async fn broadcast_query<'a>(indices: &[IndexWorker], query: &[String]) -> ResultsList {
     let futures_list: Vec<_> = indices.iter().map(|iw| {
         iw.send_query_async(query)
     }).collect();
@@ -60,7 +60,7 @@ fn clear_highlight_tasks(cur_docid: u32, highlight_queue: &mut HashMap<u32, High
     }
 }
 
-async fn highlight_handler<'a>(data: &ApplicationState<'a>, highlightid: u32) -> Result<Response<Body>, io::Error> {
+async fn highlight_handler<'a>(data: &ApplicationState, highlightid: u32) -> Result<Response<Body>, io::Error> {
     let (query, files) = {
         let jobs = data.highlighting_jobs.lock().await;
         let jobrequest = jobs.get(&highlightid).ok_or(make_err(&*format!("highlight request id {} not found", highlightid)))?;
@@ -82,7 +82,7 @@ async fn highlight_handler<'a>(data: &ApplicationState<'a>, highlightid: u32) ->
 }
 
 
-async fn handle_request<'a>(data: &ApplicationState<'a>, query: &[String]) -> Result<Response<Body>, io::Error> {
+async fn handle_request<'a>(data: &ApplicationState, query: &[String]) -> Result<Response<Body>, io::Error> {
     debug!(?query, "Started processing for ");
     let starttime = elapsed_span::new_span();
 
@@ -127,7 +127,7 @@ fn return_index_html() -> Result<Response<Body>, io::Error> {
     Ok(Response::builder().body(idx_html.into()).unwrap())
 }
 
-async fn route_request<'a>(req: Request<Body>, data: Arc<ApplicationState<'a>>) -> Result<Response<Body>, io::Error> {
+async fn route_request<'a>(req: Request<Body>, data: Arc<ApplicationState>) -> Result<Response<Body>, io::Error> {
     let uri = req.uri().path();
     if uri.starts_with("/search") {
         let q = parse_url_query(req.uri(), "q=")?;
@@ -145,7 +145,7 @@ async fn route_request<'a>(req: Request<Body>, data: Arc<ApplicationState<'a>>) 
 }
 
 
-pub fn get_server(state: ApplicationState<'static>) -> BoxFuture<'static, Result<(), hyper::Error>> {
+pub fn get_server(state: ApplicationState) -> BoxFuture<'static, Result<(), hyper::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
 
     let state = Arc::from(state);

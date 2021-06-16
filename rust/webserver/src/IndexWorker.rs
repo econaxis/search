@@ -23,14 +23,13 @@ struct SharedState {
     pub waker: Option<std::task::Waker>,
 }
 
-pub struct IndexWorker<'a> {
+pub struct IndexWorker {
     thread_handle: Option<std::thread::JoinHandle<()>>,
     indices: Arc<Vec<C_SSK>>,
-    suffices: &'a [String],
     sender: Mutex<mpsc::Sender<Option<(Vec<String>, Arc<Mutex<SharedState>>)>>>,
 }
 
-unsafe impl<'a> Send for IndexWorker<'a> {}
+unsafe impl Send for IndexWorker {}
 
 
 #[derive(Clone, Serialize, Default)]
@@ -68,7 +67,7 @@ impl DerefMut for ResultsList {
     }
 }
 
-impl<'a> Clone for IndexWorker<'a> {
+impl Clone for IndexWorker {
     fn clone(&self) -> Self {
         debug!("Cloning IndexWorker");
 
@@ -80,10 +79,9 @@ impl<'a> Clone for IndexWorker<'a> {
 
         let indices = Arc::new(indices);
 
-        let thread_handle = Self::create_thread(receiver, indices.clone(), self.suffices.to_vec());
+        let thread_handle = Self::create_thread(receiver, indices.clone(), Vec::new());
         IndexWorker {
             thread_handle: Some(thread_handle),
-            suffices: self.suffices,
             indices,
             sender: Mutex::new(sender),
         }
@@ -104,8 +102,8 @@ fn str_to_char_char(a: &Vec<String>) -> Vec<CString> {
     strs
 }
 
-impl<'a> IndexWorker<'a> {
-    pub fn new(suffices: &'a [String]) -> Self {
+impl IndexWorker {
+    pub fn new(suffices: Vec<String>) -> Self {
         let (sender, receiver) = mpsc::channel();
 
         let indices: Vec<C_SSK> = suffices.iter().map(|suffix| {
@@ -116,10 +114,9 @@ impl<'a> IndexWorker<'a> {
         let indices = Arc::new(indices);
 
         let thread_indices = indices.clone();
-        let thread_handle = Self::create_thread(receiver, thread_indices, suffices.to_vec());
+        let thread_handle = Self::create_thread(receiver, thread_indices, suffices);
         IndexWorker {
             thread_handle: Some(thread_handle),
-            suffices,
             indices,
             sender: Mutex::new(sender),
         }
@@ -138,7 +135,7 @@ impl<'a> IndexWorker<'a> {
                     let chars: Vec<*const c_char> = chars.iter().map(|x| x.as_ptr()).collect();
                     let chars: *const *const c_char = chars.as_ptr();
 
-                    let mut outputvec = VecDPP::new();
+                    let outputvec = VecDPP::new();
                     let indices_ptrptr: Vec<*const cffi::ctypes::SortedKeysIndexStub> = thread_indices.iter().map(|x| *x.as_ref()).collect();
 
 
@@ -170,7 +167,10 @@ impl<'a> IndexWorker<'a> {
                         // then it will lead to this document being included twice.
                         if results.iter().find(|x| x.1 == str).is_none() {
                             debug!(id = i.0, path = %str);
-                            filename_map.lock().unwrap().borrow_mut().insert(str.clone(), suffices[i.2 as usize].clone());
+
+                            if let Some(suf) = suffices.get(i.2 as usize) {
+                                filename_map.lock().unwrap().borrow_mut().insert(str.clone(), suf.clone());
+                            }
                             results.push((i.1, str.to_owned()));
                         }
                     }
@@ -218,7 +218,7 @@ pub fn load_file_to_string(p: &Path) -> Option<String> {
     fs::read_to_string(p).ok()
 }
 
-impl<'a> Drop for IndexWorker<'a> {
+impl Drop for IndexWorker {
     fn drop(&mut self) {
         debug!("Dropping IW");
         self.sender.lock().unwrap().send(None).unwrap();

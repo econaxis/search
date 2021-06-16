@@ -74,7 +74,7 @@ fn main() -> io::Result<()> {
     let chunk_size = indices.len() / 4;
 
     let iw: Vec<_> = indices.chunks(chunk_size).filter_map(|chunk| {
-            Some(IndexWorker::IndexWorker::new(chunk))
+            Some(IndexWorker::IndexWorker::new(Vec::from(chunk)))
     }).collect();
 
     let appstate = webserver::ApplicationState {

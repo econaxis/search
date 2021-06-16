@@ -12,8 +12,6 @@ use std::collections::HashMap;
 
 
 fn highlight_matches(str: &str, aut: &AhoCorasick<u16>) -> Vec<(usize, usize)> {
-
-
     // supports maximum 64 terms of query
     let mut processed = HashMap::<u8, u8>::new();
 

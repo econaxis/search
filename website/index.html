@@ -30,9 +30,6 @@
         abort = new AbortController();
         signal = abort.signal;
 
-        await sleep(50);
-
-
         if (signal.aborted || mycounter !== curcounter) return;
 
         let resp = await fetch("/search/?q=" + str, {signal});

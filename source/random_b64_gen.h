@@ -9,8 +9,10 @@ inline std::mt19937 &randgen() {
     return gen;
 }
 inline constexpr std::string_view b64chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_";
-inline std::string random_b64_str(int length = 200) {
-    std::uniform_int_distribution<uint> dist(0, b64chars.size() - 1); // ASCII table codes for normal characters.
+
+// Generates a random alphanumeric (and some other URL-safe characters)
+inline std::string random_b64_str(int length = 5) {
+    static std::uniform_int_distribution<uint> dist(0, b64chars.size() - 1); // ASCII table codes for normal characters.
 
     std::string output;
     output.reserve(length);

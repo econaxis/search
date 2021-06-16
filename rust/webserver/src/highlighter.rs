@@ -1,7 +1,7 @@
 use aho_corasick::{AhoCorasickBuilder, AhoCorasick};
 use crate::IndexWorker;
 
-use tracing::{instrument, debug, debug_span, error};
+use tracing::{instrument, debug_span, error};
 
 
 use serde::{Serialize, Serializer};
@@ -12,7 +12,6 @@ use std::collections::HashMap;
 
 
 fn highlight_matches(str: &str, aut: &AhoCorasick<u16>) -> Vec<(usize, usize)> {
-
 
 
     // supports maximum 64 terms of query
@@ -35,7 +34,6 @@ fn highlight_matches(str: &str, aut: &AhoCorasick<u16>) -> Vec<(usize, usize)> {
         if processed.iter().all(|(_, &freq)| freq >= 5u8) {
             break;
         }
-
     }
 
     return res;
@@ -69,7 +67,7 @@ pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Ve
     let _starttime = std::time::SystemTime::now();
     let mut highlights = Vec::new();
 
-    let aut =  AhoCorasickBuilder::new().ascii_case_insensitive(true)
+    let aut = AhoCorasickBuilder::new().ascii_case_insensitive(true)
         .dfa(true)
         .build_with_size::<u16, _, _>(highlight_words)
         .expect("Number of terms too large for a `u8` DFA to support");
@@ -80,18 +78,16 @@ pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Ve
         // If we've used up more than 1.5 seconds already, exit and just show the results we already have.
         // if starttime.elapsed().unwrap().as_millis() > 50000 { break; }
 
-        let _sp = debug_span!("Loading file", file = %path).entered();
         let str = IndexWorker::load_file_to_string(path.as_ref());
 
         if str.is_none() { continue; }
         let str = str.unwrap();
-        let str = str.as_str();
-        _sp.exit();
 
         // Highlighting done here, we want to measure exact time it takes to highlight.
-        let _sp = _highlight_span.enter();
-        let matches = highlight_matches(str, &aut);
-        std::mem::drop(_sp);
+        let matches = {
+            let _sp = _highlight_span.enter();
+            highlight_matches(&str, &aut)
+        };
 
 
         let mut highlight_hits = Vec::new();

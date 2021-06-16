@@ -58,6 +58,7 @@ struct C_DocIDFilePair {
     cstr: *const c_char,
 }
 
+#[allow(unused)]
 pub fn get_filepairs<P: AsRef<Path>>(path: P) -> Vec<DocIDFilePair> {
     let mut cvec = unsafe { CVector::new_from_path(path) };
     cvec.buffer.drain(0..).map(|i: C_DocIDFilePair| {

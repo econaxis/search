@@ -52,6 +52,7 @@ mod public_ffi {
 }
 
 #[cfg(debug_assertions)]
+#[allow(unused)]
 fn pretty_serialize(d: &HashSet<DocIDFilePair>) {
     let outfile = fs::File::create("/tmp/file_metadata.pretty.json").unwrap();
     serde_json::to_writer_pretty(outfile, &d).unwrap();
@@ -63,13 +64,11 @@ fn pretty_serialize(_: &HashSet<DocIDFilePair>) {}
 impl NamesDatabase {
     pub fn new(metadata_path: &Path) -> Self {
         let json_path = metadata_path.join("file_metadata.msgpack");
-        let json_length = fs::metadata(&json_path).map_or(0, |x| x.len());
-        let mut processed_data: HashSet<DocIDFilePair> = {
+        let processed_data: HashSet<DocIDFilePair> = {
             fs::File::create(&json_path).expect(&*format!("Couldn't open file {:?}", json_path));
             let empty_hash = HashSet::new();
             HashSet::from_iter(generate_metadata_for_dir(metadata_path, &empty_hash))
         };
-
 
         Self {
             set: processed_data,
@@ -99,6 +98,8 @@ impl NamesDatabase {
     pub fn get_from_str(&self, key: &str) -> Option<&DocIDFilePair> {
         self.get(OsStr::new(key))
     }
+
+    #[allow(unused)]
     fn drop_serialize(&mut self) {
         // Serialize new metadata file.
         let binary_outfile = fs::File::create(&self.json_path).unwrap();

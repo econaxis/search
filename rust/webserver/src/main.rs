@@ -71,11 +71,13 @@ fn main() -> io::Result<()> {
     let indices = open_index_files();
     let indices = indices.leak();
 
-    let chunk_size = indices.len() / 4;
+    let chunk_size = (indices.len() as f32 / 4 as f32).ceil() as usize;
 
     let iw: Vec<_> = indices.chunks(chunk_size).filter_map(|chunk| {
             Some(IndexWorker::IndexWorker::new(Vec::from(chunk)))
     }).collect();
+
+
 
     let appstate = webserver::ApplicationState {
         iw,

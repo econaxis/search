@@ -94,7 +94,7 @@ struct StreamSet {
     }
 };
 
-static constexpr std::size_t BUFLEN = 5e5;
+static constexpr std::size_t BUFLEN = 5e7;
 
 template<typename T>
 StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {

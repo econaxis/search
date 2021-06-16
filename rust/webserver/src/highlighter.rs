@@ -10,6 +10,8 @@ use serde::ser::SerializeMap;
 use crate::IndexWorker::ResultsList;
 use std::collections::HashMap;
 
+use IndexWorker::filename_map;
+
 
 fn highlight_matches(str: &str, aut: &AhoCorasick<u16>) -> Vec<(usize, usize)> {
     // supports maximum 64 terms of query
@@ -101,12 +103,7 @@ pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Ve
         if !highlight_hits.is_empty() {
             highlights.push((path.to_owned(), highlight_hits));
         } else {
-            error!(%path, "Couldn't find any matches");
-        }
-
-        // 10 highlighted files is enough for the first page. We don't need to highlight all.
-        if highlights.len() >= 10 {
-            break;
+            error!(%path,suffix = filename_map.lock().unwrap().borrow().get(path).unwrap_or(&"".to_owned()).as_str(), "Couldn't find any matches");
         }
     }
 

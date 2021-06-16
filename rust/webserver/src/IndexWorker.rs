@@ -14,19 +14,23 @@ use tracing::{info, span, debug, Level, event};
 
 
 use serde::Serialize;
+use std::collections::HashMap;
+use lazy_static::lazy_static;
+use std::cell::{RefCell};
 
 struct SharedState {
     pub data: Option<ResultsList>,
     pub waker: Option<std::task::Waker>,
 }
 
-pub struct IndexWorker {
+pub struct IndexWorker<'a> {
     thread_handle: Option<std::thread::JoinHandle<()>>,
     indices: Arc<Vec<C_SSK>>,
+    suffices: &'a [String],
     sender: Mutex<mpsc::Sender<Option<(Vec<String>, Arc<Mutex<SharedState>>)>>>,
 }
 
-unsafe impl Send for IndexWorker {}
+unsafe impl<'a> Send for IndexWorker<'a> {}
 
 
 #[derive(Clone, Serialize, Default)]
@@ -64,7 +68,7 @@ impl DerefMut for ResultsList {
     }
 }
 
-impl Clone for IndexWorker {
+impl<'a> Clone for IndexWorker<'a> {
     fn clone(&self) -> Self {
         debug!("Cloning IndexWorker");
 
@@ -76,13 +80,20 @@ impl Clone for IndexWorker {
 
         let indices = Arc::new(indices);
 
-        let thread_handle = Self::create_thread(receiver, indices.clone());
+        let thread_handle = Self::create_thread(receiver, indices.clone(), self.suffices.to_vec());
         IndexWorker {
             thread_handle: Some(thread_handle),
+            suffices: self.suffices,
             indices,
             sender: Mutex::new(sender),
         }
     }
+}
+
+lazy_static! {
+    pub static ref filename_map : Mutex<RefCell<HashMap<String, String>>> = {
+      Mutex::new(RefCell::new(HashMap::new()))
+    };
 }
 
 
@@ -93,28 +104,29 @@ fn str_to_char_char(a: &Vec<String>) -> Vec<CString> {
     strs
 }
 
-impl IndexWorker {
-    pub fn new<T: AsRef<str>>(suffices: &[T]) -> Self {
+impl<'a> IndexWorker<'a> {
+    pub fn new(suffices: &'a [String]) -> Self {
         let (sender, receiver) = mpsc::channel();
 
         let indices: Vec<C_SSK> = suffices.iter().map(|suffix| {
-            let _sp = event!(Level::DEBUG, index_name = suffix.as_ref(), "loading file index");
+            let _sp = event!(Level::DEBUG, index_name = suffix.as_str(), "loading file index");
             C_SSK::from_file_suffix(suffix.as_ref())
         }).collect();
 
         let indices = Arc::new(indices);
 
         let thread_indices = indices.clone();
-        let thread_handle = Self::create_thread(receiver, thread_indices);
+        let thread_handle = Self::create_thread(receiver, thread_indices, suffices.to_vec());
         IndexWorker {
             thread_handle: Some(thread_handle),
+            suffices,
             indices,
             sender: Mutex::new(sender),
         }
     }
 
     fn create_thread(receiver: mpsc::Receiver<Option<(Vec<String>, Arc<Mutex<SharedState>>)>>,
-                     thread_indices: Arc<Vec<C_SSK>>) -> thread::JoinHandle<()> {
+                     thread_indices: Arc<Vec<C_SSK>>, suffices: Vec<String>) -> thread::JoinHandle<()> {
         let builder = thread::Builder::new().name("index-worker".to_string());
         builder.spawn(move || {
             loop {
@@ -144,7 +156,6 @@ impl IndexWorker {
                     // let mut filenames_hash = HashSet::new();
 
                     let _sp = span!(Level::DEBUG, "Get filenames").entered();
-                    outputvec.truncate(25);
 
                     for i in outputvec.deref() {
                         let len = unsafe {
@@ -159,6 +170,7 @@ impl IndexWorker {
                         // then it will lead to this document being included twice.
                         if results.iter().find(|x| x.1 == str).is_none() {
                             debug!(id = i.0, path = %str);
+                            filename_map.lock().unwrap().borrow_mut().insert(str.clone(), suffices[i.2 as usize].clone());
                             results.push((i.1, str.to_owned()));
                         }
                     }
@@ -206,7 +218,7 @@ pub fn load_file_to_string(p: &Path) -> Option<String> {
     fs::read_to_string(p).ok()
 }
 
-impl Drop for IndexWorker {
+impl<'a> Drop for IndexWorker<'a> {
     fn drop(&mut self) {
         debug!("Dropping IW");
         self.sender.lock().unwrap().send(None).unwrap();

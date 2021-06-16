@@ -69,6 +69,7 @@ fn main() -> io::Result<()> {
     unsafe { cffi::initialize_dir_vars() };
 
     let indices = open_index_files();
+    let indices = indices.leak();
 
     let chunk_size = indices.len() / 4;
 

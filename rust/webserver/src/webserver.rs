@@ -28,15 +28,15 @@ fn make_err(str: &str) -> io::Error {
     io::Error::new(io::ErrorKind::Other, str)
 }
 
-pub struct ApplicationState {
-    pub iw: Vec<IndexWorker>,
+pub struct ApplicationState<'a> {
+    pub iw: Vec<IndexWorker<'a>>,
     pub highlighting_jobs: Arc<Mutex<HashMap<u32, HighlightRequest>>>,
     pub jobs_counter: AtomicU32,
 }
 
-unsafe impl Send for ApplicationState {}
+unsafe impl<'a> Send for ApplicationState<'a> {}
 
-async fn broadcast_query(indices: &[IndexWorker], query: &[String]) -> ResultsList {
+async fn broadcast_query<'a>(indices: &[IndexWorker<'a>], query: &[String]) -> ResultsList {
     let futures_list: Vec<_> = indices.iter().map(|iw| {
         iw.send_query_async(query)
     }).collect();
@@ -60,7 +60,7 @@ fn clear_highlight_tasks(cur_docid: u32, highlight_queue: &mut HashMap<u32, High
     }
 }
 
-async fn highlight_handler(data: &ApplicationState, highlightid: u32) -> Result<Response<Body>, io::Error> {
+async fn highlight_handler<'a>(data: &ApplicationState<'a>, highlightid: u32) -> Result<Response<Body>, io::Error> {
     let (query, files) = {
         let jobs = data.highlighting_jobs.lock().await;
         let jobrequest = jobs.get(&highlightid).ok_or(make_err(&*format!("highlight request id {} not found", highlightid)))?;
@@ -82,7 +82,7 @@ async fn highlight_handler(data: &ApplicationState, highlightid: u32) -> Result<
 }
 
 
-async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Response<Body>, io::Error> {
+async fn handle_request<'a>(data: &ApplicationState<'a>, query: &[String]) -> Result<Response<Body>, io::Error> {
     debug!(?query, "Started processing for ");
     let starttime = elapsed_span::new_span();
 
@@ -95,9 +95,6 @@ async fn handle_request(data: &ApplicationState, query: &[String]) -> Result<Res
     // Since highlighting might be resource intensive, we don't want to block incoming connections.
     let mut highlight_jobs = data.highlighting_jobs.lock().await;
 
-    // Truncate the results list to max 10 elements. We don't need to highlight anymore.
-    // let res_trunc = &res[0..std::cmp::min(res.len(), 10)];
-    // let res_trunc = res_trunc.to_vec();
     highlight_jobs.insert(id, HighlightRequest { query: query.to_vec(), files: ResultsList::from(res.to_vec()) });
 
     if highlight_jobs.len() > 50 {
@@ -130,7 +127,7 @@ fn return_index_html() -> Result<Response<Body>, io::Error> {
     Ok(Response::builder().body(idx_html.into()).unwrap())
 }
 
-async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Result<Response<Body>, io::Error> {
+async fn route_request<'a>(req: Request<Body>, data: Arc<ApplicationState<'a>>) -> Result<Response<Body>, io::Error> {
     let uri = req.uri().path();
     if uri.starts_with("/search") {
         let q = parse_url_query(req.uri(), "q=")?;
@@ -148,7 +145,7 @@ async fn route_request(req: Request<Body>, data: Arc<ApplicationState>) -> Resul
 }
 
 
-pub fn get_server(state: ApplicationState) -> BoxFuture<'static, Result<(), hyper::Error>> {
+pub fn get_server(state: ApplicationState<'static>) -> BoxFuture<'static, Result<(), hyper::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
 
     let state = Arc::from(state);

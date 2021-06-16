@@ -132,7 +132,6 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
             thread_local_holder.clear();
         }
     }
-    std::cout << "Finished\n";
     done_flag = true;
     contents.cv.notify_all();
 }

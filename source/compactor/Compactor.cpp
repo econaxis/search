@@ -146,9 +146,10 @@ std::vector<DocIDFilePair> merge_filepairs(std::vector<DocIDFilePair> &one, std:
 bool check_file(StreamSet<std::fstream> &str) {
     return fs::file_size(make_path("positions", str.suffix)) < 3e9;
 }
+
 using namespace Serializer;
 
-std::optional<std::string> Compactor::compact_two_files(std::string& suffix, std::string& suffix1) {
+std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std::string &suffix1) {
     std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
 
 
@@ -166,10 +167,10 @@ std::optional<std::string> Compactor::compact_two_files(std::string& suffix, std
 
     std::cout << "Greatest id: " << filepairs.back().document_id << " " << filepairs1.back().document_id << "\n";
 
+    const auto diff1 = filepairs.back().document_id + 1;
     auto upgrade_ids = [&](auto &iterable) {
         // Upgrade all documents from 1 to avoid ID duplication
         // All ID's in database 1 will increase by diff1
-        static const auto diff1 = filepairs.back().document_id + 1;
         for (auto &i : iterable) {
             i.document_id += diff1;
         }
@@ -240,6 +241,8 @@ std::optional<std::string> Compactor::compact_two_files(std::string& suffix, std
             ostreamset.serialize(wie);
             wie.key = INVALIDATED;
             wie1.key = INVALIDATED;
+        } else {
+            throw std::runtime_error("Wie key comparison impossible: " + wie.key + wie1.key);
         }
     }
     // Write the actual size of the new index to the beginning position.

@@ -53,45 +53,27 @@ add_library(c-search-abi SHARED source/c_abi.cpp)
 target_link_libraries(c-search-abi PRIVATE search-share)
 
 
-add_custom_target(rust-library
-        DEPENDS
-        "${CMAKE_BINARY_DIR}/libnamesdb.so")
-
-add_custom_target(rust-web-server
-        DEPENDS
-        "${CMAKE_SOURCE_DIR}/rust/src")
-
-
 file(GLOB rust-sources rust/webserver/src/*)
 
-set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
-
 if (CMAKE_BUILD_TYPE MATCHES RelWithDebInfo OR CMAKE_BUILD_TYPE MATCHES Release)
-    message("MESSAGE: Using release build")
-    string(APPEND ${rust-build-command} --release)
+    set(CARGO_RELEASE_MODE "--release")
+    message("MESSAGE: Using release build " ${rust-build-command})
 endif()
+set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build ${CARGO_RELEASE_MODE} --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options
+        --manifest-path ${CMAKE_SOURCE_DIR}/rust/Cargo.toml)
+
+message("Rust build command: " ${rust-build-command})
+
 
 add_custom_target(
         rust-server ALL
         COMMAND ${rust-build-command}
         DEPENDS ${CMAKE_SOURCE_DIR}/rust/webserver/src
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
-
-add_custom_command(
-        OUTPUT
-            "${CMAKE_BINARY_DIR}/libnamesdb.so"
-        COMMENT
-            "Builds the librust target"
-        COMMAND
-            ${rust-build-command}
-        DEPENDS
-            ${rust-sources}
-        WORKING_DIRECTORY
-            ${CMAKE_SOURCE_DIR}/rust
-)
-add_dependencies(general-indexer rust-library)
-add_dependencies(rust-library c-search-abi)
+add_dependencies(compactor rust-server)
+add_dependencies(general-indexer rust-server)
+add_dependencies(rust-server c-search-abi)
 add_dependencies(rust-server c-search-abi)
 

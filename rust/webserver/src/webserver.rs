@@ -11,7 +11,7 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use hyper::{Body, Request, Response, Server};
 use hyper::service::{make_service_fn, service_fn};
-use tracing::{debug,Level, span};
+use tracing::{debug, Level, span};
 
 
 use crate::elapsed_span;
@@ -62,10 +62,10 @@ fn clear_highlight_tasks(cur_docid: u32, highlight_queue: &mut HashMap<u32, High
 
 async fn highlight_handler<'a>(data: &ApplicationState, highlightid: u32) -> Result<Response<Body>, io::Error> {
     let (query, files) = {
-        let jobs = data.highlighting_jobs.lock().await;
-        let jobrequest = jobs.get(&highlightid).ok_or(make_err(&*format!("highlight request id {} not found", highlightid)))?;
+        let mut jobs = data.highlighting_jobs.lock().await;
+        let jobrequest = jobs.remove(&highlightid).ok_or(make_err(&*format!("highlight request id {} not found", highlightid)))?;
         let HighlightRequest { query, files } = jobrequest;
-        (query.clone(), files.clone())
+        (query, files)
     };
 
     debug!(flen = files.len(), "Received highlighting request");
@@ -137,7 +137,7 @@ async fn route_request<'a>(req: Request<Body>, data: Arc<ApplicationState>) -> R
         let q = parse_url_query(req.uri(), "id=")?.into_iter().next().ok_or(make_err("ID not found"))?;
         let q: u32 = q.parse().map_err(|_| make_err(&*format!("Couldn't parse int: {}", q)))?;
         highlight_handler(data.deref(), q).await
-    } else if uri == "/" || uri == "/index"{
+    } else if uri == "/" || uri == "/index" {
         return_index_html()
     } else {
         Err(io::Error::new(ErrorKind::Other, format!("no matching path found for {}", uri)))

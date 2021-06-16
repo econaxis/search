@@ -21,7 +21,7 @@ namespace fs = std::filesystem;
  */
 static unsigned int string_prefix_compare(const std::string &shorter, const std::string &longer) {
     // Score multiplier in case a word matches all (vs. only a prefix match)
-    constexpr float MATCHALL_BONUS = 10 / 3;
+    constexpr float MATCHALL_BONUS = 1.1F;
     // Returns true if shorter is the prefix of longer.
     // e.g. shorter: "str" and longer: "string" returns true.
     auto ls = longer.size();
@@ -30,7 +30,7 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
 
     if (ls < ss) return 0;
 
-    float divider = 2.F / (ls - ss + 2);
+    float divider = 5.F / (ls - ss + 5);
     for (std::size_t i = 0; i < ss; i++) {
         if (shorter[i] != longer[i]) {
             return 0;
@@ -167,19 +167,12 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
                 float coefficient = std::log10(i.document_freq) + 1;
                 i.document_freq = coefficient * score;
                 tot_score += i.document_freq;
-
-                if(i.document_id == 139155) {
-                    auto test = get_positions_for_term(wie.key);
-                    std::cout<<test.size()<<"139155 REACHED 0X\n";
-                    bool dummy = true;
-                }
             }
             TopDocs td(std::move(wie.files));
 
-            // Only add high-ranking terms to the continue-list (for further retrieval if AND can't generate 50+ results)
-            if (score >= 30) td.add_term_str(preview.key, ti);
+            if (score >= 30 || preview.key == term) td.add_term_str(preview.key, ti);
 
-            if (preview.key == term) { /* Early return because we matched exactly the term we were looking for.*/ return td; }
+            if (preview.key == term) return td;
 
             output_score.emplace_back(tot_score / td.size());
             outputs.push_back(std::move(td));
@@ -224,8 +217,10 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
             ret = DocumentsMatcher::AND(all_outputs);
         }
     }
-    if (ret.size() < 10) return DocumentsMatcher::backup(all_outputs_backup);
-    else {
+    if (ret.size() == 0 && terms.size() > 1) {
+        std::cout << "Warning: using OR backup for " << terms[0] << " ...\n";
+        return DocumentsMatcher::backup(all_outputs_backup);
+    } else {
 //        rerank_by_positions(all_outputs);
         return ret;
     }

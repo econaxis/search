@@ -24,6 +24,8 @@
     async function handle_request(str) {
         if(str.trim() === "") return;
 
+        str = str.replace(/ /g, '+');
+
         curcounter++;
         let mycounter = curcounter;
         abort.abort();
@@ -37,8 +39,8 @@
 
         if (signal.aborted || mycounter !== curcounter) return;
 
-        formattedtext = JSON.stringify(text.data, null, 3);
-        id = text.id;
+        let formattedtext = JSON.stringify(text.data, null, 3);
+        let id = text.id;
         document.getElementById("highlight-bar").innerHTML = formattedtext;
 
         // If latency is high, we want to minimize calls to highlight. If latency is low, we can call highlight freely.

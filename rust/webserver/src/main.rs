@@ -85,7 +85,7 @@ fn main() -> io::Result<()> {
         jobs_counter: Default::default(),
     };
 
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
     runtime.block_on(async move {
         let server = webserver::get_server(appstate);
         server.await.unwrap();

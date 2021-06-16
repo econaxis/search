@@ -59,8 +59,7 @@ if (CMAKE_BUILD_TYPE MATCHES RelWithDebInfo OR CMAKE_BUILD_TYPE MATCHES Release)
     set(CARGO_RELEASE_MODE "--release")
     message("MESSAGE: Using release build " ${rust-build-command})
 endif()
-set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build ${CARGO_RELEASE_MODE} --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options
-        --manifest-path ${CMAKE_SOURCE_DIR}/rust/Cargo.toml)
+set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build ${CARGO_RELEASE_MODE} --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
 
 message("Rust build command: " ${rust-build-command})
 
@@ -69,11 +68,11 @@ add_custom_target(
         rust-server ALL
         COMMAND ${rust-build-command}
         DEPENDS ${CMAKE_SOURCE_DIR}/rust/webserver/src
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
 )
+
 
 add_dependencies(compactor rust-server)
 add_dependencies(general-indexer rust-server)
-add_dependencies(rust-server c-search-abi)
 add_dependencies(rust-server c-search-abi)
 

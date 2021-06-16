@@ -2,6 +2,10 @@
 members = ["namesdb", "webserver"]
 default-members=["namesdb", "webserver"]
 
+[profile.dev]
+rpath=true
 
 
+[profile.release]
+rpath=true
 

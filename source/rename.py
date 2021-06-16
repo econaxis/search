@@ -10,6 +10,7 @@ def ren(prefix, old, new):
 
 
 f = open("index_files")
+fw = open("index_files_working", "w+")
 
 for line in f.readlines():
     line = line.rstrip()
@@ -18,3 +19,5 @@ for line in f.readlines():
     ren("filemap", line, hashs)
     ren("terms", line, hashs)
     ren("frequencies", line, hashs)
+
+    fw.write(hashs + "\n")

@@ -15,24 +15,31 @@ use IndexWorker::filename_map;
 
 fn highlight_matches(str: &str, aut: &AhoCorasick<u16>) -> Vec<(usize, usize)> {
     // supports maximum 64 terms of query
-    let mut processed = HashMap::<u8, u8>::new();
+    let mut processed = HashMap::<u16, u16>::new();
 
     let _start_index = 0;
 
     let mut res = Vec::new();
 
     for match_ in aut.find_iter(str) {
-        let pat_idx = match_.pattern() as u8;
+        let pat_idx = match_.pattern() as u16;
 
-        let val = processed.insert(pat_idx, 0).unwrap_or(0) + 1;
-        let num_found = processed.insert(pat_idx, val).unwrap();
+        let already_highlighted = if let Some(v) = processed.get_mut(&pat_idx) {
+            *v+=1;
+            *v
+        } else {
+            processed.insert(pat_idx, 1);
+            1
+        };
 
-        if num_found < 5 {
+        if already_highlighted < 6 {
             res.push((match_.start(), match_.end()));
         }
 
-        if processed.iter().all(|(_, &freq)| freq >= 5u8) {
-            break;
+        if processed.len() >= aut.pattern_count() {
+            if processed.iter().all(|x| *x.1 >= 5u16) {
+                break;
+            }
         }
     }
 
@@ -105,6 +112,8 @@ pub fn highlight_files(filelist: &ResultsList, highlight_words: &[String]) -> Ve
         } else {
             error!(%path,suffix = filename_map.lock().unwrap().borrow().get(path).unwrap_or(&"".to_owned()).as_str(), "Couldn't find any matches");
         }
+
+        if highlights.len() > 10 { break; }
     }
 
     highlights

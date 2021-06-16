@@ -14,7 +14,6 @@ void initialize_directory_variables() {
     auto data_files_dir_env = std::getenv("DATA_FILES_DIR");
     if (data_files_dir_env) {
         data_files_dir = fs::path(data_files_dir_env);
-        std::cout << "Using data file dir: " << data_files_dir_env << "\n";
     } else {
         data_files_dir = fs::path("/mnt/nfs/extra/gutenberg");
     }

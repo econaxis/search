@@ -11,12 +11,14 @@ DATA_FILES_DIR = "/mnt/nfs/extra/uspto/"
 
 [build]
 target-dir="target"
+rustflags = [
+    "-Clink-arg=-fuse-ld=lld", "-Zshare-generics=y",
+    "-C", "link-args=-Wl,-rpath,$ORIGIN/../../../cmake-build-debug/",
+    "-C", "link-args=-Wl,-rpath,$ORIGIN/../../../cmake-build-release/",
+    "-C", "link-args=-Wl,-rpath,$ORIGIN"
+]
 
 
 [target.x86_64-unknown-linux-gnu]
 linker = "/usr/bin/clang"
-rustflags = ["-Clink-arg=-fuse-ld=lld", "-Zshare-generics=y",
-    "-C", "link-args=-Wl,-rpath,$ORIGIN/../../../cmake-build-debug/",
-    "-C", "link-args=-Wl,-rpath,$ORIGIN/../../../cmake-build-release/",
-    "-C", "link-args=-Wl,-rpath,$ORIGIN/"
-]
+

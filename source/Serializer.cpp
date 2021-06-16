@@ -260,7 +260,6 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
             if (i % 50000 == 0) std::cout << "Reading file " << i * 100 / num_entries << "% \r";
         } else preview_work_index_entry(terms);
     }
-    std::cout << out.size() << " stub entries\n";
     return out;
 }
 

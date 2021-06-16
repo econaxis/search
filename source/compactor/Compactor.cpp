@@ -8,6 +8,7 @@
 #include "Serializer.h"
 #include "Constants.h"
 #include "IndexFileLocker.h"
+#include "random_b64_gen.h"
 
 namespace fs = std::filesystem;
 
@@ -94,7 +95,7 @@ struct StreamSet {
     }
 };
 
-static constexpr std::size_t BUFLEN = 5e7;
+static constexpr std::size_t BUFLEN = 5e6;
 
 template<typename T>
 StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
@@ -144,7 +145,7 @@ std::vector<DocIDFilePair> merge_filepairs(std::vector<DocIDFilePair> &one, std:
 }
 
 bool check_file(StreamSet<std::fstream> &str) {
-    return fs::file_size(make_path("positions", str.suffix)) < 3e9;
+    return fs::file_size(make_path("positions", str.suffix)) < 1e10;
 }
 
 using namespace Serializer;
@@ -158,6 +159,8 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
 
 
     auto joined_suffix = suffix + "-" + suffix1;
+
+    if(joined_suffix.size() > 20) joined_suffix = random_b64_str(5);
     auto temp_joined_suffix = "TEMP-" + joined_suffix;
 
     std::cout << "Trying to compact: " << joined_suffix << "\n";
@@ -169,6 +172,7 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
 
     const auto diff1 = filepairs.back().document_id + 1;
     auto upgrade_ids = [&](auto &iterable) {
+
         // Upgrade all documents from 1 to avoid ID duplication
         // All ID's in database 1 will increase by diff1
         for (auto &i : iterable) {
@@ -210,6 +214,7 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
             // Refill this key.
             wie1 = streamset1.read();
             upgrade_ids(wie1.files);
+
             len1--;
         }
         if (wie1.key == INVALIDATED && wie.key == INVALIDATED && !len && !len1) {

@@ -107,11 +107,11 @@ StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
             .positions = T(make_path("positions", suffix), inoutbinary),
             .filemap = T(make_path("filemap", suffix), inoutbinary),
             .suffix = suffix,
-            .buffer = std::make_unique<char[]>(BUFLEN * 5)
+            .buffer = std::make_unique<char[]>(BUFLEN * 2)
     };
 
     set.positions.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 0, BUFLEN);
-    set.frequencies.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 4, BUFLEN);
+    set.frequencies.rdbuf()->pubsetbuf(set.buffer.get() + BUFLEN * 1, BUFLEN);
 
     if (!(set.frequencies.good() && set.terms.good() && set.positions.good())) {
         throw std::runtime_error("File cannot be opened " + suffix);

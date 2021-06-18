@@ -41,21 +41,37 @@ public:
 
     bool extend_from_tier_iterator(int how_many = 2) {
         std::vector<DocumentFrequency> extended;
+        extended.resize(how_many * MultiDocumentsTier::BLOCKSIZE * 2);
+        auto extended1 = extended;
+
+        auto ptr = &extended;
+        auto lastelem = ptr->begin();
+
+        auto flip = [&]() {
+            if (ptr == &extended) ptr = &extended1;
+            else if (ptr == &extended1) ptr = &extended;
+            else throw std::runtime_error("Ptr not extended or extended1");
+            return ptr;
+        };
+
         bool has_more = false;
         for (auto &[k, ti] : included_terms) {
             for (int i = 0; i < how_many; i++) {
                 auto n = ti.read_next();
                 if (n) {
-                    extended.insert(extended.end(), n->begin(), n->end());
+                    auto oldrange = ptr;
+                    auto newrange = flip();
+
+                    lastelem = std::merge(oldrange->begin(), lastelem, n->begin(), n->end(), newrange->begin());
                     has_more = true;
                 } else {
                     break;
                 }
             }
         }
-
-        std::sort(extended.begin(), extended.end());
-        append_multi(TopDocs(extended));
+        ptr->resize(lastelem - ptr->begin());
+        assert(std::is_sorted(ptr->begin(), ptr->end()));
+        append_multi(TopDocs(std::move(*ptr)));
         return has_more;
     }
 

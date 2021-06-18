@@ -120,8 +120,8 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
     for (auto &i : joined) {
         imbued.push_back({i.document_id & tag_remover, i.document_freq, static_cast<uint8_t>(i.document_id >> 27)});
     }
-    if (joined.size() > 50) {
-        fill_rust_vec(output_buffer, imbued.begin().base(), 50 * sizeof(DocumentPositionPointer_v2_imbued));
+    if (joined.size() > 20) {
+        fill_rust_vec(output_buffer, imbued.begin().base(), 20 * sizeof(DocumentPositionPointer_v2_imbued));
     } else {
         fill_rust_vec(output_buffer, imbued.begin().base(), joined.size() * sizeof(DocumentPositionPointer_v2_imbued));
     }

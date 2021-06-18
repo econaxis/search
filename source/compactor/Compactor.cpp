@@ -36,8 +36,6 @@ std::pair<Compactor::ReadState, std::string> Compactor::read_and_mark_line(std::
 
     if (line[0] == '#') {
         return read_and_mark_line(stream); //recursive call.
-    } else if (line.size() > 150) {
-        return read_and_mark_line(stream);
     } else {
         stream.seekg(before_read);
         insert_string(stream, "# joined ");

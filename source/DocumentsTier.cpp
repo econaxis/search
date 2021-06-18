@@ -5,7 +5,6 @@
 #include <ostream>
 #include <iostream>
 
-static constexpr auto BLOCKSIZE = 256;
 
 
 void MultiDocumentsTier::serialize(const WordIndexEntry &wie, std::ostream &frequencies) {
@@ -71,7 +70,7 @@ std::optional<SingleDocumentsTier> MultiDocumentsTier::TierIterator::read_next()
     frequencies.seekg(read_position);
 
     SingleDocumentsTier output;
-    uint num_elems;
+    uint32_t num_elems;
 
     if (remaining == 1) num_elems = read_vnum(frequencies);
     else num_elems = BLOCKSIZE;

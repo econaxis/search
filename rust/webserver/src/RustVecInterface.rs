@@ -54,6 +54,7 @@ impl AsRef<*const ctypes::SortedKeysIndexStub> for C_SSK {
 }
 
 impl C_SSK {
+    #[allow(unused)]
     pub fn from_file_suffix(suffix: &str) -> Self {
         let cstr = CStr::from_bytes_with_nul(suffix.as_bytes()).unwrap();
         let ssk = unsafe { cffi::load_one_index(cstr.as_ptr()) };

@@ -8,8 +8,8 @@ set(CMAKE_CXX_STANDARD 20)
 add_library(lmdb SHARED lmdb/mdb.c lmdb/lmdb.h lmdb/midl.c lmdb/midl.h)
 target_link_libraries(lmdb PRIVATE pthread)
 
-add_executable(mdb_dump lmdb/mdb_dump.c)
-target_link_libraries(mdb_dump PRIVATE lmdb)
+#add_executable(mdb_dump lmdb/mdb_dump.c)
+#target_link_libraries(mdb_dump PRIVATE lmdb)
 
 
 add_executable(kvdb source/main.cpp source/Database.cpp source/Database.h)

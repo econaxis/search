@@ -10,6 +10,19 @@
 <pre id="highlight-bar"></pre>
 
 <script type="application/javascript">
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/<mark>/g, "(((")
+            .replace(/<\/mark>/g, ")))")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;")
+            .replace(/\(\(\(/gi, "<mark>")
+            .replace(/\)\)\)/gi, "</mark>");
+    }
+
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
@@ -21,8 +34,12 @@
     let curcounter = 0;
     let latency = 100;
 
+    const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+
+    const SURROUNDING = 100;
+
     async function handle_request(str) {
-        if(str.trim() === "") return;
+        if (str.trim() === "") return;
 
         str = str.replace(/ /g, '+');
 
@@ -46,19 +63,54 @@
         // If latency is high, we want to minimize calls to highlight. If latency is low, we can call highlight freely.
         await sleep(Math.min(latency, 300));
 
-        if (signal.aborted || mycounter!==curcounter) return;
+        if (signal.aborted || mycounter !== curcounter) return;
 
         let highlight = await fetch("/highlight/?id=" + id, {signal});
         highlight = await highlight.json();
 
-        for (v in highlight) {
-            for (hg in highlight[v]) {
-                let newresp = highlight[v][hg].replace(/(<([^>]+)>)/gi, "");
-                newresp = newresp.replace(/\(\(\(/gi, "<mark>");
-                newresp = newresp.replace(/\)\)\)/gi, "</mark>");
-                highlight[v][hg] = newresp;
+
+        for (v of highlight) {
+
+
+            let prevm = -1e5;
+            let curstring = "";
+            for (const m of v.matches) {
+                let start, end;
+                let skipped;
+                if (m[0] - prevm > SURROUNDING) {
+                    start = m[0] - SURROUNDING;
+                    skipped = true;
+                } else {
+                    start = prevm;
+                    skipped = false;
+                }
+                end = m[1] + SURROUNDING;
+                prevm = end;
+
+                start = clamp(start, 0, v.document.length);
+                end = clamp(end, 0, v.document.length);
+
+                if (skipped) curstring += "...";
+
+                curstring += v.document.substring(start, m[0]);
+                curstring += "<mark>";
+                curstring += v.document.substring(m[0], m[1]);
+                curstring += "</mark>";
+                curstring += v.document.substring(m[1], end);
             }
+            v.document = curstring;
+            delete v.matches;
+            delete v.filename;
+            v.document = v.document.replace(/\\n/gi, "");
+            v.document = escapeHtml(v.document);
+
+            // highlight[v][1].document = escapeHtml(highlight[v][1].document);
+            // highlight[v].document = highlight[v].document.replace(/\n/gi, "");
+            // newresp = newresp.
+            // newresp = newresp.
+            // highlight[v][hg] = newresp;
         }
+        window.dev = highlight;
 
         document.getElementById('highlight-bar').innerHTML = JSON.stringify(highlight, null, 3);
     }

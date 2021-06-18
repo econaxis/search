@@ -18,21 +18,25 @@ use futures::{io};
 
 
 use tracing_subscriber::FmtSubscriber;
-use tracing::{Level};
+use tracing::{Level, debug};
 use tracing_subscriber::fmt::format::FmtSpan;
 use std::sync::Arc;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::path::{PathBuf};
 use std::iter::FromIterator;
-
+use env_logger;
+use log::LevelFilter;
 
 fn setup_logging() {
     if env::var("RUST_LOG").is_ok() {
         env_logger::Builder::new().format_timestamp_millis()
             // .filter_level(log::LevelFilter::Debug)
+            .parse_default_env()
+            // .filter_level(LevelFilter::Debug)
             // .filter_module("tracing::span", LevelFilter::Trace)
-            .parse_default_env().init();
+            .filter_module("hyper", LevelFilter::Warn)
+            .init();
         println!("Using env logger");
     } else {
         let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG)
@@ -73,10 +77,10 @@ fn main() -> io::Result<()> {
 
     let chunk_size = (indices.len() as f32 / 4 as f32).ceil() as usize;
 
-    let iw: Vec<_> = indices.chunks(chunk_size).filter_map(|chunk| {
-            Some(IndexWorker::IndexWorker::new(Vec::from(chunk)))
+    debug!("Loading {} indices", indices.len());
+    let iw: Vec<_> = indices.chunks(chunk_size).map(|chunk| {
+        IndexWorker::IndexWorker::new(Vec::from(chunk))
     }).collect();
-
 
 
     let appstate = webserver::ApplicationState {
@@ -88,6 +92,8 @@ fn main() -> io::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
     runtime.block_on(async move {
         let server = webserver::get_server(appstate);
+
+        debug!("Starting web server");
         server.await.unwrap();
     });
 

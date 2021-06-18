@@ -2,7 +2,7 @@ use crate::RustVecInterface::{VecDPP};
 
 use std::ffi;
 use std::io::Read;
-pub use std::os::raw::c_char;
+use std::os::raw::c_char;
 
 use std::ffi::{CStr, OsStr};
 use std::path::{Path, PathBuf};
@@ -23,7 +23,6 @@ pub mod ctypes {
 
 // Contains FFI declarations for connecting to C++ shared library.
 #[link(name = "c-search-abi")]
-#[allow(unused)]
 extern "C" {
     fn create_ifstream_from_path(path: *const c_char) -> *const ctypes::ifstream;
     fn deallocate_ifstream(stream: *const ctypes::ifstream);
@@ -58,12 +57,18 @@ struct C_DocIDFilePair {
     cstr: *const c_char,
 }
 
-#[allow(unused)]
-pub fn get_filepairs<P: AsRef<Path>>(path: P) -> Vec<DocIDFilePair> {
-    let mut cvec = unsafe { CVector::new_from_path(path) };
-    cvec.buffer.drain(0..).map(|i: C_DocIDFilePair| {
-        i.into()
-    }).collect()
+pub mod filepairs {
+    use std::path::Path;
+    use super::CVector;
+    use crate::cffi::{DocIDFilePair, C_DocIDFilePair};
+
+    #[allow(unused)]
+    pub fn get_filepairs<P: AsRef<Path>>(path: P) -> Vec<DocIDFilePair> {
+        let mut cvec = unsafe { CVector::new_from_path(path) };
+        cvec.buffer.drain(0..).map(|i: C_DocIDFilePair| {
+            i.into()
+        }).collect()
+    }
 }
 
 #[derive(Default, Serialize, Deserialize, Debug, Eq)]

@@ -2,7 +2,7 @@ use std::{borrow::Borrow, hash::Hash, fs::{File, self}, iter::FromIterator, ffi:
 use std::path::{PathBuf};
 use std::{env};
 use std::io::{BufReader, BufRead};
-use webserver::cffi::{DocIDFilePair, get_filepairs};
+use webserver::cffi::{DocIDFilePair, filepairs::get_filepairs};
 use regex::Regex;
 pub use public_ffi::*;
 use serde::Serialize;
@@ -58,6 +58,7 @@ fn pretty_serialize(d: &HashSet<DocIDFilePair>) {
     serde_json::to_writer_pretty(outfile, &d).unwrap();
 }
 
+#[allow(unused)]
 #[cfg(not(debug_assertions))]
 fn pretty_serialize(_: &HashSet<DocIDFilePair>) {}
 

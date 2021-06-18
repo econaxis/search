@@ -42,7 +42,7 @@ namespace Serializer {
     PreviewResult preview_work_index_entry(std::istream &terms);
     int read_work_index_entry_v2_optimized(std::istream &frequencies, __m256 *buffer);
 
-    void read_packed_u32_chunk(std::istream &frequencies, int length, uint32_t *buffer);
+    void read_packed_u32_chunk(std::istream &frequencies, uint32_t length, uint32_t *buffer);
 
     void serialize(std::string suffix, const std::vector<DocIDFilePair> &vp);
 

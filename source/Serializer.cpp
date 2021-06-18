@@ -183,7 +183,7 @@ int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
 //    return num_files;
 }
 
-void Serializer::read_packed_u32_chunk(std::istream &frequencies, int length, uint32_t *buffer) {
+void Serializer::read_packed_u32_chunk(std::istream &frequencies, uint32_t length, uint32_t *buffer) {
     frequencies.read(reinterpret_cast<char *>(buffer), length * sizeof(uint32_t));
 
     auto end = (uint32_t *) buffer + length;
@@ -257,7 +257,6 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
     for (int i = 0; i < num_entries; i++) {
         if (i % INTERVAL == 0) {
             out.push_back(read_stub_index_entry_v2(frequencies, terms));
-            if (i % 50000 == 0) std::cout << "Reading file " << i * 100 / num_entries << "% \r";
         } else preview_work_index_entry(terms);
     }
     return out;

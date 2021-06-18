@@ -7,8 +7,4 @@
 
 
 pub mod cffi;
-pub mod highlighter;
-pub mod RustVecInterface;
-pub mod IndexWorker;
-pub mod elapsed_span;
-pub mod webserver;
+mod RustVecInterface;

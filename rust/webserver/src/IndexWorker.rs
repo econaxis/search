@@ -14,9 +14,7 @@ use tracing::{info, span, debug, Level, event};
 
 
 use serde::Serialize;
-use std::collections::HashMap;
-use lazy_static::lazy_static;
-use std::cell::{RefCell};
+use std::io::Read;
 
 type WorkMessage = Option<(Vec<String>, Arc<Mutex<SharedState>>)>;
 
@@ -24,6 +22,18 @@ struct SharedState {
     pub data: Option<ResultsList>,
     pub waker: Option<std::task::Waker>,
 }
+
+impl SharedState {
+    fn set_data_and_wake(&mut self, r: ResultsList) {
+        self.data.replace(r);
+        self.waker.take().unwrap().wake();
+    }
+    fn get_data(&mut self) -> Option<ResultsList> {
+        self.data.take()
+    }
+}
+
+
 
 pub struct IndexWorker {
     thread_handle: Option<std::thread::JoinHandle<()>>,
@@ -81,7 +91,7 @@ impl Clone for IndexWorker {
 
         let indices = Arc::new(indices);
 
-        let thread_handle = Self::create_thread(receiver, indices.clone(), Vec::new());
+        let thread_handle = Self::create_thread(receiver, indices.clone());
         IndexWorker {
             thread_handle: Some(thread_handle),
             indices,
@@ -89,13 +99,6 @@ impl Clone for IndexWorker {
         }
     }
 }
-
-lazy_static! {
-    pub static ref filename_map : Mutex<RefCell<HashMap<String, String>>> = {
-      Mutex::new(RefCell::new(HashMap::new()))
-    };
-}
-
 
 fn str_to_char_char(a: &Vec<String>) -> Vec<CString> {
     let strs: Vec<CString> = a.iter().map(|x| {
@@ -122,6 +125,23 @@ fn search_indices_wrapper(thread_indices: &Arc<Vec<C_SSK>>, query: &Vec<String>)
     outputvec
 }
 
+
+fn load_filenames_from_ids(vec: &VecDPP, thread_indices: &Vec<C_SSK>) -> ResultsList {
+    let filename_buffer = [0u8; 500];
+    let mut results = ResultsList(Vec::new());
+    for i in vec.deref() {
+        let len = unsafe {
+            cffi::query_for_filename(*thread_indices[i.2 as usize].as_ref(), i.0 as u32, filename_buffer.as_ptr() as *const c_char, filename_buffer.len() as u32)
+        } as usize;
+
+        // The last character at index `len`, is the null terminator.
+        let str = String::from_utf8_lossy(&filename_buffer[0..len - 1]);
+
+        results.push((i.1, (*str).to_owned()));
+    }
+    results
+}
+
 impl IndexWorker {
     pub fn new(suffices: Vec<String>) -> Self {
         let (sender, receiver) = mpsc::channel();
@@ -132,7 +152,7 @@ impl IndexWorker {
         }).collect();
 
         let indices = Arc::new(indices);
-        let thread_handle = Self::create_thread(receiver, indices.clone(), suffices);
+        let thread_handle = Self::create_thread(receiver, indices.clone());
         IndexWorker {
             thread_handle: Some(thread_handle),
             indices,
@@ -141,52 +161,22 @@ impl IndexWorker {
     }
 
     fn create_thread(receiver: mpsc::Receiver<WorkMessage>,
-                     thread_indices: Arc<Vec<C_SSK>>, suffices: Vec<String>) -> thread::JoinHandle<()> {
+                     thread_indices: Arc<Vec<C_SSK>>) -> thread::JoinHandle<()> {
         let builder = thread::Builder::new().name("index-worker".to_string());
-        builder.spawn(move || loop {
-            let received = receiver.recv().unwrap();
-            if let Some((query, sharedstate)) = received {
-                info!("Sending query: {:?}", query);
-                let outputvec = search_indices_wrapper(&thread_indices, &query);
+        builder.spawn(move || {
 
+            loop {
+                let received = receiver.recv().unwrap();
+                if let Some((query, sharedstate)) = received {
+                    info!("Sending query: {:?}", query);
+                    let outputvec = search_indices_wrapper(&thread_indices, &query);
 
-                debug!("Matched {} files. Max score: {}", outputvec.len(),
-                       max_score = outputvec.last().unwrap_or(&Default::default()).1);
-
-                let filename_buffer = [0u8; 500];
-
-                let mut results = ResultsList::from(Vec::new());
-
-                let _sp = span!(Level::DEBUG, "Get filenames").entered();
-                for i in outputvec.deref() {
-                    let len = unsafe {
-                        cffi::query_for_filename(*thread_indices[i.2 as usize].as_ref(), i.0 as u32, filename_buffer.as_ptr() as *const c_char, filename_buffer.len() as u32)
-                    } as usize;
-
-                    // The last character at index `len`, is the null terminator.
-                    let str = String::from_utf8_lossy(&filename_buffer[0..len - 1]).into_owned();
-
-                    // Deduplicate names
-                    // If we have two different StubIndex that somehow cover the same document,
-                    // then it will lead to this document being included twice.
-                    if results.iter().find(|x| x.1 == str).is_none() {
-                        debug!(id = i.0, path = %str);
-
-                        if let Some(suf) = suffices.get(i.2 as usize) {
-                            filename_map.lock().unwrap().borrow_mut().insert(str.clone(), suf.clone());
-                        }
-                        results.push((i.1, str.to_owned()));
-                    }
+                    let results = load_filenames_from_ids(&outputvec, &*thread_indices);
+                    sharedstate.lock().unwrap().set_data_and_wake(results);
+                } else {
+                    // Option is none, so we exit the loop and close the thread.
+                    break;
                 }
-                _sp.exit();
-                let mut sharedstate = sharedstate.lock().unwrap();
-
-                // Put the results into a sharedstate object, so the parent caller can access it.
-                sharedstate.data.replace(results);
-                sharedstate.waker.take().unwrap().wake();
-            } else {
-                // Option is none, so we exit the loop and close the thread.
-                break;
             }
         }).unwrap()
     }
@@ -206,7 +196,7 @@ impl IndexWorker {
                 sent = true;
                 Poll::Pending
             } else {
-                match ss.lock().unwrap().data.take() {
+                match ss.lock().unwrap().get_data() {
                     None => Poll::Pending,
                     Some(x) => Poll::Ready(x)
                 }
@@ -217,8 +207,13 @@ impl IndexWorker {
     }
 }
 
-pub fn load_file_to_string(p: &Path) -> Option<String> {
-    fs::read_to_string(p).ok()
+pub fn load_file_to_string(p: &Path, max_size: usize) -> Option<String> {
+    let mut file = fs::File::open(p).unwrap();
+    let size = file.metadata().map(|m| m.len() as usize + 1).unwrap().min(max_size);
+    let mut buf = Vec::with_capacity(size);
+    buf.resize(size, 0u8);
+    file.read(&mut buf).unwrap();
+    Some(String::from_utf8(buf).unwrap())
 }
 
 impl Drop for IndexWorker {

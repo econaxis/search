@@ -74,7 +74,7 @@ def process(filename):
     os.rename(filename, filename + "PROCESSED")
 
 
-pool = multiprocessing.Pool(processes=6)
+pool = multiprocessing.Pool(processes=3)
 
 def _process():
     pool.map(process, [x for x in os.listdir('.') if os.path.isfile(x)])
@@ -85,5 +85,4 @@ def _download():
     pool.map(download, urls)
 
 
-_download()
 _process()

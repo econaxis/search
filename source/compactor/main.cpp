@@ -25,8 +25,10 @@ int main(int argc, char *argv[]) {
 
 
     if (argc == 2 && strcmp(argv[1], "check") == 0) {
-        std::ifstream index_file(indice_files_dir / "index_files");
-        std::ofstream index_file_working(indice_files_dir / "index_files_working");
+        fs::rename(indice_files_dir/"index_files", indice_files_dir/"index_files_old");
+
+        std::ifstream index_file(indice_files_dir/"index_files_old");
+        std::ofstream index_file_working(indice_files_dir / "index_files");
         std::string line;
         std::vector<std::future<std::string>> threads;
         while (std::getline(index_file, line)) {

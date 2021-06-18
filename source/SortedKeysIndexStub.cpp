@@ -43,7 +43,7 @@ static unsigned int string_prefix_compare(const std::string &shorter, const std:
 
 
 template<typename Iterator>
-int compute_average(Iterator begin, Iterator end) {
+static int compute_average(Iterator begin, Iterator end) {
     if (end - begin < 6) return 8;
 
     unsigned int sum = 0, square = 0;
@@ -54,7 +54,7 @@ int compute_average(Iterator begin, Iterator end) {
     }
     sum += end - begin;
 
-    sum *= 1.5;
+    sum *= 1.2F;
 
     return square / sum;
 }

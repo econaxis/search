@@ -15,7 +15,7 @@ use tracing::{debug, Level, span};
 
 
 use crate::elapsed_span;
-use crate::highlighter::{highlight_files, serialize_response_to_json};
+use crate::highlighter::{highlight_files, serialize_highlight_response};
 use crate::IndexWorker::{IndexWorker, ResultsList};
 use std::fs;
 
@@ -75,10 +75,12 @@ async fn highlight_handler<'a>(data: &ApplicationState, highlightid: u32) -> Res
         highlight_files(&files, query.as_slice())
     }).await?;
 
+    let serialized = serialize_highlight_response(res);
+
     Response::builder()
         .header("Content-Type", "application/json")
         .header("Server-Timing", starttime.elapsed().to_string())
-        .body(Body::from(serialize_response_to_json(&res))).map_err(|e| make_err(&*format!("{}", e)))
+        .body(Body::from(serialized)).map_err(|e| make_err(&*format!("{}", e)))
 }
 
 
@@ -116,9 +118,9 @@ fn parse_url_query<'a>(uri: &'a hyper::Uri, query_term: &str) -> Result<Vec<&'a 
     let match_indices = query.match_indices(query_term).next().
         ok_or(io::Error::new(ErrorKind::Other, format!("{} query not found", query_term)))?.0;
 
-    let query: Vec<&'a str> = query[match_indices + query_term.len()..].split(|x| x == '+').collect();
-    debug!(parsed = ?query);
+    let mut query: Vec<&'a str> = query[match_indices + query_term.len()..].split(|x| x == '+').collect();
 
+    let query = query.drain_filter(|x| !x.is_empty()).collect();
     Ok(query)
 }
 

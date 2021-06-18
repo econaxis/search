@@ -9,6 +9,8 @@ void TopDocs::append_multi(TopDocs other) {
 
     std::vector<value_type> merged(prev + addsize);
 
+    
+
     auto lastelem = merge_combine(ibegin, iend, begin(), end(), merged.begin());
 
     // Delete all other elements.

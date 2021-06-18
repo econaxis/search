@@ -59,15 +59,11 @@ namespace FileListGenerator {
                 continue;
             }
             auto abspath = data_files_dir / "data" / file_line;
-//            if (!fs::exists(abspath) || !fs::is_regular_file(abspath)) {
-//                std::cerr << "Path " << abspath.c_str() << " nonexistent\n";
-//                continue;
-//            }
 
             cur_size += fs::file_size(abspath);
 
             // Don't index more than x files or 500MB at a time.
-            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > 1000e6) break;
+            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(1000e6)) break;
             doc_id_counter++;
             register_temporary_file(get_ndb(), file_line.c_str(), doc_id_counter);
             filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});

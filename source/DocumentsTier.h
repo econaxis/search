@@ -19,6 +19,8 @@ class WordIndexEntry;
 // Converts a long, flat list of DocumentFrequency objects to a multi-level, tiered list.
 // Based on Strohman and Croft tiered-index paper.
 namespace MultiDocumentsTier {
+    static constexpr auto BLOCKSIZE = 256;
+
     struct TierIterator {
         int remaining;
         std::streampos read_position;

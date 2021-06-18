@@ -61,8 +61,7 @@ static int compute_average(Iterator begin, Iterator end) {
 
 
 std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string &term) const {
-    auto file_start = std::lower_bound(index->begin(), index->end(), Base26Num(term));
-    auto file_end = std::upper_bound(index->begin(), index->end(), Base26Num(term));
+    auto file_start = std::lower_bound(index->begin(), index->end(), Base26Num(term)) - 1;
 
     if (file_start == index->end()) { return std::nullopt; }
 
@@ -73,8 +72,12 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
     auto terms_pos = file_start->terms_pos;
     terms.seekg(terms_pos);
 
-    while (terms.tellg() < file_end->terms_pos) {
+    while (true) {
         auto preview = Serializer::preview_work_index_entry(terms);
+        if(preview.key.compare(term) > 0 || terms.bad()) {
+            break;
+        }
+
         if (preview.key.compare(term) == 0) {
             return preview;
         }
@@ -82,33 +85,55 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
     return std::nullopt;
 }
 
-
 std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string &term) const {
     auto loc = seek_to_term(term);
     if (!loc) {
         return {};
     } else {
+        positions.clear();
+        frequencies.clear();
+
+        assert(positions.is_open());
         positions.seekg(loc->positions_pos);
         frequencies.seekg(loc->frequencies_pos);
+
+        assert(positions.good());
         auto freq_list = MultiDocumentsTier::TierIterator(frequencies).read_all();
         return PositionsSearcher::read_positions_all(positions, freq_list);
     }
 }
 
 
-void SortedKeysIndexStub::rerank_by_positions(std::vector<TopDocs> &tds) {
+void SortedKeysIndexStub::rerank_by_positions(std::vector<TopDocs> &tds, TopDocs &ret) const {
     std::vector<std::vector<DocumentPositionPointer>> positions_list(tds.size());
 
     for (int i = 0; i < tds.size(); i++) {
-
         if (auto it = tds[i].get_first_term(); it) {
             positions_list[i] = get_positions_for_term(**it);
         } else {
-            break;
+            return;
         }
-
     }
+    for(auto& d: ret) {
+        int pos_difference = 0;
+        int last_pos = std::find(positions_list[0].begin(), positions_list[0].end(), d)->document_position;
+        for(int i = 1; i < tds.size(); i++) {
+            auto curpos = std::find(positions_list[i].begin(), positions_list[i].end(), d)->document_position;
 
+
+            pos_difference += std::abs(static_cast<int>(curpos - last_pos - 1));
+            last_pos = curpos;
+        }
+        if (pos_difference <= tds.size() * 1.5F) {
+            d.document_freq *= 2;
+
+            if(pos_difference <= tds.size() * 1.1F) d.document_freq *= 20;
+
+            std::cout<<d.document_id<<" "<<query_filemap(d.document_id)<<" boosted "<<d.document_freq<<" "<<pos_difference<<"\n";
+        }
+        else d.document_freq /= 2;
+    }
+    ret.sort_by_frequencies();
 }
 
 
@@ -205,8 +230,7 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
     auto all_outputs_backup = all_outputs;
 
     auto ret = DocumentsMatcher::AND(all_outputs);
-    auto max_iter = 20;
-    while (ret.size() < 10 && max_iter--) {
+    while (ret.size() < 40) {
         bool has_more = false;
         for (auto &td : all_outputs) {
             if (td.extend_from_tier_iterator(3)) has_more = true;
@@ -221,7 +245,7 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
         std::cout << "Warning: using OR backup for " << terms[0] << " ...\n";
         return DocumentsMatcher::backup(all_outputs_backup);
     } else {
-//        rerank_by_positions(all_outputs);
+        rerank_by_positions(all_outputs_backup, ret);
         return ret;
     }
 }
@@ -233,6 +257,8 @@ SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix),
                                                                filemap((indice_files_dir / ("filemap-" + suffix))) {
     frequencies = std::ifstream(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary);
     terms = std::ifstream(indice_files_dir / ("terms-" + suffix), std::ios_base::binary);
+    positions = std::ifstream(indice_files_dir / ("positions-" + suffix), std::ios_base::binary);
+
     assert(this->frequencies && this->terms);
 
 
@@ -250,7 +276,7 @@ SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : fil
     frequencies = std::ifstream(indice_files_dir / ("frequencies-" + other.suffix), std::ios_base::binary);
     terms = std::ifstream(indice_files_dir / ("terms-" + other.suffix), std::ios_base::binary);
     positions = std::ifstream(indice_files_dir / ("positions-" + other.suffix), std::ios_base::binary);
-    assert(this->frequencies && this->terms);
+    assert(this->frequencies && this->terms && this->positions);
 
     // Setup read cache fstream_cache_buffer
     fstream_cache_buffer = std::make_unique<char[]>(BUFLEN);

@@ -51,6 +51,8 @@
 
         if (signal.aborted || mycounter !== curcounter) return;
 
+        await sleep(500);
+
         let resp = await fetch("/search/?q=" + str, {signal});
         let text = await resp.json();
 
@@ -61,7 +63,7 @@
         document.getElementById("highlight-bar").innerHTML = formattedtext;
 
         // If latency is high, we want to minimize calls to highlight. If latency is low, we can call highlight freely.
-        await sleep(Math.min(latency, 300));
+        await sleep(500);
 
         if (signal.aborted || mycounter !== curcounter) return;
 
@@ -100,7 +102,6 @@
             }
             v.document = curstring;
             delete v.matches;
-            delete v.filename;
             v.document = v.document.replace(/\\n/gi, "");
             v.document = escapeHtml(v.document);
 

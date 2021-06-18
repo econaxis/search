@@ -32,7 +32,13 @@ void PositionsSearcher::serialize_positions(std::ostream &positions, const WordI
 std::vector<DocumentPositionPointer>
 PositionsSearcher::read_positions_all(std::istream &positions, const std::vector<DocumentFrequency> &freq_list) {
     uint32_t magic_num;
+    auto pos1 = positions.tellg();
+
+
     positions.read(reinterpret_cast<char *>(&magic_num), 4);
+
+    auto pos = positions.tellg();
+
     assert(magic_num == MAGIC_NUM);
 
     std::vector<DocumentPositionPointer> out;

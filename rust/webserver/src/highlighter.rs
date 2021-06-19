@@ -39,10 +39,8 @@ fn highlight_matches(str: &str, aut: &AhoCorasick<u16>) -> (usize, Vec<(usize, u
             res.push((match_.start(), match_.end()));
         }
 
-        if processed.len() >= aut.pattern_count() {
-            if processed.iter().all(|x| *x.1 >= 5u16) {
-                break;
-            }
+        if processed.len() >= aut.pattern_count() && processed.iter().all(|x| *x.1 >= 5u16) {
+            break;
         }
     }
 

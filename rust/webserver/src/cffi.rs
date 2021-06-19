@@ -95,7 +95,7 @@ impl Hash for DocIDFilePair {
 
 impl PartialEq for DocIDFilePair {
     fn eq(&self, other: &Self) -> bool {
-        return self.path == other.path;
+        self.path == other.path
     }
 }
 
@@ -153,18 +153,18 @@ impl CObj_Drop<C_DocIDFilePair> for CVector<C_DocIDFilePair> {
 
 impl CVector<C_DocIDFilePair> {
     pub unsafe fn new(stream: &ifstream) -> Self {
-        let vecpointer: *const ctypes::vector = 0 as *const _;
+        let vecpointer: *const *const ctypes::vector = std::ptr::null();
         let length: u32 = 0;
-        read_filepairs(stream.as_ctypes(), &vecpointer as *const *const _, &length as *const u32);
+        read_filepairs(stream.as_ctypes(), vecpointer, &length as *const u32);
 
         let mut buf = Vec::new();
         buf.resize(length as usize, C_DocIDFilePair::default());
         let ptrloc = buf.as_slice().as_ptr() as *const C_DocIDFilePair;
-        copy_filepairs_to_buf(vecpointer, ptrloc, length);
+        copy_filepairs_to_buf(*vecpointer, ptrloc, length);
 
         CVector {
             buffer: buf,
-            vectorlocation: vecpointer,
+            vectorlocation: *vecpointer,
         }
     }
 
@@ -194,7 +194,7 @@ impl ifstream {
         }
     }
     fn as_ctypes(&self) -> *const ctypes::ifstream {
-        return self.0 as *const ffi::c_void as *const ctypes::ifstream;
+        self.0 as *const ffi::c_void as *const ctypes::ifstream
     }
 }
 
@@ -205,7 +205,7 @@ impl Read for ifstream {
         unsafe {
             read_from_ifstream(self.0, &mut buf[0] as *mut u8 as *mut c_char, buflen);
         };
-        return Ok(buflen as usize);
+        Ok(buflen as usize)
     }
 }
 

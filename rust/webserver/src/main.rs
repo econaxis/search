@@ -74,7 +74,7 @@ fn main() -> io::Result<()> {
     let indices = open_index_files();
     let indices = indices.leak();
 
-    let chunk_size = (indices.len() as f32 / 4 as f32).ceil() as usize;
+    let chunk_size = (indices.len() as f32 / 4f32).ceil() as usize;
 
 
     debug!("Loading {} indices", indices.len());

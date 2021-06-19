@@ -120,7 +120,7 @@ fn filemaps<P: AsRef<Path>>(p: P) -> Vec<PathBuf> {
     // Check the index_files file too, make sure there aren't any mistakes.
     let p = p.as_ref().to_path_buf().join("index_files");
 
-    let bfr = fs::File::open(&p).map(|x| BufReader::new(x));
+    let bfr = fs::File::open(&p).map(BufReader::new);
     let mut result_index_files = Vec::new();
 
     if let Ok(bfr) = bfr {

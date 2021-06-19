@@ -85,9 +85,7 @@ impl Clone for IndexWorker {
 
         let (sender, receiver) = mpsc::channel();
 
-        let indices: Vec<C_SSK> = self.indices.iter().map(|x| {
-            x.clone()
-        }).collect();
+        let indices: Vec<C_SSK> = self.indices.iter().cloned().collect();
 
         let indices = Arc::new(indices);
 
@@ -100,15 +98,15 @@ impl Clone for IndexWorker {
     }
 }
 
-fn str_to_char_char(a: &Vec<String>) -> Vec<CString> {
+fn str_to_char_char(a: &[String]) -> Vec<CString> {
     let strs: Vec<CString> = a.iter().map(|x| {
         CString::new(x.as_bytes()).unwrap()
     }).collect();
     strs
 }
 
-fn search_indices_wrapper(thread_indices: &Arc<Vec<C_SSK>>, query: &Vec<String>) -> VecDPP {
-    let chars = str_to_char_char(&query);
+fn search_indices_wrapper(thread_indices: &Arc<Vec<C_SSK>>, query: &[String]) -> VecDPP {
+    let chars = str_to_char_char(query);
 
     let chars: Vec<*const c_char> = chars.iter().map(|x| x.as_ptr()).collect();
     let chars: *const *const c_char = chars.as_ptr();
@@ -126,7 +124,7 @@ fn search_indices_wrapper(thread_indices: &Arc<Vec<C_SSK>>, query: &Vec<String>)
 }
 
 
-fn load_filenames_from_ids(vec: &VecDPP, thread_indices: &Vec<C_SSK>) -> ResultsList {
+fn load_filenames_from_ids(vec: &VecDPP, thread_indices: &[C_SSK]) -> ResultsList {
     let filename_buffer = [0u8; 500];
     let mut results = ResultsList(Vec::new());
     for i in vec.deref() {
@@ -210,8 +208,7 @@ impl IndexWorker {
 pub fn load_file_to_string(p: &Path, max_size: usize) -> Option<String> {
     let mut file = fs::File::open(p).unwrap();
     let size = file.metadata().map(|m| m.len() as usize + 1).unwrap().min(max_size);
-    let mut buf = Vec::with_capacity(size);
-    buf.resize(size, 0u8);
+    let mut buf = vec![0u8; size];
     file.read(&mut buf).unwrap();
     Some(String::from_utf8(buf).unwrap())
 }

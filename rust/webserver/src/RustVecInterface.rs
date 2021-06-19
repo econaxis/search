@@ -9,7 +9,7 @@ use crate::cffi::{self, clone_one_index, ctypes};
 #[repr(C)]
 pub struct DocumentPositionPointer_v3(pub u32, pub u32, pub u8);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct VecDPP(Vec<DocumentPositionPointer_v3>);
 
 

@@ -26,7 +26,7 @@ use std::io::{BufReader, BufRead};
 use std::path::{PathBuf};
 use std::iter::FromIterator;
 use env_logger;
-use log::LevelFilter;
+use tracing::log::LevelFilter;
 
 fn setup_logging() {
     if env::var("RUST_LOG").is_ok() {
@@ -66,7 +66,6 @@ fn open_index_files() -> Vec<String> {
     }).collect()
 }
 
-// const suffices: [&str; 30] = ["bDqAA-YGF-E\0", "IPkxL-0UIm3\0", "1RC0P-BWoSj\0", "nTNYn-fjulY\0", "OLfQJ-2GRMG\0", "1T7w3-2FyYw\0", "SgfRj-7jVDy\0", "8B_D4-FlgH7\0", "RfCBA-GXPHZ\0", "ZqqTC-QAErs\0", "JK6Fd-vI2JZ\0", "b6EiO-Woo4F\0", "z9GQY-J_jsV\0", "KM6KY-Ub7Q9\0", "umhkl-Rs2iJ\0", "KjvRz-vq5_a\0", "J8412-1CgFX\0", "A7wJU-oDt4o\0", "tQdWr-bJ92Q\0", "JUuTA-X2PtI\0", "qv-re-pG8NH\0", "Erc4o--rGoP\0", "XenTF-EG9dm\0", "QfhPp-EO2sQ\0", "pXJ7k-U4mhP\0", "BFd7n-UIslu\0", "u6g5i-bgGAN\0", "xhmyc-X6yXp\0", "jm4BP-nwCBP\0", "0Z56k-fyvHt\0" ];
 fn main() -> io::Result<()> {
     setup_logging();
 
@@ -76,6 +75,7 @@ fn main() -> io::Result<()> {
     let indices = indices.leak();
 
     let chunk_size = (indices.len() as f32 / 4 as f32).ceil() as usize;
+
 
     debug!("Loading {} indices", indices.len());
     let iw: Vec<_> = indices.chunks(chunk_size).map(|chunk| {

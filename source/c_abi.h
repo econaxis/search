@@ -34,8 +34,6 @@ SortedKeysIndexStub* clone_one_index(SortedKeysIndexStub* other);
 
 SortedKeysIndexStub *load_one_index(const char* suffix_name);
 
-void search_index_top_n(SortedKeysIndexStub* index, RustVec* output_buffer, int term_num, const char** query_terms);
-
 void delete_one_index(SortedKeysIndexStub* ssk);
 };
 

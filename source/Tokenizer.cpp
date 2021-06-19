@@ -77,10 +77,7 @@ std::vector<WordPos> clean_string(std::string &file) {
 std::vector<WordIndexEntry> Tokenizer::index_string_file(std::string file, uint32_t docid) {
     auto positions = clean_string(file);
     robin_hood::unordered_map<std::string, WordIndexEntry> index_temp;
-    robin_hood::unordered_set<unsigned int> processed;
-    index_temp.reserve(file.length() / 2);
-
-    unsigned int word_count = 0;
+    index_temp.reserve(file.length() / 3);
 
     for (auto[start, end] : positions) {
         auto temp = file.substr(start, end - start);
@@ -89,13 +86,13 @@ std::vector<WordIndexEntry> Tokenizer::index_string_file(std::string file, uint3
             if (auto it = index_temp.find(temp); it == index_temp.end()) {
                 index_temp.emplace(temp, WordIndexEntry{temp, {}});
             }
-            index_temp.at(temp).files.push_back(DocumentPositionPointer{docid, word_count++});
+            index_temp.at(temp).files.emplace_back(docid, start);
         }
     }
     std::vector<WordIndexEntry> final;
     final.reserve(index_temp.size());
-    std::transform(index_temp.begin(), index_temp.end(), std::back_inserter(final),
-                   [](auto &pair) {
+    std::transform(std::make_move_iterator(index_temp.begin()), std::make_move_iterator(index_temp.end()), std::back_inserter(final),
+                   [](auto pair) {
                        return std::move(pair.second);
                    });
     return final;

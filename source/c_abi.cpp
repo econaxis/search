@@ -102,7 +102,7 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
 
         uint32_t curtag = i << 27;
 
-        // Imbue top 4 bits of docid with tag (which index we are using)
+        // Imbue top 4 bits of docid with index tag (which index the doc id is associated with)
         for (auto &pair: temp) {
             assert(pair.document_id < 1 << 27);
             pair.document_id |= curtag;
@@ -120,8 +120,8 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
     for (auto &i : joined) {
         imbued.push_back({i.document_id & tag_remover, i.document_freq, static_cast<uint8_t>(i.document_id >> 27)});
     }
-    if (joined.size() > 20) {
-        fill_rust_vec(output_buffer, imbued.begin().base(), 20 * sizeof(DocumentPositionPointer_v2_imbued));
+    if (joined.size() > 50) {
+        fill_rust_vec(output_buffer, imbued.begin().base(), 50 * sizeof(DocumentPositionPointer_v2_imbued));
     } else {
         fill_rust_vec(output_buffer, imbued.begin().base(), joined.size() * sizeof(DocumentPositionPointer_v2_imbued));
     }
@@ -135,21 +135,6 @@ uint32_t query_for_filename(SortedKeysIndexStub *index, uint32_t docid, char *bu
     std::strncpy(buffer, absstrpath.c_str(), bufferlen);
     return strlen(absstrpath.c_str()) + 1;
 }
-
-void search_index_top_n(SortedKeysIndexStub *index, RustVec *output_buffer, int term_num, const char **query_terms) {
-    std::vector<std::string> query(term_num);
-    for (int i = 0; i < term_num; i++) query[i] = std::string(query_terms[i]);
-
-    auto td = index->search_many_terms(query);
-    td.sort_by_frequencies();
-
-    if (td.size() > 300) {
-        fill_rust_vec(output_buffer, td.begin().base(), 300 * sizeof(DocumentFrequency));
-    } else {
-        fill_rust_vec(output_buffer, td.begin().base(), td.size() * sizeof(DocumentFrequency));
-    }
-}
-
 SortedKeysIndexStub *load_one_index(const char *suffix_name) {
     try {
         std::string suffix = suffix_name;

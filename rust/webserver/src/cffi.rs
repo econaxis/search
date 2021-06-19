@@ -153,18 +153,18 @@ impl CObj_Drop<C_DocIDFilePair> for CVector<C_DocIDFilePair> {
 
 impl CVector<C_DocIDFilePair> {
     pub unsafe fn new(stream: &ifstream) -> Self {
-        let vecpointer: *const *const ctypes::vector = std::ptr::null();
+        let vecpointer= std::mem::MaybeUninit::<*const ctypes::vector>::uninit();
         let length: u32 = 0;
-        read_filepairs(stream.as_ctypes(), vecpointer, &length as *const u32);
+        read_filepairs(stream.as_ctypes(), vecpointer.as_ptr(), &length as *const u32);
 
         let mut buf = Vec::new();
         buf.resize(length as usize, C_DocIDFilePair::default());
         let ptrloc = buf.as_slice().as_ptr() as *const C_DocIDFilePair;
-        copy_filepairs_to_buf(*vecpointer, ptrloc, length);
+        copy_filepairs_to_buf(*vecpointer.as_ptr(), ptrloc, length);
 
         CVector {
             buffer: buf,
-            vectorlocation: *vecpointer,
+            vectorlocation: vecpointer.assume_init(),
         }
     }
 
@@ -212,7 +212,6 @@ impl Read for ifstream {
 
 impl Drop for ifstream {
     fn drop(&mut self) {
-        println!("Dropping ifstream");
         unsafe { deallocate_ifstream(self.0); };
     }
 }

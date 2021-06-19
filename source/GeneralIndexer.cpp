@@ -12,6 +12,7 @@
 #include <iostream>
 #include <queue>
 #include "compactor/Compactor.h"
+#include <execution>
 
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
@@ -36,12 +37,14 @@ struct SyncedQueue {
         cv.notify_one();
     }
 
-    void push_multi(const auto begin, const auto end) {
+    template<typename T>
+    void push_multi(T begin, T end) {
         auto l = get_lock();
 
-        for (auto i = begin; i < end; i++) {
-            queue.push(*i);
+        for(auto i = begin; i < end; i++) {
+            queue.push(std::move(*i));
         }
+
         cv.notify_one();
     }
 
@@ -119,15 +122,15 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
             std::cout << (entry - filepairs.begin() - contents.size()) * 100 / filepairs.size() << "%\r" << std::flush;
         }
 
-        if (contents.size() > 200) {
+        if (contents.size() > 150) {
             contents.wait_for([&] {
-                return contents.size() <= 10;
+                return contents.size() < 150;
             });
         }
 
         thread_local_holder.emplace_back(std::move(filestr), *entry);
 
-        if(thread_local_holder.size() >= 20) {
+        if (thread_local_holder.size() >= 50) {
             contents.push_multi(thread_local_holder.begin(), thread_local_holder.end());
             thread_local_holder.clear();
         }
@@ -136,6 +139,12 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
     contents.cv.notify_all();
 }
 
+
+void sort_and_group_all_par(std::vector<WordIndexEntry>& index) {
+    std::for_each(std::execution::par_unseq, index.begin(), index.end(), [](WordIndexEntry &elem) {
+        std::sort(elem.files.begin(), elem.files.end());
+    });
+}
 
 std::optional<std::string> GeneralIndexer::read_some_files() {
     // Vector of file paths and generated, incremental ID.
@@ -179,17 +188,18 @@ std::optional<std::string> GeneralIndexer::read_some_files() {
     // Instead of sorting and grouping by terms, this also sorts each term's documents list by document ID.
     // This could take a long time (many sorts), and there's no memory-conservation advantage,
     // so we only need to do it at the end.
-    a1.sort_and_group_all();
+    sort_and_group_all_par(a1.get_index());
     return persist_indices(a1, fp);
 }
 
 SortedKeysIndex
 GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file) {
     std::array<SortedKeysIndex, 20> reducer{};
+    reducer[0].get_index().reserve(each_max_file * 100);
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
             file_contents.wait_for([&]() {
-                return file_contents.size() > 10 || done_flag;
+                return file_contents.size() > 2 || done_flag;
             });
         }
         if (!file_contents.size() && done_flag) continue;
@@ -200,15 +210,19 @@ GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQu
         auto should_insert = std::min_element(reducer.begin(), reducer.end(), [](auto &i, auto &b) {
             return i.get_index().size() < b.get_index().size();
         });
+        auto &should_insert_vec = should_insert->get_index();
         auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
+        should_insert_vec.insert(should_insert_vec.end(), temp.begin(), temp.end());
 
-        should_insert->merge_into(std::move(temp));
+        if (should_insert_vec.size() % 1000 == 0) should_insert->sort_and_group_shallow();
     }
 
     for (int i = 1; i < reducer.size(); i++) {
+        reducer[i].sort_and_group_shallow();
         reducer[0].merge_into(std::move(reducer[i]));
         assert(reducer[i].get_index().empty());
     }
+    reducer[0].sort_and_group_shallow();
     return reducer[0];
 }
 
@@ -238,4 +252,37 @@ std::string GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     });
 
     return suffix;
+}
+
+int get_index_file_len() {
+    std::ifstream i (indice_files_dir / "index_files");
+    auto s = std::string();
+    int counter = 0;
+    while(std::getline(i, s)) {
+        counter++;
+    }
+    return counter;
+}
+
+void GeneralIndexer::read_and_compress_files() {
+    auto idf_len =get_index_file_len();
+
+    if(idf_len <= 16) return;
+
+    auto do_two = []() -> std::string {
+        auto first = GeneralIndexer::read_some_files();
+        assert(first);
+        auto second = GeneralIndexer::read_some_files();
+        assert(second);
+        return *Compactor::compact_two_files(*first, *second);
+    };
+
+    auto one = do_two();
+    auto two = do_two();
+    auto three = do_two();
+    auto four = do_two();
+
+    auto onetwo = Compactor::compact_two_files(one, two);
+    auto threefour = Compactor::compact_two_files(three, four);
+    Compactor::compact_two_files(*onetwo, *threefour).value();
 }

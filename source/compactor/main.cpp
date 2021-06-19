@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
         fs::rename(indice_files_dir/"index_files", indice_files_dir/"index_files_old");
 
         std::ifstream index_file(indice_files_dir/"index_files_old");
-        std::ofstream index_file_working(indice_files_dir / "index_files");
+        std::ofstream index_file_working(indice_files_dir / "index_files", std::ios_base::out);
         std::string line;
         std::vector<std::future<std::string>> threads;
         while (std::getline(index_file, line)) {

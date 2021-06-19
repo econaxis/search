@@ -11,9 +11,9 @@ class FPStub {
     robin_hood::unordered_map<uint32_t, std::string> map;
 public:
 
-    FPStub(fs::path path);
+    FPStub(const fs::path& path);
 
-    std::string query(int docid) const;
+    std::string query(uint32_t docid) const;
 };
 
 

@@ -78,7 +78,7 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
             break;
         }
 
-        if (preview.key.compare(term) == 0) {
+        if (preview.key == term) {
             return preview;
         }
     }
@@ -104,34 +104,36 @@ std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term
 }
 
 
-void SortedKeysIndexStub::rerank_by_positions(std::vector<TopDocs> &tds, TopDocs &ret) const {
+float position_difference_scaler(unsigned int posdiff) {
+    if (posdiff <= 1) return 5.f;
+    if (posdiff <= 3) return 2.5f;
+    if (posdiff <= 5) return 2.f;
+    if (posdiff <= 10) return 1.5f;
+    if (posdiff <= 20) return 1.2f;
+    return 0.8f;
+}
+
+void rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds, TopDocs &ret) {
     std::vector<std::vector<DocumentPositionPointer>> positions_list(tds.size());
 
     for (int i = 0; i < tds.size(); i++) {
         if (auto it = tds[i].get_first_term(); it) {
-            positions_list[i] = get_positions_for_term(**it);
+            positions_list[i] = index.get_positions_for_term(**it);
         } else {
             return;
         }
     }
     for(auto& d: ret) {
-        int pos_difference = 0;
-        int last_pos = std::find(positions_list[0].begin(), positions_list[0].end(), d)->document_position;
+        uint pos_difference = 0;
+        uint last_pos = std::find(positions_list[0].begin(), positions_list[0].end(), d)->document_position;
         for(int i = 1; i < tds.size(); i++) {
             auto curpos = std::find(positions_list[i].begin(), positions_list[i].end(), d)->document_position;
-
-
             pos_difference += std::abs(static_cast<int>(curpos - last_pos - 1));
             last_pos = curpos;
         }
-        if (pos_difference <= tds.size() * 1.5F) {
-            d.document_freq *= 2;
-
-            if(pos_difference <= tds.size() * 1.1F) d.document_freq *= 20;
-
-            std::cout<<d.document_id<<" "<<query_filemap(d.document_id)<<" boosted "<<d.document_freq<<" "<<pos_difference<<"\n";
-        }
-        else d.document_freq /= 2;
+        d.document_freq *= position_difference_scaler(pos_difference);
+        if (pos_difference <= 5)
+            std::cout<<d.document_id<<" "<<index.query_filemap(d.document_id)<<" boosted "<<d.document_freq<<" "<<pos_difference<<"\n";
     }
     ret.sort_by_frequencies();
 }
@@ -235,7 +237,6 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
         for (auto &td : all_outputs) {
             if (td.extend_from_tier_iterator(3)) has_more = true;
         }
-
         if (!has_more) break;
         else {
             ret = DocumentsMatcher::AND(all_outputs);
@@ -245,7 +246,7 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
         std::cout << "Warning: using OR backup for " << terms[0] << " ...\n";
         return DocumentsMatcher::backup(all_outputs_backup);
     } else {
-        rerank_by_positions(all_outputs_backup, ret);
+        rerank_by_positions(*this, all_outputs_backup, ret);
         return ret;
     }
 }

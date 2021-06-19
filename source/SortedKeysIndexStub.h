@@ -56,9 +56,8 @@ private:
 
 
     std::optional<PreviewResult> seek_to_term(const std::string &term) const;
-    std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
+
     TopDocs search_one_term(const std::string &term) const;
-    void rerank_by_positions(std::vector<TopDocs> &tds, TopDocs &ret) const;
 
 public:
 
@@ -75,6 +74,7 @@ public:
     SortedKeysIndexStub(const SortedKeysIndexStub& other);
 
 
+    std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
 };
 
 

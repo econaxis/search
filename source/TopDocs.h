@@ -29,53 +29,15 @@ public:
 
     TopDocs() = default;
 
-    void add_term_str(std::string term, MultiDocumentsTier::TierIterator it) {
-        included_terms.emplace(std::move(term), std::move(it));
+    void add_term_str(const std::string &term, MultiDocumentsTier::TierIterator it) {
+        included_terms.emplace(std::move(term), it);
     }
 
-    const std::optional<const std::string*> get_first_term() const {
-        if(included_terms.empty()) {
-            return std::nullopt;
-        } else return &included_terms.begin()->first;
-    }
+    std::optional<const std::string *> get_first_term() const;
 
-    bool extend_from_tier_iterator(int how_many = 2) {
-        std::vector<DocumentFrequency> extended;
-        extended.resize(how_many * MultiDocumentsTier::BLOCKSIZE * 2);
-        auto extended1 = extended;
+    bool extend_from_tier_iterator(int how_many);
 
-        auto ptr = &extended;
-        auto lastelem = ptr->begin();
-
-        auto flip = [&]() {
-            if (ptr == &extended) ptr = &extended1;
-            else if (ptr == &extended1) ptr = &extended;
-            else throw std::runtime_error("Ptr not extended or extended1");
-            return ptr;
-        };
-
-        bool has_more = false;
-        for (auto &[k, ti] : included_terms) {
-            for (int i = 0; i < how_many; i++) {
-                auto n = ti.read_next();
-                if (n) {
-                    auto oldrange = ptr;
-                    auto newrange = flip();
-
-                    lastelem = std::merge(oldrange->begin(), lastelem, n->begin(), n->end(), newrange->begin());
-                    has_more = true;
-                } else {
-                    break;
-                }
-            }
-        }
-        ptr->resize(lastelem - ptr->begin());
-        assert(std::is_sorted(ptr->begin(), ptr->end()));
-        append_multi(TopDocs(std::move(*ptr)));
-        return has_more;
-    }
-
-    TopDocs(std::vector<DocumentFrequency> docs) : docs(std::move(docs)) {};
+    explicit TopDocs(std::vector<DocumentFrequency> docs) : docs(std::move(docs)) {};
 
     TopDocs(value_type *ibegin, value_type *iend) {
         docs.resize(iend - ibegin);
@@ -94,12 +56,22 @@ public:
 
     std::size_t size() const { return docs.size(); }
 
+    // Merge another TopDocs with our list of TopDocs.
+    // Maintains sorted order by document id
     void append_multi(TopDocs other);
 
 
+    // If our list contains two same document ID's, then add their scores and merge them into one.
+    // This is possible in prefix searching, when a document might have multiple words whose prefixes
+    // match the same query term.
+    // This also happens when we merge the TopDocs of two query terms, so documents containing both terms
+    // should be bonused.
+    // Note: maybe not needed since `append_multi` doesn't allow duplicates
     void merge_similar_docs();
 
 
+    // Normally, we maintain sorted order by document_id.
+    // However, when we want to view the results, we would rather have a frequencies-sorted list.
     void sort_by_frequencies();
 
 };

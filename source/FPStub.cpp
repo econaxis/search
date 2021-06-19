@@ -7,7 +7,7 @@
 #include <algorithm>
 
 
-FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
+FPStub::FPStub(const fs::path& path) : stream(path, std::ios_base::binary) {
     assert(stream);
     auto sz = Serializer::read_vnum(stream);
     for (auto i = 0; i < sz; i++) {
@@ -16,7 +16,7 @@ FPStub::FPStub(fs::path path) : stream(path, std::ios_base::binary) {
     }
 }
 
-std::string FPStub::query(int docid) const {
+std::string FPStub::query(uint32_t docid) const {
     auto it =  map.find(docid);
     if(it == map.end()) return "File not found";
     else return it->second;

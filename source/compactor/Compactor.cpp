@@ -308,7 +308,7 @@ void Compactor::test_makes_sense(const std::string &suffix) {
 
     auto filepairs = Serializer::read_filepairs(streamset.filemap);
 
-    assert(filepairs.size());
+    assert(!filepairs.empty());
     return;
 
 

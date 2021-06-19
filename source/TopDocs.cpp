@@ -23,11 +23,7 @@ void TopDocs::append_multi(TopDocs other) {
 }
 
 
-// If our list contains two same document ID's, then add their scores and merge them into one.
-// This is possible in prefix searching, when a document might have multiple words whose prefixes
-// match the same query term.
-// This also happens when we merge the TopDocs of two query terms, so documents containing both terms
-// should be bonused.
+
 void TopDocs::merge_similar_docs() {
     if (size() == 0) return;
 
@@ -68,4 +64,49 @@ void TopDocs::sort_by_frequencies() {
     std::partial_sort(begin(), partial_end, end(), [](auto &t, auto &t1) {
         return t.document_freq < t1.document_freq;
     });
+}
+
+bool TopDocs::extend_from_tier_iterator(int how_many) {
+    std::vector<DocumentFrequency> extended;
+    extended.resize(how_many * MultiDocumentsTier::BLOCKSIZE * 2);
+    auto extended1 = extended;
+
+    auto ptr = &extended;
+    auto lastelem = ptr->begin();
+
+    // Use a "double-buffering" approach to merging many sorted lists.
+    // Reduces number of dynamic allocations in the loop.
+    auto flip = [&]() {
+        if (ptr == &extended) ptr = &extended1;
+        else if (ptr == &extended1) ptr = &extended;
+        else throw std::runtime_error("Ptr not extended or extended1");
+        return ptr;
+    };
+
+    bool has_more = false;
+    for (auto &[k, ti] : included_terms) {
+        for (int i = 0; i < how_many; i++) {
+            auto n = ti.read_next();
+            if (n) {
+                auto oldrange = ptr;
+                auto newrange = flip();
+
+                lastelem = std::merge(oldrange->begin(), lastelem, n->begin(), n->end(), newrange->begin());
+                has_more = true;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // If we encountered the last element, then the actual "valid" size will be less than buffer size
+    ptr->resize(lastelem - ptr->begin());
+    append_multi(TopDocs(std::move(*ptr)));
+    return has_more;
+}
+
+std::optional<const std::string *> TopDocs::get_first_term() const {
+    if(included_terms.empty()) {
+        return std::nullopt;
+    } else return &included_terms.begin()->first;
 }

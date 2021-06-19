@@ -102,12 +102,7 @@ int main(int argc, char *argv[]) {
 
     if (argc == 1 ) {
         while (true) {
-            auto first = GeneralIndexer::read_some_files();
-            assert(first);
-            auto second = GeneralIndexer::read_some_files();
-            assert(second);
-
-            Compactor::compact_two_files(*first, *second);
+            GeneralIndexer::read_and_compress_files();
         };
         return 1;
     };

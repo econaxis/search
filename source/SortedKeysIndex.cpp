@@ -50,16 +50,16 @@ void SortedKeysIndex::merge_into(SortedKeysIndex &&other) {
 
 
 void SortedKeysIndex::sort_and_group_shallow() {
-    if (!std::is_sorted(index.begin(), index.end())) {
-        throw std::runtime_error("Not sorted. Unexpected state, unsorted or duplicate values found");
-    }
-
-    for (int i = 1; i < index.size(); i++) {
-        if (index[i] == index[i - 1]) {
-            throw std::runtime_error("Ununique. Unexpected state, unsorted or duplicate values found");
-        }
-    }
-    return;
+//    if (!std::is_sorted(index.begin(), index.end())) {
+//        throw std::runtime_error("Not sorted. Unexpected state, unsorted or duplicate values found");
+//    }
+//
+//    for (int i = 1; i < index.size(); i++) {
+//        if (index[i] == index[i - 1]) {
+//            throw std::runtime_error("Ununique. Unexpected state, unsorted or duplicate values found");
+//        }
+//    }
+//    return;
 
     std::sort(index.begin(), index.end());
 

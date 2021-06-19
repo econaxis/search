@@ -10,10 +10,8 @@ unstable-options = true
 DATA_FILES_DIR = "/mnt/nfs/extra/uspto/"
 
 [build]
-target-dir="target"
 rustflags = [
-    "-Clink-arg=-fuse-ld=lld", "-Zshare-generics=y",
-    "-C", "link-arg=-Wl,-rpath,$ORIGIN"
+    "-C", "prefer-dynamic"
 ]
 
 

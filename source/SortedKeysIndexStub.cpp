@@ -74,7 +74,7 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
 
     while (true) {
         auto preview = Serializer::preview_work_index_entry(terms);
-        if(preview.key.compare(term) > 0 || terms.bad()) {
+        if (preview.key.compare(term) > 0 || terms.bad()) {
             break;
         }
 
@@ -104,38 +104,74 @@ std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term
 }
 
 
-float position_difference_scaler(unsigned int posdiff) {
+float position_difference_scaler(int posdiff) {
     if (posdiff <= 1) return 5.f;
     if (posdiff <= 3) return 2.5f;
     if (posdiff <= 5) return 2.f;
     if (posdiff <= 10) return 1.5f;
-    if (posdiff <= 20) return 1.2f;
-    return 0.8f;
+    if (posdiff <= 20) return 1.1f;
+    return 0.6f;
 }
 
+template<typename T>
+uint32_t two_finger_find_min(T first1, T last1, T first2, T last2) {
+    assert(last1 - first1 && last2 - first2);
+    assert(first1->document_id == (last1-1)->document_id);
+    assert(first2->document_id == (last2-1)->document_id);
+
+    uint32_t curmin = 1<<30;
+    while(first1 < last1) {
+        if(first2 == last2) break;
+        if(first1->document_position > first2->document_position)
+            first2++;
+        else {
+            curmin = std::min(curmin, first2->document_position - first1->document_position);
+            if (curmin <= 1) break;
+            first1++;
+        }
+    }
+    return curmin;
+}
+
+
 void rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds, TopDocs &ret) {
+    if (tds.size() >= 32 || tds.size() < 2) {
+        std::cerr << "Number of terms larger than 32 or less than 2. Not supported\n";
+        return;
+    }
+
+
     std::vector<std::vector<DocumentPositionPointer>> positions_list(tds.size());
+    int total_terms_len = 0;
 
     for (int i = 0; i < tds.size(); i++) {
         if (auto it = tds[i].get_first_term(); it) {
             positions_list[i] = index.get_positions_for_term(**it);
+            total_terms_len += (*it)->size();
         } else {
+            std::cout << "Couldn't match all terms\n";
             return;
         }
     }
-    for(auto& d: ret) {
-        uint pos_difference = 0;
-        uint last_pos = std::find(positions_list[0].begin(), positions_list[0].end(), d)->document_position;
-        for(int i = 1; i < tds.size(); i++) {
-            auto curpos = std::find(positions_list[i].begin(), positions_list[i].end(), d)->document_position;
-            pos_difference += std::abs(static_cast<int>(curpos - last_pos - 1));
-            last_pos = curpos;
+    for (auto d = ret.begin(); d < ret.end(); d++) {
+        uint32_t pos_difference = 0;
+        for (int i = 0; i < tds.size(); i += 2) {
+            auto [first1, last1] = std::equal_range(positions_list[i].begin(), positions_list[i].end(), *d);
+            auto [first2, last2] = std::equal_range(positions_list[i+1].begin(), positions_list[i+1].end(), *d);
+            pos_difference += two_finger_find_min(first1, last1, first2, last2);
         }
-        d.document_freq *= position_difference_scaler(pos_difference);
-        if (pos_difference <= 5)
-            std::cout<<d.document_id<<" "<<index.query_filemap(d.document_id)<<" boosted "<<d.document_freq<<" "<<pos_difference<<"\n";
+
+
+        // Two different versions of indexing, workaround
+        if (pos_difference >= total_terms_len) pos_difference -= total_terms_len;
+
+        d->document_freq = static_cast<uint32_t>(d->document_freq * position_difference_scaler(pos_difference));
+        if (pos_difference <= 5) {
+            std::cout << index.query_filemap(d->document_id) << " boosted\n";
+        }
     }
     ret.sort_by_frequencies();
+    auto dumm = true;
 }
 
 

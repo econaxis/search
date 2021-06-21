@@ -44,10 +44,11 @@ mod public_ffi {
         ndb.get_from_str(key).is_some()
     }
 
+
     #[no_mangle]
-    pub extern fn drop_name_database(ndb: *mut NamesDatabase) {
+    pub extern fn serialize_namesdb(ndb: *mut NamesDatabase) {
         // unsafe { &mut *ndb }.drop_serialize();
-        unsafe { Box::from_raw(ndb) };
+        unsafe { &mut *ndb }.serialize();
     }
 }
 
@@ -65,6 +66,11 @@ fn pretty_serialize(_: &HashSet<DocIDFilePair>) {}
 impl NamesDatabase {
     pub fn new(metadata_path: &Path) -> Self {
         let json_path = metadata_path.join("file_metadata.msgpack");
+
+        if fs::metadata(&json_path).map_or(0, |f| f.len()) > 1 {
+            return Self::from_json_file(&json_path);
+        }
+
         let processed_data: HashSet<DocIDFilePair> = {
             fs::File::create(&json_path).expect(&*format!("Couldn't open file {:?}", json_path));
             let empty_hash = HashSet::new();
@@ -100,16 +106,12 @@ impl NamesDatabase {
         self.get(OsStr::new(key))
     }
 
-    #[allow(unused)]
-    fn drop_serialize(&mut self) {
+    fn serialize(&mut self) {
         // Serialize new metadata file.
         let binary_outfile = fs::File::create(&self.json_path).unwrap();
 
         let mut serializer = rmp_serde::Serializer::new(&binary_outfile);
         self.set.serialize(&mut serializer).unwrap();
-
-        // Serialize for debugging
-        // pretty_serialize(&self.set);
     }
 }
 
@@ -147,25 +149,31 @@ fn filemaps<P: AsRef<Path>>(p: P) -> Vec<PathBuf> {
 
 /// Generate metadata for all filemap-* files in a directory as a vector of DocIDFilePairs.
 pub fn generate_metadata_for_dir<P: AsRef<Path>>(path: P, processed_already: &HashSet<DocIDFilePair>)
-                                                 -> Vec<DocIDFilePair> {
+                                                 -> HashSet<DocIDFilePair> {
     let a: Vec<PathBuf> = filemaps(path).drain_filter(|path| {
         // Only filter paths not in the procesed already path.
         let path: &OsStr = path.as_ref();
         processed_already.get(path).is_none()
     }).collect();
-    let mut fp_total = Vec::new();
+    let mut fp_total = HashSet::new();
+    let mut errored = false;
     for ref path in a {
-        let fp = get_filepairs(path).into_iter().map(|mut elem: DocIDFilePair| {
+        get_filepairs(path).into_iter().for_each(|mut elem: DocIDFilePair| {
             // Fill in the remaining data of the elem.
             elem.filemap_path = Some(path.clone());
 
             // elem.bytes = fs::metadata(&abspath).map(|metadata| metadata.len() as u32).ok();
             // elem.num_words = word_count(&abspath);
-            elem
-        }).collect::<Vec<DocIDFilePair>>();
 
-        println!("{} files processed", fp.len());
-        fp_total.extend(fp);
+            if fp_total.get(&elem).is_some() && !errored {
+                errored = true;
+                eprintln!("Duplicate filename found {}", path.display());
+            } else {
+                fp_total.insert(elem);
+            }
+        });
+
+        println!("Total files currently {}", fp_total.len());
     }
     fp_total
 }

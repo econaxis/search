@@ -57,7 +57,13 @@ pub struct HighlightResult {
 fn load_matches_for_file<APath: AsRef<Path>>(p: APath, aut: &AhoCorasick<u16>) -> Option<HighlightResult> {
     // If we've used up more than 1.5 seconds already, exit and just show the results we already have.
     // if starttime.elapsed().unwrap().as_millis() > 50000 { break; }
-    let mut docsize = 16000usize;
+    let mut docsize = 20000usize;
+    let str = IndexWorker::load_file_to_string(p.as_ref(), docsize)?;
+
+    return Some(HighlightResult {
+        document: str,
+        matches: vec![(0, 0)],
+    });
 
     let (str, curmatches) = loop {
         let str = IndexWorker::load_file_to_string(p.as_ref(), docsize)?;

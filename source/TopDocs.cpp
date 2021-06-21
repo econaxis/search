@@ -68,7 +68,7 @@ void TopDocs::sort_by_frequencies() {
 
 bool TopDocs::extend_from_tier_iterator(int how_many) {
     std::vector<DocumentFrequency> extended;
-    extended.resize(how_many * MultiDocumentsTier::BLOCKSIZE * 2);
+    extended.resize(how_many * MultiDocumentsTier::BLOCKSIZE * 2 * included_terms.size());
     auto extended1 = extended;
 
     auto ptr = &extended;
@@ -91,6 +91,8 @@ bool TopDocs::extend_from_tier_iterator(int how_many) {
                 auto oldrange = ptr;
                 auto newrange = flip();
 
+                assert(lastelem -oldrange->begin() + n->size() <= newrange->size());
+
                 lastelem = std::merge(oldrange->begin(), lastelem, n->begin(), n->end(), newrange->begin());
                 has_more = true;
             } else {
@@ -100,7 +102,8 @@ bool TopDocs::extend_from_tier_iterator(int how_many) {
     }
 
     // If we encountered the last element, then the actual "valid" size will be less than buffer size
-    ptr->resize(lastelem - ptr->begin());
+    auto size = lastelem - ptr->begin();
+    ptr->resize(size);
     append_multi(TopDocs(std::move(*ptr)));
     return has_more;
 }

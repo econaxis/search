@@ -16,3 +16,4 @@ tracing = { version = "^0.1.26", features = ["log"] }
 tracing-subscriber = "^0.2"
 hyper = { version = "^0.14", features = ["full"] }
 env_logger = "^0.8"
+indicatif = "0.16.2"

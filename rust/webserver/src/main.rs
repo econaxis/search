@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
+#![allow(unused_imports)]
 #![allow(non_snake_case)]
 #![feature(extern_types)]
 #![feature(min_specialization)]
@@ -26,6 +27,7 @@ use std::io::{BufReader, BufRead};
 use std::path::{PathBuf};
 use std::iter::FromIterator;
 use env_logger;
+use indicatif::ProgressBar;
 use tracing::log::LevelFilter;
 
 fn setup_logging() {
@@ -71,14 +73,15 @@ fn main() -> io::Result<()> {
 
     unsafe { cffi::initialize_dir_vars() };
 
-    let indices = open_index_files();
+    let mut indices = open_index_files();
     let indices = indices.leak();
 
-    let chunk_size = (indices.len() as f32 / 4f32).ceil() as usize;
+    let chunk_size = (indices.len() as f32 / 5f32).ceil() as usize;
 
 
-    debug!("Loading {} indices", indices.len());
+    let bar = ProgressBar::new(indices.len() as u64);
     let iw: Vec<_> = indices.chunks(chunk_size).map(|chunk| {
+        bar.inc(chunk.len() as u64);
         IndexWorker::IndexWorker::new(Vec::from(chunk))
     }).collect();
 

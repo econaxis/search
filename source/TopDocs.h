@@ -29,6 +29,7 @@ public:
 
     TopDocs() = default;
 
+
     void add_term_str(const std::string &term, MultiDocumentsTier::TierIterator it) {
         included_terms.emplace(std::move(term), it);
     }

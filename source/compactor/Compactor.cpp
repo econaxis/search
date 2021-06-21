@@ -161,8 +161,6 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
     if(joined_suffix.size() > 20) joined_suffix = random_b64_str(5);
     auto temp_joined_suffix = "TEMP-" + joined_suffix;
 
-    std::cout << "Trying to compact: " << joined_suffix << "\n";
-
     auto filepairs = Serializer::read_filepairs(streamset.filemap);
     auto filepairs1 = Serializer::read_filepairs(streamset1.filemap);
 
@@ -261,10 +259,9 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
     IndexFileLocker::move_all(temp_joined_suffix, joined_suffix);
 
     IndexFileLocker::do_lambda([&] {
-        index_file.seekg(0, std::ios_base::end);
+        std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
         index_file << joined_suffix << "\n";
     });
-
     return joined_suffix;
 }
 

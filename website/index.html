@@ -100,7 +100,7 @@
                 curstring += "</mark>";
                 curstring += v.document.substring(m[1], end);
             }
-            v.document = curstring;
+            // v.document = curstring;
             delete v.matches;
             v.document = v.document.replace(/\\n/gi, "");
             v.document = escapeHtml(v.document);

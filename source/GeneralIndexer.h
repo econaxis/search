@@ -16,7 +16,7 @@ struct SyncedQueue;
 
 namespace GeneralIndexer {
 
-    void read_and_compress_files();
+    int read_and_compress_files();
 
 
     std::optional<std::string> read_some_files();

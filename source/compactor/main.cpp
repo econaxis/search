@@ -17,6 +17,18 @@ static fs::path make_path(const std::string &name, const std::string &suffix) {
     return indice_files_dir / (name + "-" + suffix);
 }
 
+int get_index_file_len() {
+    std::ifstream i (indice_files_dir / "index_files", std::ios_base::in);
+    assert(i);
+    std::string s;
+    int counter = 0;
+    while(std::getline(i, s) && i.good()) {
+        std::cout<<s<<i.tellg()<<"\n";
+        counter++;
+    }
+    return counter;
+}
+
 int main(int argc, char *argv[]) {
 
 //    Compactor_test();
@@ -63,12 +75,18 @@ int main(int argc, char *argv[]) {
         return 0;
     } else {
         while (true) {
+            if(get_index_file_len() <= 8) break;
+
             auto joined_suffix = Compactor::compact_two_files();
 
             if (joined_suffix) {
                 if (joined_suffix.value() == "CONTINUE") {
                     continue;
                 }
+                IndexFileLocker::do_lambda([&] {
+                    std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
+                    index_file << *joined_suffix << "\n";
+                });
                 std::cout << "Compacted to " << joined_suffix.value() << "\n";
             } else {
                 break;

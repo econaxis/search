@@ -24,6 +24,11 @@ inline std::string random_b64_str(int length = 5) {
     }
     return output;
 }
+inline ulong random_long(ulong min = 0, ulong max = 1UL<<63) {
+    std::uniform_int_distribution<ulong> dist(min, max);
+
+    return dist(randgen());
+}
 
 
 #endif //GAME_RANDOM_B64_GEN_H

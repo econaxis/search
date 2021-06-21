@@ -1,6 +1,7 @@
-import sys
-import hashlib
+import subprocess
 import os
+
+os.chdir(os.environ["DATA_FILES_DIR"] + "/indices")
 
 def ren(prefix, old, new):
     try:
@@ -10,14 +11,21 @@ def ren(prefix, old, new):
 
 
 f = open("index_files")
-fw = open("index_files_working", "w+")
+
+good = []
 
 for line in f.readlines():
     line = line.rstrip()
-    hashs = hashlib.md5(line.encode("ascii")).hexdigest()[0:5]
-    ren("positions", line, hashs)
-    ren("filemap", line, hashs)
-    ren("terms", line, hashs)
-    ren("frequencies", line, hashs)
+    good.append("positions-" + line)
+    good.append("filemap-" + line)
+    good.append("terms-" + line)
+    good.append("frequencies-" + line)
 
-    fw.write(hashs + "\n")
+total = subprocess.check_output('fd "positions|filemap|terms|frequencies" --max-depth=1', shell = True).decode("ascii")
+
+
+print("keeping ", good)
+for j in total.splitlines():
+    if j not in good:
+        os.renames(j, "old/" + j)
+        print("removing ", j)

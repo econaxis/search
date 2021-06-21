@@ -141,7 +141,7 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
 
 
 void sort_and_group_all_par(std::vector<WordIndexEntry>& index) {
-    std::for_each(std::execution::par_unseq, index.begin(), index.end(), [](WordIndexEntry &elem) {
+    std::for_each(std::execution::par, index.begin(), index.end(), [](WordIndexEntry &elem) {
         std::sort(elem.files.begin(), elem.files.end());
     });
 }
@@ -171,9 +171,9 @@ std::optional<std::string> GeneralIndexer::read_some_files() {
 
 
     std::vector<std::future<SortedKeysIndex>> threads;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 3; i++) {
         threads.emplace_back(std::async(std::launch::async | std::launch::deferred, [&]() {
-            return thread_process_files(done_flag, file_contents, fp.size() / 4);
+            return thread_process_files(done_flag, file_contents);
         }));
     }
     for (auto &fut : threads) a1.merge_into(fut.get());
@@ -193,13 +193,12 @@ std::optional<std::string> GeneralIndexer::read_some_files() {
 }
 
 SortedKeysIndex
-GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file) {
-    std::array<SortedKeysIndex, 20> reducer{};
-    reducer[0].get_index().reserve(each_max_file * 100);
+GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents) {
+    std::array<SortedKeysIndex, 4> reducer{};
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
             file_contents.wait_for([&]() {
-                return file_contents.size() > 2 || done_flag;
+                return file_contents.size() || done_flag;
             });
         }
         if (!file_contents.size() && done_flag) continue;
@@ -236,7 +235,6 @@ std::string GeneralIndexer::persist_indices(const SortedKeysIndex &master,
         // File already exists. Get a new suffix that's more random.
         suffix += random_b64_str(50);
     }
-    std::cout << "Persisting files to disk - " << suffix << "\n";
 
     auto temp_suffix = "TEMP-" + suffix;
     Serializer::serialize(temp_suffix, filepairs);
@@ -245,36 +243,20 @@ std::string GeneralIndexer::persist_indices(const SortedKeysIndex &master,
     // once it's done we copy temp to real.
     IndexFileLocker::move_all(temp_suffix, suffix);
 
-    // Put these new indices to the index_files list
-    IndexFileLocker::do_lambda([&] {
-        std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
-        index_file << suffix << "\n";
-    });
 
     return suffix;
 }
 
-int get_index_file_len() {
-    std::ifstream i (indice_files_dir / "index_files");
-    auto s = std::string();
-    int counter = 0;
-    while(std::getline(i, s)) {
-        counter++;
-    }
-    return counter;
-}
 
-void GeneralIndexer::read_and_compress_files() {
-    auto idf_len =get_index_file_len();
 
-    if(idf_len <= 16) return;
+int GeneralIndexer::read_and_compress_files() {
 
-    auto do_two = []() -> std::string {
+    auto do_two = []() -> std::optional<std::string> {
         auto first = GeneralIndexer::read_some_files();
-        assert(first);
+        if(!first) return std::nullopt;
         auto second = GeneralIndexer::read_some_files();
-        assert(second);
-        return *Compactor::compact_two_files(*first, *second);
+        if(!second) return std::nullopt;
+        return Compactor::compact_two_files(*first, *second);
     };
 
     auto one = do_two();
@@ -282,7 +264,10 @@ void GeneralIndexer::read_and_compress_files() {
     auto three = do_two();
     auto four = do_two();
 
-    auto onetwo = Compactor::compact_two_files(one, two);
-    auto threefour = Compactor::compact_two_files(three, four);
-    Compactor::compact_two_files(*onetwo, *threefour).value();
+    if(!one || !two || !three || !four) return -1;
+
+    auto onetwo = Compactor::compact_two_files(*one, *two).value();
+    auto threefour = Compactor::compact_two_files(*three, *four).value();
+    auto main_suffix = Compactor::compact_two_files(onetwo, threefour).value();
+    return 0;
 }

@@ -7,6 +7,7 @@
 #include <memory>
 #include "DocIDFilePair.h"
 #include "IndexFileLocker.h"
+#include "random_b64_gen.h"
 
 constexpr unsigned int MAX_FILES_PER_INDEX = 300000;
 
@@ -25,12 +26,13 @@ namespace FileListGenerator {
     }
 
     void delete_names_db() {
-        if(*ndb != nullptr) {
-            drop_name_database(*ndb);
+        if (*ndb != nullptr) {
+            // NO need to do it, hold NDB for the rest of the program
+            // drop_name_database(*ndb);
         }
     }
 
-    std::ifstream& get_index_files() {
+    std::ifstream &get_index_files() {
         static auto dir_it = std::ifstream(data_files_dir / "total-files-list");
         return dir_it;
     }
@@ -38,15 +40,17 @@ namespace FileListGenerator {
     // Creates a list of files to index.
     // Deals with multiple processes by acquiring a lock file.
     FilePairs from_file() {
+        using namespace std::chrono;
+        std::this_thread::sleep_for(milliseconds(random_long(10, 1000)));
+
         while (!IndexFileLocker::acquire_lock_file()) {
-            using namespace std::chrono_literals;
             std::cerr << "Blocking: lock file already exists\n";
-            std::this_thread::sleep_for(10s);
+            std::this_thread::sleep_for(seconds(5 + random_long(0, 5)));
         }
 
         FilePairs filepairs;
 
-        auto& dir_it = get_index_files();
+        auto &dir_it = get_index_files();
 
         uint32_t doc_id_counter = 1;
         std::string file_line;
@@ -63,13 +67,14 @@ namespace FileListGenerator {
             cur_size += fs::file_size(abspath);
 
             // Don't index more than x files or 500MB at a time.
-            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(300e6)) break;
+            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(500e6)) break;
             doc_id_counter++;
             register_temporary_file(get_ndb(), file_line.c_str(), doc_id_counter);
             filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});
         }
         std::cout << filepairs.size() << " files will be processed\n";
 
+        serialize_namesdb(get_ndb());
         // Release the lock file.
         IndexFileLocker::release_lock_file();
 

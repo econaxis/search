@@ -145,7 +145,6 @@ impl IndexWorker {
         let (sender, receiver) = mpsc::channel();
 
         let indices: Vec<C_SSK> = suffices.iter().map(|suffix| {
-            let _sp = event!(Level::DEBUG, index_name = suffix.as_str(), "loading file index");
             C_SSK::from_file_suffix(suffix.as_ref())
         }).collect();
 

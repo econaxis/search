@@ -41,7 +41,9 @@ namespace FileListGenerator {
     // Deals with multiple processes by acquiring a lock file.
     FilePairs from_file() {
         using namespace std::chrono;
-        std::this_thread::sleep_for(milliseconds(random_long(10, 1000)));
+
+        // Add some jitter as we're not sure that creating a file is an atomic operation in the filesystem implementation.
+        std::this_thread::sleep_for(milliseconds(random_long(10, 100)));
 
         while (!IndexFileLocker::acquire_lock_file()) {
             std::cerr << "Blocking: lock file already exists\n";
@@ -67,10 +69,12 @@ namespace FileListGenerator {
             cur_size += fs::file_size(abspath);
 
             // Don't index more than x files or 500MB at a time.
-            if (doc_id_counter > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(500e6)) break;
-            doc_id_counter++;
+            if (filepairs.size() > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(500e6)) break;
             register_temporary_file(get_ndb(), file_line.c_str(), doc_id_counter);
             filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});
+
+            doc_id_counter++;
+
         }
         std::cout << filepairs.size() << " files will be processed\n";
 

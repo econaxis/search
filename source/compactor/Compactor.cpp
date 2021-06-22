@@ -158,12 +158,13 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
 
     auto joined_suffix = suffix + "-" + suffix1;
 
-    if(joined_suffix.size() > 20) joined_suffix = random_b64_str(5);
+    if (joined_suffix.size() > 20) joined_suffix = random_b64_str(5);
     auto temp_joined_suffix = "TEMP-" + joined_suffix;
 
     auto filepairs = Serializer::read_filepairs(streamset.filemap);
     auto filepairs1 = Serializer::read_filepairs(streamset1.filemap);
 
+    std::cout << suffix << "-" << suffix1 << "\n";
     std::cout << "Greatest id: " << filepairs.back().document_id << " " << filepairs1.back().document_id << "\n";
 
     const auto diff1 = filepairs.back().document_id + 1;
@@ -306,7 +307,6 @@ void Compactor::test_makes_sense(const std::string &suffix) {
     auto filepairs = Serializer::read_filepairs(streamset.filemap);
 
     assert(!filepairs.empty());
-    return;
 
 
     assert(streamset.frequencies && streamset.terms && streamset.positions);

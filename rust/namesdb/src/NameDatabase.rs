@@ -8,6 +8,7 @@ pub use public_ffi::*;
 use serde::Serialize;
 use rmp_serde;
 use std::str::FromStr;
+use std::collections::HashMap;
 
 
 #[derive(Default, Debug)]
@@ -155,25 +156,27 @@ pub fn generate_metadata_for_dir<P: AsRef<Path>>(path: P, processed_already: &Ha
         let path: &OsStr = path.as_ref();
         processed_already.get(path).is_none()
     }).collect();
-    let mut fp_total = HashSet::new();
+    // let mut fp_total = HashSet::new();
+    let mut dup_finder: HashMap<DocIDFilePair, &PathBuf> = HashMap::new();
     let mut errored = false;
-    for ref path in a {
-        get_filepairs(path).into_iter().for_each(|mut elem: DocIDFilePair| {
+    for path in &a {
+        println!("{}", path.display());
+        for mut elem in get_filepairs(path).into_iter() {
             // Fill in the remaining data of the elem.
             elem.filemap_path = Some(path.clone());
 
-            // elem.bytes = fs::metadata(&abspath).map(|metadata| metadata.len() as u32).ok();
-            // elem.num_words = word_count(&abspath);
 
-            if fp_total.get(&elem).is_some() && !errored {
-                errored = true;
-                eprintln!("Duplicate filename found {}", path.display());
+            if let Some(oldpath) = dup_finder.get(&elem) {
+                if errored { continue; } else { errored = true; }
+                if oldpath == &path { continue; };
+                eprintln!("Duplicate filename found {} {}", path.display(), oldpath.display());
             } else {
-                fp_total.insert(elem);
+                dup_finder.insert(elem, path);
             }
-        });
+        }
 
-        println!("Total files currently {}", fp_total.len());
+        // println!("Total files currently {}", fp_total.len());
     }
-    fp_total
+    println!("Size: {} files", dup_finder.len());
+    dup_finder.into_keys().collect()
 }

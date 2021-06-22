@@ -71,7 +71,7 @@ pub mod filepairs {
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Debug, Eq)]
+#[derive(Default, Serialize, Deserialize, Debug, Eq, Clone)]
 pub struct DocIDFilePair {
     pub docid: u32,
     pub path: PathBuf,

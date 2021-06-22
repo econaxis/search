@@ -104,77 +104,7 @@ std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term
 }
 
 
-float position_difference_scaler(int posdiff) {
-    if (posdiff <= 1) return 200.f;
-    if (posdiff <= 3) return 100.f;
-    if (posdiff <= 5) return 50.f;
-    if (posdiff <= 10) return 30.f;
-    if (posdiff <= 20) return 2.f;
-    return 0.5f;
-}
 
-template<typename T>
-uint32_t two_finger_find_min(T first1, T last1, T first2, T last2) {
-    assert(last1 - first1 && last2 - first2);
-    assert(first1->document_id == (last1-1)->document_id);
-    assert(first2->document_id == (last2-1)->document_id);
-
-    uint32_t curmin = 1<<30;
-    while(first1 < last1) {
-        if(first2 == last2) break;
-        if(first1->document_position > first2->document_position)
-            first2++;
-        else {
-            curmin = std::min(curmin, first2->document_position - first1->document_position);
-            if (curmin <= 1) break;
-            first1++;
-        }
-    }
-    return curmin;
-}
-
-
-void rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds, TopDocs &ret) {
-    if (tds.size() >= 32 || tds.size() < 2) {
-        std::cerr << "Number of terms larger than 32 or less than 2. Not supported\n";
-        return;
-    }
-
-
-    std::vector<std::vector<DocumentPositionPointer>> positions_list(tds.size());
-    int total_terms_len = 0;
-
-    for (int i = 0; i < tds.size(); i++) {
-        if (auto it = tds[i].get_first_term(); it) {
-            positions_list[i] = index.get_positions_for_term(**it);
-            total_terms_len += (*it)->size();
-        } else {
-            std::cout << "Couldn't match all terms\n";
-            return;
-        }
-    }
-    for (auto d = ret.begin(); d < ret.end(); d++) {
-        uint32_t pos_difference = 0;
-        for (int i = 0; i < tds.size() - 1; i++) {
-            auto [first1, last1] = std::equal_range(positions_list[i].begin(), positions_list[i].end(), *d);
-            auto [first2, last2] = std::equal_range(positions_list[i+1].begin(), positions_list[i+1].end(), *d);
-            pos_difference += two_finger_find_min(first1, last1, first2, last2);
-        }
-        pos_difference /= (tds.size() / 2);
-
-
-        d->document_freq = d->document_freq * position_difference_scaler(pos_difference);
-        if (position_difference_scaler(pos_difference) >= 100) {
-            std::cout << index.query_filemap(d->document_id) << " boosted\n";
-
-            if(index.query_filemap(d->document_id) == "58/c8/US20190390292A1-20191226.XML") {
-                bool dum = true;
-            }
-        }
-    }
-    ret.sort_by_frequencies();
-    auto dumm = true;
-}
 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
@@ -253,7 +183,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 }
 
 
-TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &terms) const {
+std::vector<TopDocs> SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &terms) const {
     std::vector<TopDocs> all_outputs;
     all_outputs.reserve(terms.size());
 
@@ -261,32 +191,7 @@ TopDocs SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &t
         auto result = this->search_one_term(term);
         all_outputs.push_back(std::move(result));
     };
-
-    // We'll do operations on all_outputs, adding to it lesser-frequencied documents.
-    // If we can't find enough documents that match an AND boolean query, then we'll
-    // switch to the backup OR boolean query. When we do OR, we only want the top documents matching.
-    // Thus, we copy this and back it up, in case we need to do an OR on the original,
-    // high-frequencied document set.
-    auto all_outputs_backup = all_outputs;
-
-    auto ret = DocumentsMatcher::AND(all_outputs);
-    while (ret.size() < 10) {
-        bool has_more = false;
-        for (auto &td : all_outputs) {
-            if (td.extend_from_tier_iterator(3)) has_more = true;
-        }
-        if (!has_more) break;
-        else {
-            ret = DocumentsMatcher::AND(all_outputs);
-        }
-    }
-    if (ret.size() == 0 && terms.size() > 1) {
-        std::cout << "Warning: using OR backup for " << terms[0] << " ...\n";
-        return DocumentsMatcher::backup(all_outputs_backup);
-    } else {
-        rerank_by_positions(*this, all_outputs_backup, ret);
-        return ret;
-    }
+    return all_outputs;
 }
 
 

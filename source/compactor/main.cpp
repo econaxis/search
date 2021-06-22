@@ -10,6 +10,7 @@
 #include <future>
 #include "Serializer.h"
 #include <map>
+#include <queue>
 
 namespace fs = std::filesystem;
 
@@ -30,6 +31,32 @@ int get_index_file_len() {
     return counter;
 }
 
+void clear_queue(std::ofstream &index_file_working, std::queue<std::future<std::string>> &threads,
+                 std::map<std::string, std::string> &fpmap) {
+    auto line = threads.front().get();
+    threads.pop();
+
+    if (!line.empty()) {
+        std::ifstream fp_stream(indice_files_dir / ("filemap-" + line));
+        auto fps = Serializer::read_filepairs(fp_stream);
+
+        auto errored = false;
+        for (auto &p : fps) {
+            if (auto it = fpmap.find(p.file_name); it == fpmap.end()) {
+                fpmap[p.file_name] = line;
+            } else if (!errored) {
+                errored = true;
+                std::cout << it->second << " duplicates " << line << "\n";
+            }
+        }
+
+        std::cout << line << " " << std::max_element(fps.begin(), fps.end())->document_id << "\n";
+        index_file_working << line << "\n" << std::flush;
+    } else {
+        std::cerr << line << " invalid\n";
+    }
+}
+
 int main(int argc, char *argv[]) {
 
 //    Compactor_test();
@@ -44,9 +71,11 @@ int main(int argc, char *argv[]) {
         std::ifstream index_file(indice_files_dir / "index_files_old");
         std::ofstream index_file_working(indice_files_dir / "index_files", std::ios_base::out);
         std::string line;
-        std::vector<std::future<std::string>> threads;
+        std::queue<std::future<std::string>> threads;
+        std::map<std::string, std::string> fpmap;
+
         while (std::getline(index_file, line)) {
-            threads.emplace_back(std::async(std::launch::async | std::launch::deferred, [=]() {
+            threads.emplace(std::async(std::launch::async | std::launch::deferred, [=]() {
                 try {
                     Compactor::test_makes_sense(line);
 
@@ -61,32 +90,13 @@ int main(int argc, char *argv[]) {
                     return std::string{""};
                 }
             }));
-        }
-        std::map<std::string, std::string> fpmap;
-        while (!threads.empty()) {
-            auto line = threads.back().get();
-            threads.pop_back();
 
-            if (!line.empty()) {
-                std::ifstream fp_stream(indice_files_dir / ("filemap-" + line));
-                auto fps = Serializer::read_filepairs(fp_stream);
-
-                auto errored = false;
-                for (auto &p : fps) {
-                    if (auto it = fpmap.find(p.file_name); it == fpmap.end()) {
-                        fpmap[p.file_name] = line;
-                    } else if (!errored) {
-                        errored = true;
-                        std::cout << it->second << " duplicates " << line << "\n";
-                    }
-                }
-
-                std::cout << line << " " << fps.size() << "\n";
-                index_file_working << line << "\n" << std::flush;
-            } else {
-                std::cerr << line << " invalid\n";
+            while (threads.size() >= 5) {
+                clear_queue(index_file_working, threads, fpmap);
             }
         }
+        while(!threads.empty()) clear_queue(index_file_working, threads, fpmap);
+
 
         return 0;
     } else {

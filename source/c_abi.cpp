@@ -5,6 +5,7 @@
 #include "rust-interface.h"
 #include "Tokenizer.h"
 #include "DocumentFrequency.h"
+#include "DocumentsMatcher.h"
 
 namespace ffi = Serializer::ffi;
 namespace sr = Serializer;
@@ -96,18 +97,19 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
         query[i] = as_str;
     }
 
-    TopDocs joined;
+    DocumentsMatcher::TopDocsWithPositions joined;
     for (std::size_t i = 0; i < num_indices; i++) {
         auto temp = indices[i]->search_many_terms(query);
+        auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(*indices[i], temp);
 
         uint32_t curtag = i << 27;
 
         // Imbue top 4 bits of docid with index tag (which index the doc id is associated with)
-        for (auto &pair: temp) {
+        for (auto &pair: topdocs_with_pos) {
             assert(pair.document_id < 1 << 27);
             pair.document_id |= curtag;
         }
-        if (temp.size()) joined.append_multi(temp);
+        if (!topdocs_with_pos.docs.empty()) joined.insert(topdocs_with_pos);
     }
 
     joined.sort_by_frequencies();
@@ -120,10 +122,12 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
     for (auto &i : joined) {
         imbued.push_back({i.document_id & tag_remover, i.document_freq, static_cast<uint8_t>(i.document_id >> 27)});
     }
-    if (joined.size() > 50) {
+
+    // TODO: bug, fixed with positions, c-struct layout not standard.
+    if (joined.docs.size() > 50) {
         fill_rust_vec(output_buffer, imbued.begin().base(), 50 * sizeof(DocumentPositionPointer_v2_imbued));
     } else {
-        fill_rust_vec(output_buffer, imbued.begin().base(), joined.size() * sizeof(DocumentPositionPointer_v2_imbued));
+        fill_rust_vec(output_buffer, imbued.begin().base(), joined.docs.size() * sizeof(DocumentPositionPointer_v2_imbued));
     }
 }
 

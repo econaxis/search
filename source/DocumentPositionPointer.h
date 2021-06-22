@@ -46,6 +46,12 @@ inline bool operator<(const DocumentPositionPointer& one, const DocumentFrequenc
 inline bool operator<(const DocumentFrequency& one, const DocumentPositionPointer& two) {
     return one.document_id < two.document_id;
 }
+inline bool operator<(const DocumentPositionPointer& one, uint32_t two) {
+    return one.document_id < two;
+}
+inline bool operator<(const uint32_t one, const DocumentPositionPointer& two) {
+    return one < two.document_id;
+}
 
 std::ostream &operator<<(std::ostream &os, std::vector<DocumentPositionPointer> vec);
 

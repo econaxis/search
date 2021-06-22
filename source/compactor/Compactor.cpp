@@ -311,16 +311,10 @@ void Compactor::test_makes_sense(const std::string &suffix) {
 
     assert(streamset.frequencies && streamset.terms && streamset.positions);
 
-    auto ostreamset = open_file_set<std::fstream>(suffix + "-COPY_DEBUG", true);
-    ostreamset.apply_to_all([=](auto &stream) {
-        serialize_vnum(stream, len, true);
-    });
-
     WordIndexEntry wie;
 
     if (len < 5 || filepairs.size() < 5) {
         std::cout << "Too short, failed compactation detected\n";
-
         fs::remove(make_path("frequencies", suffix));
         fs::remove(make_path("terms", suffix));
         fs::remove(make_path("positions", suffix));
@@ -329,10 +323,8 @@ void Compactor::test_makes_sense(const std::string &suffix) {
     }
     while (check_stream_good(dynamic_cast<std::ifstream &>(streamset.terms)) && len > 0) {
         len--;
-
         wie = read_work_index_entry(streamset.frequencies, streamset.terms, streamset.positions);
         assert(std::is_sorted(wie.files.begin(), wie.files.end()));
-//        serialize_work_index_entry(ofrequencies, oterms, opositions, wie);
     }
     assert(len == 0);
 }

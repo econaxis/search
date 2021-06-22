@@ -13,6 +13,44 @@ namespace DocumentsMatcher {
 
     TopDocs
     collection_merge_search(std::vector<SortedKeysIndexStub> &indices, const std::vector<std::string> &search_terms);
+
+    struct TopDocsWithPositions {
+        TopDocsWithPositions() = default;
+
+        struct Elem {
+            Elem(unsigned int i, unsigned int i1);
+
+            uint32_t document_id;
+            uint32_t document_freq;
+            std::array<uint32_t, 4> matches = {0};
+        };
+        std::vector<Elem> docs;
+
+        void sort_by_frequencies() {
+            std::sort(docs.begin(), docs.end(), [](auto& a, auto& b) {
+                return a.document_freq < b.document_freq;
+            });
+        }
+
+        explicit TopDocsWithPositions(const TopDocs& td) {
+            docs.reserve(td.size());
+            for(auto t: td) docs.emplace_back(t.document_id, t.document_freq);
+        }
+
+        void insert(TopDocsWithPositions other) {
+            std::move(other.docs.begin(), other.docs.end(), std::back_inserter(docs));
+        }
+        std::vector<Elem>::const_iterator begin() const { return docs.begin(); }
+
+        std::vector<Elem>::const_iterator end() const { return docs.end(); }
+
+        std::vector<Elem>::iterator begin() { return docs.begin(); }
+
+        std::vector<Elem>::iterator end() { return docs.end(); }
+    };
+
+    TopDocsWithPositions combiner_with_position(SortedKeysIndexStub& index, std::vector<TopDocs>& outputs);
+
 };
 
 #endif //GAME_DOCUMENTSMATCHER_H

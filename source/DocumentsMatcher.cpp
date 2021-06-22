@@ -19,6 +19,8 @@ void advance_to_next_unique_value(Iterator &it, const Callable &value_getter) {
 
 #include <immintrin.h>
 
+using namespace DocumentsMatcher;
+
 // Inspired from https://gms.tf/stdfind-and-memchr-optimizations.html#what-about-avx-512
 // I adapted AVX2 code from finding bytes to finding 32 bit integers.
 const uint32_t *find_avx_256(const uint32_t *start, const uint32_t *end, uint32_t value) {
@@ -51,6 +53,7 @@ const uint32_t *find_avx_256(const uint32_t *start, const uint32_t *end, uint32_
 }
 
 #include <chrono>
+#include <iostream>
 
 using namespace std::chrono;
 
@@ -117,7 +120,7 @@ TopDocs DocumentsMatcher::backup(std::vector<TopDocs> &results) {
     for (int i = 1; i < results.size(); i++) {
         results[0].append_multi(results[i]);
     }
-    for(auto& i : results[0]) {
+    for (auto &i : results[0]) {
         // Nerf scores because we're using backup
         i.document_freq /= 5;
     }
@@ -194,17 +197,120 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
 }
 
-TopDocs DocumentsMatcher::collection_merge_search(std::vector<SortedKeysIndexStub> &indices,
-                                                     const std::vector<std::string> &search_terms) {
-    TopDocs joined;
-    for (auto &index : indices) {
-        auto temp = index.search_many_terms(search_terms);
 
-        if (temp.size()) joined.append_multi(temp);
-    };
+float position_difference_scaler(uint32_t posdiff) {
+    if (posdiff <= 1) return 200.f;
+    if (posdiff <= 3) return 100.f;
+    if (posdiff <= 5) return 50.f;
+    if (posdiff <= 10) return 30.f;
+    if (posdiff <= 20) return 2.f;
+    return 0.5f;
+}
 
-    joined.merge_similar_docs();
-    joined.sort_by_frequencies();
+template<typename T>
+uint32_t two_finger_find_min(T &first1, T last1, T &first2, T last2) {
+    assert(first1->document_id == (last1 - 1)->document_id);
+    assert(first2->document_id == (last2 - 1)->document_id);
 
-    return joined;
+    uint32_t curmin = 1 << 30;
+    while (first1 < last1) {
+        if (first2 == last2) break;
+        if (first1->document_position > first2->document_position)
+            first2++;
+        else {
+            curmin = std::min(curmin, first2->document_position - first1->document_position);
+            if (curmin <= 1) break;
+            first1++;
+        }
+    }
+    return curmin;
+}
+
+template<typename Container>
+void insert_to_array(Container &array, uint32_t value) {
+    for (auto &i : array) {
+        if (i == 0) {
+            i = value;
+        }
+    }
+}
+
+TopDocsWithPositions
+rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds, const TopDocs &td) {
+    TopDocsWithPositions ret(td);
+    if (tds.size() >= 32 || tds.size() < 2) {
+        std::cerr << "Number of terms larger than 32 or less than 2. Not supported\n";
+        return ret;
+    }
+
+
+    std::vector<std::vector<DocumentPositionPointer>> positions_list(tds.size());
+
+    for (int i = 0; i < tds.size(); i++) {
+        if (auto it = tds[i].get_first_term(); it) {
+            positions_list[i] = index.get_positions_for_term(**it);
+        } else {
+            std::cerr<<"Couldn't find all terms\n";
+            return ret;
+        }
+    }
+    for (auto d = ret.begin(); d < ret.end(); d++) {
+        uint32_t pos_difference = 0;
+        for (int i = 0; i < tds.size() - 1; i++) {
+            auto[first1, last1] = std::equal_range(positions_list[i].begin(), positions_list[i].end(), d->document_id);
+            auto[first2, last2] = std::equal_range(positions_list[i + 1].begin(), positions_list[i + 1].end(), d->document_id);
+
+            if(last1 == positions_list[i].end() || last2 == positions_list[i+1].end()) {
+                continue;
+            }
+
+            pos_difference += two_finger_find_min(first1, last1, first2, last2);
+            insert_to_array(d->matches, first1->document_position);
+        }
+        pos_difference /= (tds.size() / 2);
+
+
+        d->document_freq = d->document_freq * position_difference_scaler(pos_difference);
+
+        if (position_difference_scaler(pos_difference) >= 100) {
+            std::cout << index.query_filemap(d->document_id) << " boosted\n";
+        }
+    }
+    ret.sort_by_frequencies();
+    return ret;
+}
+
+
+TopDocsWithPositions
+DocumentsMatcher::combiner_with_position(SortedKeysIndexStub &index, std::vector<TopDocs> &outputs) {
+
+    // We'll do operations on outputs, adding to it lesser-frequencied documents.
+    // If we can't find enough documents that match an AND boolean query, then we'll
+    // switch to the backup OR boolean query. When we do OR, we only want the top documents matching.
+    // Thus, we copy this and back it up, in case we need to do an OR on the original,
+    // high-frequencied document set.
+    auto term_size = outputs.size();
+
+    auto outputs_backup = outputs;
+
+    auto ret = DocumentsMatcher::AND(outputs);
+    while (ret.size() < 10) {
+        bool has_more = false;
+        for (auto &td : outputs) {
+            if (td.extend_from_tier_iterator(3)) has_more = true;
+        }
+        if (!has_more) break;
+        else {
+            ret = DocumentsMatcher::AND(outputs);
+        }
+    }
+    if (ret.size() == 0 && term_size > 1) {
+        std::cout << "Warning: using OR backup for " << *(outputs[0].get_first_term()) << " ...\n";
+        return TopDocsWithPositions(DocumentsMatcher::backup(outputs_backup));
+    } else {
+        return rerank_by_positions(index, outputs, ret);
+    }
+}
+
+TopDocsWithPositions::Elem::Elem(unsigned int i, unsigned int i1) : document_id(i), document_freq(i1) {
 }

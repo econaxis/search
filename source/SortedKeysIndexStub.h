@@ -69,7 +69,7 @@ public:
     std::string query_filemap(uint32_t docid) const;
 
 
-    TopDocs search_many_terms(const std::vector<std::string> &terms) const;
+    std::vector<TopDocs> search_many_terms(const std::vector<std::string> &terms) const;
 
     SortedKeysIndexStub(const SortedKeysIndexStub& other);
 

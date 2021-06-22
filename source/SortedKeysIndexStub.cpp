@@ -1,7 +1,6 @@
 #include "PositionsSearcher.h"
 #include <iostream>
 #include "SortedKeysIndexStub.h"
-#include "DocumentsMatcher.h"
 #include "Base26Num.h"
 #include "Serializer.h"
 #include <cmath>
@@ -165,7 +164,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             }
             TopDocs td(std::move(wie.files));
 
-            if (score >= 30 || preview.key == term) td.add_term_str(preview.key, ti);
+            if (tot_score >= 4000 || preview.key == term) td.add_term_str(preview.key, ti);
 
             if (preview.key == term) return td;
 

@@ -21,7 +21,12 @@ void PositionsSearcher::serialize_positions(std::ostream &positions, const WordI
     std::stringstream positionbuf;
     auto prevfile = DocumentPositionPointer{0, 0};
     for (auto &file : ie.files) {
-        if(file == prevfile) serialize_vnum(positionbuf, file.document_position - prevfile.document_position);
+        if(file.document_id == prevfile.document_id) {
+            if(file.document_position <= prevfile.document_position) {
+                throw std::runtime_error("Positions list not sorted");
+            }
+            serialize_vnum(positionbuf, file.document_position - prevfile.document_position);
+        }
         else serialize_vnum(positionbuf, file.document_position);
 
         prevfile = file;
@@ -53,6 +58,10 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
         auto counter = 0;
         while (docs_left--) {
             auto pos = read_vnum(positions);
+
+            if(counter + pos < counter) {
+                throw std::runtime_error("Number overflow");
+            }
             counter += pos;
             out.emplace_back(df.document_id, counter);
         }

@@ -325,7 +325,12 @@ void Compactor::test_makes_sense(const std::string &suffix) {
     while (check_stream_good(dynamic_cast<std::ifstream &>(streamset.terms)) && len > 0) {
         len--;
         wie = read_work_index_entry(streamset.frequencies, streamset.terms, streamset.positions);
-        assert(std::is_sorted(wie.files.begin(), wie.files.end()));
+
+        for(auto i = wie.files.begin(); i < wie.files.end() - 1; i++) {
+            if(*i > *(i+1)) {
+                throw std::runtime_error("Bad! unsorted");
+            }
+        }
     }
     assert(len == 0);
 }

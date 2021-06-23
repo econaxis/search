@@ -122,15 +122,15 @@ void queue_produce_file_contents(SyncedQueue &contents, const FilePairs &filepai
             std::cout << (entry - filepairs.begin() - contents.size()) * 100 / filepairs.size() << "%\r" << std::flush;
         }
 
-        if (contents.size() > 150) {
-            contents.wait_for([&] {
-                return contents.size() < 150;
-            });
-        }
+//        if (contents.size() > 400) {
+//            contents.wait_for([&] {
+//                return contents.size() < 400;
+//            });
+//        }
 
         thread_local_holder.emplace_back(std::move(filestr), *entry);
 
-        if (thread_local_holder.size() >= 50) {
+        if (thread_local_holder.size() >= 200) {
             contents.push_multi(thread_local_holder.begin(), thread_local_holder.end());
             thread_local_holder.clear();
         }
@@ -198,7 +198,7 @@ GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQu
     while (file_contents.size() || !done_flag) {
         if (!file_contents.size()) {
             file_contents.wait_for([&]() {
-                return file_contents.size() || done_flag;
+                return file_contents.size()|| done_flag;
             });
         }
         if (!file_contents.size() && done_flag) continue;
@@ -213,7 +213,7 @@ GeneralIndexer::thread_process_files(const std::atomic_bool &done_flag, SyncedQu
         auto temp = Tokenizer::index_string_file(contents, docidfilepair.document_id);
         should_insert_vec.insert(should_insert_vec.end(), temp.begin(), temp.end());
 
-        if (should_insert_vec.size() % 1000 == 0) should_insert->sort_and_group_shallow();
+//        if (should_insert_vec.size() % 1000 == 0) should_insert->sort_and_group_shallow();
     }
 
     for (int i = 1; i < reducer.size(); i++) {

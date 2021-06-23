@@ -31,29 +31,40 @@ int get_index_file_len() {
     return counter;
 }
 
-void clear_queue(std::ofstream &index_file_working, std::queue<std::future<std::string>> &threads,
+void clear_queue(std::ofstream &index_file_working, std::vector<std::future<std::string>> &threads,
                  std::map<std::string, std::string> &fpmap) {
-    auto line = threads.front().get();
-    threads.pop();
+    using namespace std::chrono_literals;
+    for (auto i  = 0; i < threads.size(); i++) {
+        auto line_fut = threads.begin() + i;
 
-    if (!line.empty()) {
-        std::ifstream fp_stream(indice_files_dir / ("filemap-" + line));
-        auto fps = Serializer::read_filepairs(fp_stream);
+        if(i >= threads.size()) return;
 
-        auto errored = false;
-        for (auto &p : fps) {
-            if (auto it = fpmap.find(p.file_name); it == fpmap.end()) {
-                fpmap[p.file_name] = line;
-            } else if (!errored) {
-                errored = true;
-                std::cout << it->second << " duplicates " << line << "\n";
-            }
+        if(line_fut->valid()&&line_fut->wait_for(1us) != std::future_status::ready) {
+            continue;
         }
 
-        std::cout << line << " " << std::max_element(fps.begin(), fps.end())->document_id << "\n";
-        index_file_working << line << "\n" << std::flush;
-    } else {
-        std::cerr << line << " invalid\n";
+        auto line = line_fut->get();
+        threads.erase(line_fut);
+
+        if (!line.empty()) {
+            std::ifstream fp_stream(indice_files_dir / ("filemap-" + line));
+            auto fps = Serializer::read_filepairs(fp_stream);
+
+            auto errored = false;
+            for (auto &p : fps) {
+                if (auto it = fpmap.find(p.file_name); it == fpmap.end()) {
+                    fpmap[p.file_name] = line;
+                } else if (!errored) {
+                    errored = true;
+                    std::cout << it->second << " duplicates " << line << "\n";
+                }
+            }
+
+            std::cout << line << " " << std::max_element(fps.begin(), fps.end())->document_id << "\n";
+            index_file_working << line << "\n" << std::flush;
+        } else {
+            std::cerr << line << " invalid\n";
+        }
     }
 }
 
@@ -71,11 +82,11 @@ int main(int argc, char *argv[]) {
         std::ifstream index_file(indice_files_dir / "index_files_old");
         std::ofstream index_file_working(indice_files_dir / "index_files", std::ios_base::out);
         std::string line;
-        std::queue<std::future<std::string>> threads;
+        std::vector<std::future<std::string>> threads;
         std::map<std::string, std::string> fpmap;
 
         while (std::getline(index_file, line)) {
-            threads.emplace(std::async(std::launch::async | std::launch::deferred, [=]() {
+            threads.emplace_back(std::async(std::launch::async, [=]() {
                 try {
                     Compactor::test_makes_sense(line);
 
@@ -95,7 +106,7 @@ int main(int argc, char *argv[]) {
                 clear_queue(index_file_working, threads, fpmap);
             }
         }
-        while(!threads.empty()) clear_queue(index_file_working, threads, fpmap);
+        while (!threads.empty()) clear_queue(index_file_working, threads, fpmap);
 
 
         return 0;

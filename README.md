@@ -1,6 +1,8 @@
 # Full Text Search Engine
 This project is a full text search engine, based upon an on-disk, binary inverted index data structure. All queries are done on-disk, so this engine can cover many gigabytes of text with just a limited amount of memory. It can search through 10GB of Wikipedia text archives using just 50MB of physical memory.
 
+
+## Inspirations
 I wrote this engine to learn how large, distributed databases can scale to many terabytes of data. Many techniques and implementation details here are inspired off Apache Lucene and Google's SSTable. I learned about ranking functions, stop word detection, inverted indices, and phrase queries from the book *Introduction to Information Retrieval*. I designed my data serialization model, like variable-length integers, delta encoding, and organization of the inverted index (into terms, positions, and frequency specific files) from studying Lucene's Java implementation. I implemented packed integer blocking/shuffling inspired by Blosc. The binary representation of my inverted index closely resembles SSTables and is inspired by LevelDB's merge-based approach (/source/compactor/Compactor.cpp). This allows parallelized index building of many gigabytes of documents while having very low memory usage.
 
 # Features
@@ -43,7 +45,7 @@ Fortunately, I came across [tiered indexes](https://nlp.stanford.edu/IR-book/htm
 
 I changed the format to:
 
-`[number of postings: n]. Then "n" instances of document_id. Then "n" instances of document_frequency.`
+`[number of postings: n]. Then "n" instances of document_id: i32. Then "n" instances of document_frequency: i32.`
 
 In other words, rather than storing tuples, I stored document_ids as their own block, then document_frequencies as their own block. This made delta-compression more efficient. In addition, should I decide to use an external compression algorithm in the future, this new format would increase the compressibility of my index.
 

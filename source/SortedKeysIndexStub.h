@@ -75,6 +75,8 @@ public:
 
 
     std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
+
+    std::vector<DocumentPositionPointer> get_positions_for_term(const std::string *term) const;
 };
 
 

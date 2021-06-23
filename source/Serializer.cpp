@@ -108,7 +108,7 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         int a = stream.tellg();
         int b = stream.good();
         int c = stream.eof();
-        std::cout << "Error: not a valid number; " << a << b << c;
+        std::cout << "Error: not a valid number; " << a <<" "<< b <<" "<< c;
         print_backtrace();
 
         throw std::runtime_error("Error: not a valid number " + std::to_string(a) + " " + std::to_string(c));

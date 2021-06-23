@@ -19,8 +19,12 @@ void PositionsSearcher::serialize_positions(std::ostream &positions, const WordI
     assert(std::is_sorted(ie.files.begin(), ie.files.end()));
 
     std::stringstream positionbuf;
+    auto prevfile = DocumentPositionPointer{0, 0};
     for (auto &file : ie.files) {
-        serialize_vnum(positionbuf, file.document_position);
+        if(file == prevfile) serialize_vnum(positionbuf, file.document_position - prevfile.document_position);
+        else serialize_vnum(positionbuf, file.document_position);
+
+        prevfile = file;
     }
 
     // Serialize magic num to help in debugging, make sure we aren't reading the wrong frame.
@@ -39,15 +43,18 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
 
     auto pos = positions.tellg();
 
-    assert(magic_num == MAGIC_NUM);
+    if(magic_num != MAGIC_NUM) {
+        throw std::runtime_error("Magic num not equals");
+    }
 
     std::vector<DocumentPositionPointer> out;
     for (auto &df : freq_list) {
         auto docs_left = df.document_freq;
-
+        auto counter = 0;
         while (docs_left--) {
             auto pos = read_vnum(positions);
-            out.emplace_back(df.document_id, pos);
+            counter += pos;
+            out.emplace_back(df.document_id, counter);
         }
     }
 

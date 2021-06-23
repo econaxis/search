@@ -201,10 +201,10 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 float position_difference_scaler(uint32_t posdiff) {
     if (posdiff <= 1) return 200.f;
     if (posdiff <= 3) return 100.f;
-    if (posdiff <= 5) return 50.f;
-    if (posdiff <= 10) return 30.f;
-    if (posdiff <= 20) return 2.f;
-    return 0.5f;
+    if (posdiff <= 5) return 5.f;
+    if (posdiff <= 10) return 3.f;
+    if (posdiff <= 20) return 1.5f;
+    return 0.9f;
 }
 
 template<typename T>
@@ -248,9 +248,9 @@ rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds,
 
     for (int i = 0; i < tds.size(); i++) {
         if (auto it = tds[i].get_first_term(); it) {
-            positions_list[i] = index.get_positions_for_term(**it);
+            positions_list[i] = index.get_positions_for_term(*it);
         } else {
-            std::cerr<<"Couldn't find all terms\n";
+            std::cerr << "Couldn't find all terms\n";
             return ret;
         }
     }
@@ -258,9 +258,10 @@ rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds,
         uint32_t pos_difference = 0;
         for (int i = 0; i < tds.size() - 1; i++) {
             auto[first1, last1] = std::equal_range(positions_list[i].begin(), positions_list[i].end(), d->document_id);
-            auto[first2, last2] = std::equal_range(positions_list[i + 1].begin(), positions_list[i + 1].end(), d->document_id);
+            auto[first2, last2] = std::equal_range(positions_list[i + 1].begin(), positions_list[i + 1].end(),
+                                                   d->document_id);
 
-            if(last1 == positions_list[i].end() || last2 == positions_list[i+1].end()) {
+            if (last1 == positions_list[i].end() || last2 == positions_list[i + 1].end()) {
                 continue;
             }
 
@@ -313,4 +314,20 @@ DocumentsMatcher::combiner_with_position(SortedKeysIndexStub &index, std::vector
 }
 
 TopDocsWithPositions::Elem::Elem(unsigned int i, unsigned int i1) : document_id(i), document_freq(i1) {
+}
+
+
+TopDocs DocumentsMatcher::collection_merge_search(std::vector<SortedKeysIndexStub> &indices,
+                                                  const std::vector<std::string> &search_terms) {
+    TopDocs joined;
+    for (auto &index : indices) {
+        auto temp = index.search_many_terms(search_terms);
+        auto t = AND(temp);
+        if (temp.size()) joined.append_multi(t);
+    };
+
+    joined.merge_similar_docs();
+    joined.sort_by_frequencies();
+
+    return joined;
 }

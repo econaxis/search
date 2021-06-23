@@ -69,7 +69,7 @@ namespace FileListGenerator {
             cur_size += fs::file_size(abspath);
 
             // Don't index more than x files or 500MB at a time.
-            if (filepairs.size() > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(500e6)) break;
+            if (filepairs.size() > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(200e6)) break;
             register_temporary_file(get_ndb(), file_line.c_str(), doc_id_counter);
             filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});
 

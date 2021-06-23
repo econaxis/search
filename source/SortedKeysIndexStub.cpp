@@ -84,21 +84,20 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
     return std::nullopt;
 }
 
-std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string &term) const {
-    auto loc = seek_to_term(term);
-    if (!loc) {
-        return {};
-    } else {
-        positions.clear();
-        frequencies.clear();
+std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string *term) const {
+    auto loc = seek_to_term(*term);
+    if (loc) {
+//        positions.clear();
+//        frequencies.clear();
 
-        assert(positions.is_open());
         positions.seekg(loc->positions_pos);
         frequencies.seekg(loc->frequencies_pos);
 
         assert(positions.good());
         auto freq_list = MultiDocumentsTier::TierIterator(frequencies).read_all();
         return PositionsSearcher::read_positions_all(positions, freq_list);
+    } else {
+        return {};
     }
 }
 

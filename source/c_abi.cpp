@@ -88,46 +88,50 @@ struct DocumentPositionPointer_v2_imbued {
 
 void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int num_terms, const char **query_terms,
                           RustVec *output_buffer) {
-
-    assert(num_indices < 32);
-    std::vector<std::string> query(num_terms);
-    for (int i = 0; i < num_terms; i++) {
-        auto as_str = std::string(query_terms[i]);
-        Tokenizer::clean_token_to_index(as_str);
-        query[i] = as_str;
-    }
-
-    DocumentsMatcher::TopDocsWithPositions joined;
-    for (std::size_t i = 0; i < num_indices; i++) {
-        auto temp = indices[i]->search_many_terms(query);
-        auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(*indices[i], temp);
-
-        uint32_t curtag = i << 27;
-
-        // Imbue top 4 bits of docid with index tag (which index the doc id is associated with)
-        for (auto &pair: topdocs_with_pos) {
-            assert(pair.document_id < 1 << 27);
-            pair.document_id |= curtag;
+    try {
+        assert(num_indices < 32);
+        std::vector<std::string> query(num_terms);
+        for (int i = 0; i < num_terms; i++) {
+            auto as_str = std::string(query_terms[i]);
+            Tokenizer::clean_token_to_index(as_str);
+            query[i] = as_str;
         }
-        if (!topdocs_with_pos.docs.empty()) joined.insert(topdocs_with_pos);
-    }
 
-    joined.sort_by_frequencies();
-    std::reverse(joined.begin(), joined.end());
+        DocumentsMatcher::TopDocsWithPositions joined;
+        for (std::size_t i = 0; i < num_indices; i++) {
+            auto temp = indices[i]->search_many_terms(query);
+            auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(*indices[i], temp);
 
-    std::vector<DocumentPositionPointer_v2_imbued> imbued;
+            uint32_t curtag = i << 27;
 
-    uint32_t tag_remover = (1 << 27) - 1;
+            // Imbue top 4 bits of docid with index tag (which index the doc id is associated with)
+            for (auto &pair: topdocs_with_pos) {
+                assert(pair.document_id < 1 << 27);
+                pair.document_id |= curtag;
+            }
+            if (!topdocs_with_pos.docs.empty()) joined.insert(topdocs_with_pos);
+        }
 
-    for (auto &i : joined) {
-        imbued.push_back({i.document_id & tag_remover, i.document_freq, static_cast<uint8_t>(i.document_id >> 27)});
-    }
+        joined.sort_by_frequencies();
+        std::reverse(joined.begin(), joined.end());
 
-    // TODO: bug, fixed with positions, c-struct layout not standard.
-    if (joined.docs.size() > 50) {
-        fill_rust_vec(output_buffer, imbued.begin().base(), 50 * sizeof(DocumentPositionPointer_v2_imbued));
-    } else {
-        fill_rust_vec(output_buffer, imbued.begin().base(), joined.docs.size() * sizeof(DocumentPositionPointer_v2_imbued));
+        std::vector<DocumentPositionPointer_v2_imbued> imbued;
+
+        uint32_t tag_remover = (1 << 27) - 1;
+
+        for (auto &i : joined) {
+            imbued.push_back({i.document_id & tag_remover, i.document_freq, static_cast<uint8_t>(i.document_id >> 27)});
+        }
+
+        // TODO: bug, fixed with positions, c-struct layout not standard.
+        if (joined.docs.size() > 50) {
+            fill_rust_vec(output_buffer, imbued.begin().base(), 50 * sizeof(DocumentPositionPointer_v2_imbued));
+        } else {
+            fill_rust_vec(output_buffer, imbued.begin().base(), joined.docs.size() * sizeof(DocumentPositionPointer_v2_imbued));
+        }
+    } catch (std::exception& e) {
+        std::cerr<<e.what()<<"\n";
+        exit(1);
     }
 }
 

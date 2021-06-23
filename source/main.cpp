@@ -20,7 +20,7 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
     std::uniform_int_distribution<uint> dist(0, 5825); // ASCII table codes for normal characters.
     auto t1 = high_resolution_clock::now();
     int i = 0;
-    while(i < NUM_SEARCHES) {
+    while (i < NUM_SEARCHES) {
 
         auto temp = (std::string) strings[dist(randgen())];
         auto temp1 = (std::string) strings[dist(randgen())];
@@ -38,7 +38,7 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
         TopDocs result;
         if (temp.size() && temp1.size()) {
             Tokenizer::remove_bad_words(query);
-            if(!query.empty()) {
+            if (!query.empty()) {
                 result = DocumentsMatcher::collection_merge_search(index, query);
                 i++;
             }
@@ -84,7 +84,6 @@ load_all_indices() {
 }
 
 
-
 [[maybe_unused]] static unsigned long measure() {
     using namespace std::chrono;
     static auto lasttime = high_resolution_clock::now();
@@ -100,7 +99,7 @@ int main(int argc, char *argv[]) {
     initialize_directory_variables();
 
 
-    if (argc == 1 ) {
+    if (argc == 1) {
         while (true) {
             GeneralIndexer::read_and_compress_files();
         };
@@ -126,6 +125,6 @@ int main(int argc, char *argv[]) {
             }
         }
         auto temp1 = DocumentsMatcher::collection_merge_search(indices, terms);
-        std::cout<<temp1.size()<<" matches found\n";
+        std::cout << temp1.size() << " matches found\n";
     }
 }

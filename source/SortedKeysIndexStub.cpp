@@ -20,7 +20,7 @@ namespace fs = std::filesystem;
  */
 static unsigned int string_prefix_compare(const std::string &shorter, const std::string &longer) {
     // Score multiplier in case a word matches all (vs. only a prefix match)
-    constexpr float MATCHALL_BONUS = 1.1F;
+    constexpr float MATCHALL_BONUS = 1.5F;
     // Returns true if shorter is the prefix of longer.
     // e.g. shorter: "str" and longer: "string" returns true.
     auto ls = longer.size();

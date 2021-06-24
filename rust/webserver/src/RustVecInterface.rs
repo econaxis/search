@@ -1,17 +1,7 @@
 use std::ffi::{c_void, CStr};
-use std::mem;
-use std::ops::{Deref, DerefMut};
 use std::slice;
 
 use crate::cffi::{self, clone_one_index, ctypes};
-
-#[derive(Copy, Clone, Default, Debug)]
-#[repr(C)]
-pub struct DocumentPositionPointer_v3(pub u32, pub u32, pub u8);
-
-#[derive(Debug, Clone, Default)]
-pub struct VecDPP(Vec<DocumentPositionPointer_v3>);
-
 
 pub struct C_SSK(*const ctypes::SortedKeysIndexStub);
 
@@ -28,24 +18,6 @@ impl Clone for C_SSK {
     }
 }
 
-impl VecDPP {
-    pub fn new() -> Self {
-        VecDPP(Vec::new())
-    }
-}
-
-impl Deref for VecDPP {
-    type Target = Vec<DocumentPositionPointer_v3>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for VecDPP {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 impl AsRef<*const ctypes::SortedKeysIndexStub> for C_SSK {
     fn as_ref(&self) -> &*const ctypes::SortedKeysIndexStub {
@@ -69,13 +41,10 @@ impl Drop for C_SSK {
 }
 
 #[no_mangle]
-pub extern fn fill_rust_vec(vec: *mut VecDPP, data: *const c_void, size: usize) {
+pub extern fn fill_rust_vec(vec: *mut Vec<u8>, data: *const c_void, size: usize) {
     let vec = unsafe { &mut *vec };
 
-    assert_eq!(size % mem::size_of::<DocumentPositionPointer_v3>(), 0);
-    let dppsize = size / mem::size_of::<DocumentPositionPointer_v3>();
-    vec.resize_with(dppsize, Default::default);
-
-    let data_slice = unsafe { slice::from_raw_parts(data as *const DocumentPositionPointer_v3, dppsize) };
+    vec.resize(size, 0);
+    let data_slice = unsafe { slice::from_raw_parts(data as *const u8, size) };
     vec.copy_from_slice(data_slice);
 }

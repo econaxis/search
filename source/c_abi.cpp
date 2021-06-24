@@ -5,10 +5,13 @@
 #include "rust-interface.h"
 #include "Tokenizer.h"
 #include "DocumentFrequency.h"
+#include <fmt/core.h>
 #include "DocumentsMatcher.h"
+#include <fmt/ostream.h>
 
 namespace ffi = Serializer::ffi;
 namespace sr = Serializer;
+namespace dm = DocumentsMatcher;
 
 void abi_error(std::string message) {
     std::cout << "error: " << message;
@@ -86,10 +89,24 @@ struct DocumentPositionPointer_v2_imbued {
     uint8_t index_num;
 };
 
+void
+serialize_final_doc_to_json(std::ostream &out, dm::TopDocsWithPositions::Elem &entry, const std::string &filename) {
+    static const auto format_string = R"({{"fn":"{0}","df":{1},"matches":{2}}})";
+    static const auto matches_array_format_string = R"([{0},{1},{2},{3}])";
+
+    std::string match_str = "";
+    if (entry.matches[0])
+        match_str = fmt::format(matches_array_format_string, entry.matches[0], entry.matches[1], entry.matches[2],
+                                entry.matches[3]);
+    else match_str = "null";
+    fmt::print(out, format_string, filename, entry.document_freq, match_str);
+}
+
 void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int num_terms, const char **query_terms,
                           RustVec *output_buffer) {
     try {
         assert(num_indices < 32);
+        constexpr uint32_t tag_remover = (1 << 27) - 1;
         std::vector<std::string> query(num_terms);
         for (int i = 0; i < num_terms; i++) {
             auto as_str = std::string(query_terms[i]);
@@ -113,24 +130,34 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
         }
 
         joined.sort_by_frequencies();
-        std::reverse(joined.begin(), joined.end());
+        if (joined.docs.size() > 40) {
+            auto bound = std::lower_bound(joined.docs.begin(), joined.docs.end(), 60);
 
-        std::vector<DocumentPositionPointer_v2_imbued> imbued;
+            if (joined.docs.end() - bound > 40) {
+                joined.docs.erase(joined.docs.begin(), bound);
+            }
+        }
+        std::reverse(joined.docs.begin(), joined.docs.end());
 
-        uint32_t tag_remover = (1 << 27) - 1;
-
+        std::ostringstream out{};
+        out << "[";
         for (auto &i : joined) {
-            imbued.push_back({i.document_id & tag_remover, i.document_freq, static_cast<uint8_t>(i.document_id >> 27)});
-        }
+            auto docid = i.document_id & tag_remover;
+            auto index = i.document_id >> 27;
+            serialize_final_doc_to_json(out, i, indices[index]->query_filemap(docid));
 
-        // TODO: bug, fixed with positions, c-struct layout not standard.
-        if (joined.docs.size() > 50) {
-            fill_rust_vec(output_buffer, imbued.begin().base(), 50 * sizeof(DocumentPositionPointer_v2_imbued));
-        } else {
-            fill_rust_vec(output_buffer, imbued.begin().base(), joined.docs.size() * sizeof(DocumentPositionPointer_v2_imbued));
+            if (i.document_id != (joined.end() - 1)->document_id) {
+                out << ",";
+            }
         }
-    } catch (std::exception& e) {
-        std::cerr<<e.what()<<"\n";
+        out << "]";
+
+
+        auto str = out.str();
+
+        fill_rust_vec(output_buffer, str.data(), str.size());
+    } catch (std::exception &e) {
+        std::cerr << e.what() << "\n";
         exit(1);
     }
 }
@@ -138,11 +165,11 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
 
 uint32_t query_for_filename(SortedKeysIndexStub *index, uint32_t docid, char *buffer, uint32_t bufferlen) {
     auto str = index->query_filemap(docid);
-    auto absstrpath = data_files_dir / "data" / str;
 
-    std::strncpy(buffer, absstrpath.c_str(), bufferlen);
-    return strlen(absstrpath.c_str()) + 1;
+    std::strncpy(buffer, str.c_str(), bufferlen);
+    return strlen(str.c_str()) + 1;
 }
+
 SortedKeysIndexStub *load_one_index(const char *suffix_name) {
     try {
         std::string suffix = suffix_name;

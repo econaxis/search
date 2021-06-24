@@ -22,7 +22,7 @@ void PositionsSearcher::serialize_positions(std::ostream &positions, const WordI
     auto prevfile = DocumentPositionPointer{0, 0};
     for (auto &file : ie.files) {
         if(file.document_id == prevfile.document_id) {
-            if(file.document_position <= prevfile.document_position) {
+            if(file.document_position < prevfile.document_position) {
                 throw std::runtime_error("Positions list not sorted");
             }
             serialize_vnum(positionbuf, file.document_position - prevfile.document_position);
@@ -46,8 +46,6 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
 
     positions.read(reinterpret_cast<char *>(&magic_num), 4);
 
-    auto pos = positions.tellg();
-
     if(magic_num != MAGIC_NUM) {
         throw std::runtime_error("Magic num not equals");
     }
@@ -55,7 +53,7 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
     std::vector<DocumentPositionPointer> out;
     for (auto &df : freq_list) {
         auto docs_left = df.document_freq;
-        auto counter = 0;
+        auto counter = 0U;
         while (docs_left--) {
             auto pos = read_vnum(positions);
 

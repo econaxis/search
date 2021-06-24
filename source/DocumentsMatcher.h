@@ -4,6 +4,9 @@
 #include "TopDocs.h"
 #include <vector>
 #include "SortedKeysIndexStub.h"
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+#include <fmt/compile.h>
 
 namespace DocumentsMatcher {
 
@@ -37,6 +40,8 @@ namespace DocumentsMatcher {
             for(auto t: td) docs.emplace_back(t.document_id, t.document_freq);
         }
 
+
+
         void insert(TopDocsWithPositions other) {
             std::move(other.docs.begin(), other.docs.end(), std::back_inserter(docs));
         }
@@ -51,6 +56,10 @@ namespace DocumentsMatcher {
 
     TopDocsWithPositions combiner_with_position(SortedKeysIndexStub& index, std::vector<TopDocs>& outputs);
 
+inline bool operator<(const TopDocsWithPositions::Elem& one, int two) {
+    return one.document_freq < two;
+}
 };
+
 
 #endif //GAME_DOCUMENTSMATCHER_H

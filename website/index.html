@@ -49,75 +49,87 @@
         abort = new AbortController();
         signal = abort.signal;
 
+        await sleep(50);
         if (signal.aborted || mycounter !== curcounter) return;
-
-        await sleep(500);
 
         let resp = await fetch("/search/?q=" + str, {signal});
+        console.log("Response time: ", resp.headers.get("Server-Timing"), "ms")
         let text = await resp.json();
+        text = text.flat();
 
-        if (signal.aborted || mycounter !== curcounter) return;
-
-        let formattedtext = JSON.stringify(text.data, null, 3);
-        let id = text.id;
-        document.getElementById("highlight-bar").innerHTML = formattedtext;
-
-        // If latency is high, we want to minimize calls to highlight. If latency is low, we can call highlight freely.
-        await sleep(500);
-
-        if (signal.aborted || mycounter !== curcounter) return;
-
-        let highlight = await fetch("/highlight/?id=" + id, {signal});
-        highlight = await highlight.json();
+        text.sort((a, b) => {
+            return a.df - b.df;
+        });
+        text.reverse();
 
 
-        for (v of highlight) {
-
-
-            let prevm = -1e5;
-            let curstring = "";
-            for (const m of v.matches) {
-                let start, end;
-                let skipped;
-                if (m[0] - prevm > SURROUNDING) {
-                    start = m[0] - SURROUNDING;
-                    skipped = true;
-                } else {
-                    start = prevm;
-                    skipped = false;
-                }
-                end = m[1] + SURROUNDING;
-                prevm = end;
-
-                start = clamp(start, 0, v.document.length);
-                end = clamp(end, 0, v.document.length);
-
-                if (skipped) curstring += "...";
-
-                curstring += v.document.substring(start, m[0]);
-                curstring += "<mark>";
-                curstring += v.document.substring(m[0], m[1]);
-                curstring += "</mark>";
-                curstring += v.document.substring(m[1], end);
-            }
-            // v.document = curstring;
-            delete v.matches;
-            v.document = v.document.replace(/\\n/gi, "");
-            v.document = escapeHtml(v.document);
-
-            // highlight[v][1].document = escapeHtml(highlight[v][1].document);
-            // highlight[v].document = highlight[v].document.replace(/\n/gi, "");
-            // newresp = newresp.
-            // newresp = newresp.
-            // highlight[v][hg] = newresp;
+        let htmltext = "";
+        for(const c of text) {
+            c.fn = decodeURIComponent(c.fn);
+            c.fn = "http://instructables.com" + c.fn;
+            htmltext += `<a href="${c.fn}">${c.fn} Score: ${c.df}</a></br>`;
         }
-        window.dev = highlight;
 
-        document.getElementById('highlight-bar').innerHTML = JSON.stringify(highlight, null, 3);
+        if (signal.aborted || mycounter !== curcounter) return;
+
+        document.getElementById("highlight-bar").innerHTML = htmltext;
+
+        // // If latency is high, we want to minimize calls to highlight. If latency is low, we can call highlight freely.
+        // await sleep(500);
+        //
+        // if (signal.aborted || mycounter !== curcounter) return;
+        //
+        // let highlight = await fetch("/highlight/?id=" + id, {signal});
+        // highlight = await highlight.json();
+        //
+        //
+        // for (v of highlight) {
+        //
+        //
+        //     let prevm = -1e5;
+        //     let curstring = "";
+        //     for (const m of v.matches) {
+        //         let start, end;
+        //         let skipped;
+        //         if (m[0] - prevm > SURROUNDING) {
+        //             start = m[0] - SURROUNDING;
+        //             skipped = true;
+        //         } else {
+        //             start = prevm;
+        //             skipped = false;
+        //         }
+        //         end = m[1] + SURROUNDING;
+        //         prevm = end;
+        //
+        //         start = clamp(start, 0, v.document.length);
+        //         end = clamp(end, 0, v.document.length);
+        //
+        //         if (skipped) curstring += "...";
+        //
+        //         curstring += v.document.substring(start, m[0]);
+        //         curstring += "<mark>";
+        //         curstring += v.document.substring(m[0], m[1]);
+        //         curstring += "</mark>";
+        //         curstring += v.document.substring(m[1], end);
+        //     }
+        //     // v.document = curstring;
+        //     delete v.matches;
+        //     v.document = v.document.replace(/\\n/gi, "");
+        //     v.document = escapeHtml(v.document);
+        //
+        //     // highlight[v][1].document = escapeHtml(highlight[v][1].document);
+        //     // highlight[v].document = highlight[v].document.replace(/\n/gi, "");
+        //     // newresp = newresp.
+        //     // newresp = newresp.
+        //     // highlight[v][hg] = newresp;
+        // }
+        // window.dev = highlight;
+
+        // document.getElementById('highlight-bar').innerHTML = JSON.stringify(highlight, null, 3);
     }
 
     document.getElementById("search-bar").addEventListener("input", (ev) => {
-        handle_request(ev.target.value).then(() => console.log("done"));
+        handle_request(ev.target.value).then(() => undefined);
     })
 </script>
 </body>

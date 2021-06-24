@@ -7,7 +7,6 @@
 #![feature(drain_filter)]
 
 mod cffi;
-mod highlighter;
 mod RustVecInterface;
 mod IndexWorker;
 mod webserver;
@@ -26,7 +25,6 @@ use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::path::{PathBuf};
 use std::iter::FromIterator;
-use env_logger;
 use indicatif::ProgressBar;
 use tracing::log::LevelFilter;
 
@@ -73,7 +71,7 @@ fn main() -> io::Result<()> {
 
     unsafe { cffi::initialize_dir_vars() };
 
-    let mut indices = open_index_files();
+    let indices = open_index_files();
     let indices = indices.leak();
 
     let chunk_size = (indices.len() as f32 / 5f32).ceil() as usize;
@@ -88,7 +86,6 @@ fn main() -> io::Result<()> {
 
     let appstate = webserver::ApplicationState {
         iw,
-        highlighting_jobs: Arc::new(Default::default()),
         jobs_counter: Default::default(),
     };
 

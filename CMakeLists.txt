@@ -5,15 +5,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
 
-add_subdirectory(kvdb)
 
-
-add_compile_options(-march=native -Wall -Wno-ignored-attributes -fno-inline -Wno-sign-compare)
+add_compile_options(-march=native -Wall -Wno-ignored-attributes -fno-inline -Wno-sign-compare -fPIC)
 
 add_library(general-indexer SHARED
         "source/GeneralIndexer.cpp"
         )
-
 
 
 add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
@@ -34,7 +31,7 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         source/FPStub.cpp
         source/DocumentsTier.cpp
         source/PositionsSearcher.cpp
-        source/Constants.h source/DocumentsMatcher.cpp source/DocumentsMatcher.h source/dict_strings.h source/ResultsPrinter.cpp source/ResultsPrinter.h source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/TopDocs.h source/CustomAllocatedVec.cpp source/CustomAllocatedVec.h)
+        source/Constants.h source/DocumentsMatcher.cpp source/ResultsPrinter.cpp source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/CustomAllocatedVec.cpp source/SyncedQueue.cpp)
 target_include_directories(search-share PUBLIC source extern extern/mio/include)
 
 target_include_directories(general-indexer PUBLIC source extern extern/mio/include)
@@ -59,7 +56,7 @@ file(GLOB rust-sources rust/webserver/src/*)
 if (CMAKE_BUILD_TYPE MATCHES RelWithDebInfo OR CMAKE_BUILD_TYPE MATCHES Release)
     set(CARGO_RELEASE_MODE "--release")
     message("MESSAGE: Using release build " ${rust-build-command})
-endif()
+endif ()
 set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build ${CARGO_RELEASE_MODE} --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
 
 message("Rust build command: " ${rust-build-command})
@@ -77,3 +74,15 @@ add_dependencies(compactor rust-server)
 add_dependencies(general-indexer rust-server)
 add_dependencies(rust-server c-search-abi)
 
+
+add_executable(stdinindexer source/StdinIndexer.cpp)
+target_include_directories(stdinindexer PRIVATE source/)
+target_link_libraries(stdinindexer PRIVATE general-indexer search-share)
+
+
+add_subdirectory(extern/fmt-7.1.3)
+target_link_libraries(search-share PUBLIC fmt::fmt)
+target_include_directories(search-share PUBLIC extern/fmt-7.1.3/include)
+
+target_link_libraries(c-search-abi PRIVATE fmt::fmt)
+target_include_directories(c-search-abi PUBLIC extern/fmt-7.1.3/include)

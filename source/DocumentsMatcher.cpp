@@ -199,16 +199,16 @@ TopDocs DocumentsMatcher::AND(std::vector<TopDocs> &results) {
 
 
 float position_difference_scaler(uint32_t posdiff) {
-    if (posdiff <= 1) return 200.f;
-    if (posdiff <= 3) return 100.f;
-    if (posdiff <= 5) return 5.f;
-    if (posdiff <= 10) return 3.f;
-    if (posdiff <= 20) return 1.5f;
+    if (posdiff <= 2) return 100.f;
+    if (posdiff <= 5) return 50.f;
+    if (posdiff <= 10) return 25.f;
+    if (posdiff <= 20) return 10.f;
+    if (posdiff <= 50) return 1.f;
     return 0.9f;
 }
 
 template<typename T>
-uint32_t two_finger_find_min(T &first1, T last1, T &first2, T last2) {
+int two_finger_find_min(T &first1, T last1, T &first2, T last2, int diff1) {
     assert(first1->document_id == (last1 - 1)->document_id);
     assert(first2->document_id == (last2 - 1)->document_id);
 
@@ -218,12 +218,12 @@ uint32_t two_finger_find_min(T &first1, T last1, T &first2, T last2) {
         if (first1->document_position > first2->document_position)
             first2++;
         else {
-            curmin = std::min(curmin, first2->document_position - first1->document_position);
+            curmin = std::min(curmin, first2->document_position - (first1->document_position + diff1) );
             if (curmin <= 1) break;
             first1++;
         }
     }
-    return curmin;
+    return static_cast<int>(curmin);
 }
 
 template<typename Container>
@@ -249,13 +249,15 @@ rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds,
     for (int i = 0; i < tds.size(); i++) {
         if (auto it = tds[i].get_first_term(); it) {
             positions_list[i] = index.get_positions_for_term(*it);
+            std::cout<<**it<<" ";
         } else {
             std::cerr << "Couldn't find all terms\n";
             return ret;
         }
+        std::cout<<"\n";
     }
     for (auto d = ret.begin(); d < ret.end(); d++) {
-        uint32_t pos_difference = 0;
+        int pos_difference = 0;
         for (int i = 0; i < tds.size() - 1; i++) {
             auto[first1, last1] = std::equal_range(positions_list[i].begin(), positions_list[i].end(), d->document_id);
             auto[first2, last2] = std::equal_range(positions_list[i + 1].begin(), positions_list[i + 1].end(),
@@ -265,10 +267,9 @@ rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds,
                 continue;
             }
 
-            pos_difference += two_finger_find_min(first1, last1, first2, last2);
+            pos_difference += two_finger_find_min(first1, last1, first2, last2, tds[i].get_first_term().value()->size());
             insert_to_array(d->matches, first1->document_position);
         }
-        pos_difference /= (tds.size() / 2);
 
 
         d->document_freq = d->document_freq * position_difference_scaler(pos_difference);

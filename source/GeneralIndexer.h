@@ -19,9 +19,6 @@ namespace GeneralIndexer {
     int read_and_compress_files();
 
 
-    std::optional<std::string> read_some_files();
-
-
     std::string persist_indices(const SortedKeysIndex &master, const std::vector<DocIDFilePair> &filepairs);
 
     void test_serialization();
@@ -32,6 +29,10 @@ namespace GeneralIndexer {
 
     SortedKeysIndex
     thread_process_files(const std::atomic_bool &done_flag, SyncedQueue &file_contents, int each_max_file);
+
+    std::optional<std::string> read_some_files(void (*producer)(SyncedQueue &));
+
+    SortedKeysIndex thread_process_files(SyncedQueue &file_contents);
 }
 
 #endif //GAME_GENERALINDEXER_H

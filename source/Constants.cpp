@@ -15,5 +15,6 @@ void initialize_directory_variables() {
     assert(data_files_dir_env);
     data_files_dir = fs::path(data_files_dir_env);
     indice_files_dir = data_files_dir / "indices";
+    std::cout<<"Using dir: "<<data_files_dir<<"\n";
 }
 

@@ -1,4 +1,3 @@
-use crate::RustVecInterface::{VecDPP};
 
 use std::ffi;
 use std::io::Read;
@@ -37,11 +36,9 @@ extern "C" {
 
     #[allow(improper_ctypes)]
     pub fn search_multi_indices(num_indices: i32, indices: *const *const ctypes::SortedKeysIndexStub, num_terms: i32, query_terms: *const *const c_char,
-                                output_buffer: *const VecDPP);
+                                output_buffer: *const Vec<u8>);
 
     pub fn initialize_dir_vars();
-
-    pub fn query_for_filename(index: *const ctypes::SortedKeysIndexStub, docid: u32, buffer: *const c_char, bufferlen: u32) -> u32;
 
     pub fn clone_one_index(other: *const ctypes::SortedKeysIndexStub) -> *const ctypes::SortedKeysIndexStub;
 }

@@ -79,12 +79,12 @@ target_include_directories(stdinindexer PRIVATE source/)
 target_link_libraries(stdinindexer PRIVATE general-indexer search-share ${CMAKE_BINARY_DIR}/libnamesdb.so)
 
 
-add_subdirectory(extern/fmt-7.1.3)
+add_subdirectory(extern/fmt)
 target_link_libraries(search-share PUBLIC fmt::fmt)
-target_include_directories(search-share PUBLIC extern/fmt-7.1.3/include)
+target_include_directories(search-share PUBLIC extern/fmt/include)
 
 target_link_libraries(c-search-abi PRIVATE fmt::fmt)
-target_include_directories(c-search-abi PUBLIC extern/fmt-7.1.3/include)
+target_include_directories(c-search-abi PUBLIC extern/fmt/include)
 
 
 target_link_libraries(search-share PUBLIC systemd)

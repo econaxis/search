@@ -4,9 +4,6 @@
 #include "TopDocs.h"
 #include <vector>
 #include "SortedKeysIndexStub.h"
-#include <fmt/core.h>
-#include <fmt/ostream.h>
-#include <fmt/compile.h>
 
 namespace DocumentsMatcher {
 

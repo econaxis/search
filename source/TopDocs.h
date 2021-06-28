@@ -34,7 +34,7 @@ public:
         included_terms.emplace(std::move(term), it);
     }
 
-    std::optional<const std::string *> get_first_term() const;
+    std::optional<const char *> get_first_term() const;
 
     bool extend_from_tier_iterator(int how_many);
 

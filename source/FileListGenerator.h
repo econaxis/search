@@ -21,6 +21,7 @@ namespace FileListGenerator {
         if (!ndb || *ndb == nullptr) {
             auto path = indice_files_dir;
             ndb = std::make_shared<NamesDatabase *>(new_name_database(path.c_str()));
+            std::cout<<"Created NDB\n";
         }
         return *ndb;
     }

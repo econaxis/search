@@ -54,6 +54,10 @@
 
         let resp = await fetch("/search/?q=" + str, {signal});
         console.log("Response time: ", resp.headers.get("Server-Timing"), "ms")
+
+
+        // Have to do some JSON processing, it's more efficient to do it in client side Javascript to avoid
+        // needless serialization/deser.return
         let text = await resp.json();
         text = text.flat();
 

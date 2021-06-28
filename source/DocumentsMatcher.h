@@ -10,7 +10,8 @@
 
 namespace DocumentsMatcher {
 
-    TopDocs AND(std::vector<TopDocs> &results);
+    TopDocs AND_Driver(std::vector<TopDocs>& outputs);
+
 
     TopDocs backup(std::vector<TopDocs> &results);
 
@@ -27,24 +28,25 @@ namespace DocumentsMatcher {
             uint32_t document_freq;
             std::array<uint32_t, 4> matches = {0};
         };
+
         std::vector<Elem> docs;
 
         void sort_by_frequencies() {
-            std::sort(docs.begin(), docs.end(), [](auto& a, auto& b) {
+            std::sort(docs.begin(), docs.end(), [](auto &a, auto &b) {
                 return a.document_freq < b.document_freq;
             });
         }
 
-        explicit TopDocsWithPositions(const TopDocs& td) {
+        explicit TopDocsWithPositions(const TopDocs &td) {
             docs.reserve(td.size());
-            for(auto t: td) docs.emplace_back(t.document_id, t.document_freq);
+            for (auto t: td) docs.emplace_back(t.document_id, t.document_freq);
         }
-
 
 
         void insert(TopDocsWithPositions other) {
             std::move(other.docs.begin(), other.docs.end(), std::back_inserter(docs));
         }
+
         std::vector<Elem>::const_iterator begin() const { return docs.begin(); }
 
         std::vector<Elem>::const_iterator end() const { return docs.end(); }
@@ -54,11 +56,12 @@ namespace DocumentsMatcher {
         std::vector<Elem>::iterator end() { return docs.end(); }
     };
 
-    TopDocsWithPositions combiner_with_position(SortedKeysIndexStub& index, std::vector<TopDocs>& outputs);
+    TopDocsWithPositions combiner_with_position(SortedKeysIndexStub &index, std::vector<TopDocs> &outputs);
 
-inline bool operator<(const TopDocsWithPositions::Elem& one, int two) {
-    return one.document_freq < two;
-}
+    inline bool operator<(const TopDocsWithPositions::Elem &one, int two) {
+        return one.document_freq < two;
+    }
+
 };
 
 

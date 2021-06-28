@@ -20,32 +20,6 @@ using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
 
 
-void queue_produce_file_contents_tar(std::vector<std::string> tarnames, SyncedQueue &contents,
-                                     std::atomic_bool &done_flag) {
-    uint32_t docid = 1;
-    for (const auto &tarname : tarnames) {
-        mtar_t mtar;
-        mtar_header_t h;
-        if (mtar_open(&mtar, (data_files_dir / tarname).c_str(), "r") != MTAR_ESUCCESS) {
-            throw std::runtime_error("Couldn't open file " + (data_files_dir / tarname).string());
-        }
-        while ((mtar_read_header(&mtar, &h)) != MTAR_ENULLRECORD && docid <= MAX_FILES_PER_INDEX) {
-            std::string filestr(h.size, ' ');
-            mtar_read_data(&mtar, filestr.data(), h.size);
-            mtar_next(&mtar);
-
-            contents.wait_for([&] {
-                return contents.size() < 1500;
-            });
-
-            contents.push({std::move(filestr), {docid++, h.name}});
-
-        }
-    }
-    done_flag = true;
-    contents.cv.notify_all();
-}
-
 void queue_produce_file_contents(SyncedQueue &contents) {
     const FilePairs filepairs = FileListGenerator::from_file();
 
@@ -95,9 +69,10 @@ void sort_and_group_all_par(std::vector<WordIndexEntry> &index) {
     });
 }
 
-std::optional<std::string> GeneralIndexer::read_some_files(void (*producer)(SyncedQueue &)) {
-    // Vector of file paths and generated, incremental ID.
-
+//! Reads some files from a specified func* and indexes them.
+//! \param func function that produces content from a source (e.g. socket, STDIN, file) for the indexer to index.
+//! \return the file name of the produced index file.
+std::optional<std::string> GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc* func) {
     // Vector of arrays with custom allocator.
     SortedKeysIndex a1;
 
@@ -109,7 +84,7 @@ std::optional<std::string> GeneralIndexer::read_some_files(void (*producer)(Sync
 
     // Start our thread to open all files and load them into memory, so we don't get stuck on file IO
     // in the processing + indexing thread.
-    std::thread filecontentproducer(producer, std::ref(file_contents));
+    std::thread filecontentproducer(func, std::ref(file_contents));
 
 
     std::vector<std::future<SortedKeysIndex>> threads;

@@ -101,8 +101,9 @@ SingleDocumentsTier MultiDocumentsTier::TierIterator::read_all() {
         auto a = read_next();
         if(!a) break;
         out.insert(out.end(), a->begin(), a->end());
+        std::inplace_merge(out.begin(), out.end() - a->size(), out.end());
     }
-    std::sort(out.begin(), out.end());
+    assert(std::is_sorted(out.begin(), out.end()));
     return out;
 }
 

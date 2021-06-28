@@ -17,36 +17,33 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
     using namespace std::chrono;
 
     int NUM_SEARCHES = std::atoi(argv[1]);
-    std::uniform_int_distribution<uint> dist(0, 5825); // ASCII table codes for normal characters.
+    std::uniform_int_distribution<uint> dist(0, 1000); // ASCII table codes for normal characters.
     auto t1 = high_resolution_clock::now();
     int i = 0;
     while (i < NUM_SEARCHES) {
 
         auto temp = (std::string) strings[dist(randgen())];
         auto temp1 = (std::string) strings[dist(randgen())];
-        auto temp2 = (std::string) strings[dist(randgen())];
-        auto temp3 = (std::string) strings[dist(randgen())];
-        auto temp4 = (std::string) strings[dist(randgen())];
 
         Tokenizer::clean_token_to_index(temp);
         Tokenizer::clean_token_to_index(temp1);
-        Tokenizer::clean_token_to_index(temp2);
-        Tokenizer::clean_token_to_index(temp3);
-        Tokenizer::clean_token_to_index(temp4);
 
         std::vector<std::string> query{temp, temp1};
-        TopDocs result;
+        auto size = 0;
         if (temp.size() && temp1.size()) {
             Tokenizer::remove_bad_words(query);
             if (!query.empty()) {
-                result = DocumentsMatcher::collection_merge_search(index, query);
+                for (auto &j : index) {
+                    auto temp = j.search_many_terms(query);
+                    size += DocumentsMatcher::combiner_with_position(j, temp).docs.size();
+                }
                 i++;
             }
         }
 //        ResultsPrinter::print_results(result, filemap, query);
 
-        if (i % 30 == 0)
-            std::cout << "Matched " << result.size() << " files for " << temp1 << " " << temp << " "
+        if (i % 3 == 0)
+            std::cout << "Matched " << size << " files for " << temp1 << " " << temp << " "
                       << i * 100 / NUM_SEARCHES << "%\n" << std::flush;
     }
     auto time = high_resolution_clock::now() - t1;
@@ -73,10 +70,9 @@ load_all_indices() {
         if (statedb != Compactor::ReadState::GOOD) break;
 
         std::cout << "Used database file: " << line << "\n";
-
         indices.emplace_back(line);
 
-        if (indices.size() >= 7) break;
+        if (indices.size() >= 1) break;
     }
 
 
@@ -91,7 +87,6 @@ load_all_indices() {
     lasttime = high_resolution_clock::now();
     return ret;
 }
-
 
 
 int main(int argc, char *argv[]) {

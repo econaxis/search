@@ -84,8 +84,8 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
     return std::nullopt;
 }
 
-std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string *term) const {
-    auto loc = seek_to_term(*term);
+std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string &term) const {
+    auto loc = seek_to_term(term);
     if (loc) {
 //        positions.clear();
 //        frequencies.clear();

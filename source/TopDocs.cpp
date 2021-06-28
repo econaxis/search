@@ -108,8 +108,8 @@ bool TopDocs::extend_from_tier_iterator(int how_many) {
     return has_more;
 }
 
-std::optional<const std::string *> TopDocs::get_first_term() const {
+std::optional<const char *> TopDocs::get_first_term() const {
     if(included_terms.empty()) {
         return std::nullopt;
-    } else return &included_terms.begin()->first;
+    } else return included_terms.begin()->first.data();
 }

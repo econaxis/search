@@ -68,20 +68,23 @@ impl NamesDatabase {
     pub fn new(metadata_path: &Path) -> Self {
         let json_path = metadata_path.join("file_metadata.msgpack");
 
-        if fs::metadata(&json_path).map_or(0, |f| f.len()) > 1 {
-            return Self::from_json_file(&json_path);
+        if fs::metadata(&json_path).map_or(0, |f| f.len()) > 10 {
+            let this = Self::from_json_file(&json_path);
+            return this;
         }
-
         let processed_data: HashSet<DocIDFilePair> = {
             fs::File::create(&json_path).expect(&*format!("Couldn't open file {:?}", json_path));
             let empty_hash = HashSet::new();
             HashSet::from_iter(generate_metadata_for_dir(metadata_path, &empty_hash))
         };
 
-        Self {
+        let this = Self {
             set: processed_data,
             json_path,
-        }
+        };
+        println!("Creating new NDB file");
+        this.serialize();
+        this
     }
 
     pub fn insert(&mut self, path: &str, id: u32) {
@@ -107,7 +110,7 @@ impl NamesDatabase {
         self.get(OsStr::new(key))
     }
 
-    fn serialize(&mut self) {
+    fn serialize(&self) {
         // Serialize new metadata file.
         let binary_outfile = fs::File::create(&self.json_path).unwrap();
 

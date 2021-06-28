@@ -4,16 +4,18 @@
 
 #include <iostream>
 #include <atomic>
-#include <iostream>
 #include "SyncedQueue.h"
 #include "GeneralIndexer.h"
 #include "Constants.h"
+#include "FileListGenerator.h"
 #include "IndexFileLocker.h"
 
 void queue_produce_file_contents_stdin(SyncedQueue &contents);
 
 int main() {
     initialize_directory_variables();
+
+    FileListGenerator::get_ndb();
 
     auto str = GeneralIndexer::read_some_files(queue_produce_file_contents_stdin);
     IndexFileLocker::do_lambda([&] {
@@ -56,7 +58,6 @@ void queue_produce_file_contents_stdin(SyncedQueue &contents) {
             std::cin >> word;
         }
 
-        // File
         std::cin >> word;
         if (word != "file") {
             std::cerr << ("Word: " + word + " wrong");
@@ -68,9 +69,15 @@ void queue_produce_file_contents_stdin(SyncedQueue &contents) {
             std::cin >> word;
         }
 
+
+        if(search_name_database(FileListGenerator::get_ndb(), filename.c_str())) {
+            continue;
+        }
+
+        log("Processing file: ", filename);
         thread_local_holder.emplace_back(std::move(file), DocIDFilePair{docid++, filename});
 
-        if (thread_local_holder.size() >= 20) {
+        if (thread_local_holder.size() >= 50) {
             contents.push_multi(thread_local_holder.begin(), thread_local_holder.end());
             thread_local_holder.clear();
             std::cout << "Progress: " << docid - contents.size() << "\n";

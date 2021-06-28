@@ -117,6 +117,8 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
         DocumentsMatcher::TopDocsWithPositions joined;
         for (std::size_t i = 0; i < num_indices; i++) {
             auto temp = indices[i]->search_many_terms(query);
+
+            // If we dont' want positions_matching, call DocumentsMatcher::AND_Driver(temp);
             auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(*indices[i], temp);
 
             uint32_t curtag = i << 27;

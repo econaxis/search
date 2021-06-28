@@ -6,6 +6,7 @@
 #include "DocumentsTier.h"
 #include "DocumentFrequency.h"
 #include <execinfo.h>
+#include "PositionsSearcher.h"
 
 void print_backtrace() {
     void *tracePtrs[15];

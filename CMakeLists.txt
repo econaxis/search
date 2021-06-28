@@ -87,6 +87,5 @@ target_link_libraries(c-search-abi PRIVATE fmt::fmt)
 target_include_directories(c-search-abi PUBLIC extern/fmt/include)
 
 
-target_link_libraries(search-share PUBLIC systemd)
 
 target_precompile_headers(search-share PUBLIC source/logger.h)

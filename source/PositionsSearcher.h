@@ -14,6 +14,7 @@
 #include "DocumentsMatcher.h"
 
 using SingleDocumentsTier = std::vector<DocumentFrequency>;
+using PositionsMatrix = std::vector<std::vector<DocumentPositionPointer>>;
 
 struct WordIndexEntry;
 
@@ -24,8 +25,11 @@ namespace PositionsSearcher {
     std::vector<DocumentPositionPointer>
     read_positions_all(std::istream &positions, const SingleDocumentsTier &freq_list);
 
+
     DocumentsMatcher::TopDocsWithPositions
-    rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds, const TopDocs &td);
+    rerank_by_positions(const PositionsMatrix &positions_list, const TopDocs &td, const std::vector<std::string>& query_terms);
+
+    PositionsMatrix fill_positions_from_docs(const SortedKeysIndexStub &index, const std::vector<std::string>& query_terms);
 };
 
 

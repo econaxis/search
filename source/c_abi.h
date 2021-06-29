@@ -26,7 +26,7 @@ void copy_filepairs_to_buf(std::vector<DocIDFilePair> *vec, RustDIFP *buf, uint3
 
 
 
-void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int num_terms, const char **query_terms, RustVec* output_buffer);
+void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int num_terms, const char **query_terms_ptr, RustVec* output_buffer);
 uint32_t query_for_filename(SortedKeysIndexStub *index, uint32_t docid, char *buffer, uint32_t bufferlen);
 
 void initialize_dir_vars();

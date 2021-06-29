@@ -5,6 +5,7 @@
 #include <vector>
 #include "SortedKeysIndexStub.h"
 #include <cstdint>
+#include <span>
 
 namespace DocumentsMatcher {
 
@@ -52,14 +53,16 @@ namespace DocumentsMatcher {
         std::vector<Elem>::iterator begin() { return docs.begin(); }
 
         std::vector<Elem>::iterator end() { return docs.end(); }
-    };
 
-    TopDocsWithPositions combiner_with_position(SortedKeysIndexStub &index, std::vector<TopDocs> &outputs);
+
+    };
 
     inline bool operator<(const TopDocsWithPositions::Elem &one, int two) {
         return one.document_freq < two;
     }
 
+    TopDocsWithPositions combiner_with_position(SortedKeysIndexStub &index, std::vector<TopDocs> &outputs,
+                                                const std::vector<std::string> &query_terms);
 };
 
 

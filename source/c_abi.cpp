@@ -7,6 +7,7 @@
 #include "DocumentFrequency.h"
 #include "DocumentsMatcher.h"
 #include <fmt/ostream.h>
+#include <span>
 
 namespace ffi = Serializer::ffi;
 namespace sr = Serializer;
@@ -89,24 +90,23 @@ serialize_final_doc_to_json(std::ostream &out, dm::TopDocsWithPositions::Elem &e
     fmt::print(out, format_string, filename, entry.document_freq, match_str);
 }
 
-void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int num_terms, const char **query_terms,
+void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int num_terms, const char **query_terms_ptr,
                           RustVec *output_buffer) {
     try {
         assert(num_indices < 32);
         constexpr uint32_t tag_remover = (1 << 27) - 1;
         std::vector<std::string> query(num_terms);
         for (int i = 0; i < num_terms; i++) {
-            auto as_str = std::string(query_terms[i]);
+            auto as_str = std::string(query_terms_ptr[i]);
             Tokenizer::clean_token_to_index(as_str);
             query[i] = as_str;
         }
-
         DocumentsMatcher::TopDocsWithPositions joined;
         for (std::size_t i = 0; i < num_indices; i++) {
             auto temp = indices[i]->search_many_terms(query);
 
             // If we dont' want positions_matching, call DocumentsMatcher::AND_Driver(temp);
-            auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(*indices[i], temp);
+            auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(*indices[i], temp, query);
 
             uint32_t curtag = i << 27;
 
@@ -147,6 +147,7 @@ void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int nu
         fill_rust_vec(output_buffer, str.data(), str.size());
     } catch (std::exception &e) {
         std::cerr << e.what() << "\n";
+        print("Exception encountered: ", e.what());
         exit(1);
     }
 }

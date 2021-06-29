@@ -1,11 +1,9 @@
-//
-// Created by henry on 2021-06-03.
-//
 #include <unordered_map>
 #include "DocumentFrequency.h"
 #include "DocumentsMatcher.h"
 #include <cassert>
 #include <iostream>
+#include <span>
 #include "Serializer.h"
 #include "WordIndexEntry.h"
 #include "PositionsSearcher.h"
@@ -54,7 +52,7 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
         throw std::runtime_error("Magic num not equals");
     }
 
-    auto sum = 0;
+    auto sum = 0U;
     for (auto &df : freq_list) {
         sum += df.document_freq;
     }
@@ -80,11 +78,11 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
 }
 
 
+//! Scales the document score according to how far the matched terms are.
+int position_difference_scaler(uint32_t posdiff);
 
 
-// Scales the document score according to how far the matched terms are.
-float position_difference_scaler(uint32_t posdiff);
-
+//! Inserts an element into a static array by replacing zero-elements with `value`
 template<typename Container>
 void insert_to_array(Container &array, uint32_t value);
 
@@ -115,50 +113,33 @@ int two_finger_find_min(T &first1, T last1, T &first2, T last2) {
 }
 
 
-
+//! Uses positioning information to rerank the documents list. Documents that have matching terms closer together are boosted to the top.
+//! \param index SortedKeysIndexStub (needed for position information)
+//! \param tds
+//! \param td
+//! \return
 DocumentsMatcher::TopDocsWithPositions
-PositionsSearcher::rerank_by_positions(const SortedKeysIndexStub &index, std::vector<TopDocs> &tds, const TopDocs &td) {
+PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, const TopDocs &td, const std::vector<std::string> &query_terms) {
     using TopDocsWithPositions = DocumentsMatcher::TopDocsWithPositions;
     TopDocsWithPositions ret(td);
-    if (tds.size() >= 32 || tds.size() < 2) {
-        log("Positions searcher not active: terms size not within bounds [2, 32]");
-        return ret;
-    }
 
+    if (positions_list.empty()) return ret;
 
-    std::vector<std::vector<DocumentPositionPointer>> positions_list(tds.size());
-
-    for (int i = 0; i < tds.size(); i++) {
-        std::string terms_list{};
-        if (auto it = tds[i].get_first_term(); it) {
-            positions_list[i] = index.get_positions_for_term(*it);
-            terms_list += std::string(*it) + " ";
-        } else {
-            log("error: Couldn't find all terms\n");
-            return ret;
-        }
-        log("terms list: ", terms_list);
-    }
     for (auto d = ret.begin(); d < ret.end(); d++) {
         int pos_difference = 0;
-        for (int i = 0; i < tds.size() - 1; i++) {
+        for (int i = 0; i < positions_list.size() - 1; i++) {
             auto[first1, last1] = std::equal_range(positions_list[i].begin(), positions_list[i].end(), d->document_id);
             auto[first2, last2] = std::equal_range(positions_list[i + 1].begin(), positions_list[i + 1].end(),
                                                    d->document_id);
 
             if (first1->document_id != d->document_id || first2->document_id != d->document_id) {
-                print("error: Pos dont exist ", **tds[i].get_first_term(), **tds[i + 1].get_first_term(),
-                      index.query_filemap(d->document_id));
+                print_range("error: Pos dont exist, probably AND error?", query_terms.begin(), query_terms.end());
                 pos_difference = 1 << 29;
                 break;
             }
 
             auto a0 = two_finger_find_min(first1, last1, first2, last2);
-            a0 -= std::strlen(*tds[i].get_first_term());
-
-            if (a0 <= 3)
-                log("Two finger find min result: ", index.query_filemap(d->document_id), first1->document_position,
-                    first2->document_position);
+            a0 -= query_terms[i].size();
             pos_difference += abs(a0);
             insert_to_array(d->matches, first1->document_position);
         }
@@ -167,14 +148,31 @@ PositionsSearcher::rerank_by_positions(const SortedKeysIndexStub &index, std::ve
     ret.sort_by_frequencies();
     return ret;
 }
+PositionsMatrix
+PositionsSearcher::fill_positions_from_docs(const SortedKeysIndexStub &index, const std::vector<std::string>& query_terms) {
+    if (query_terms.size() >= 32 || query_terms.size() < 2) {
+        log("Positions searcher not active: terms size not within bounds [2, 32]");
+        return {};
+    }
+    PositionsMatrix positions_list(query_terms.size());
 
-float position_difference_scaler(uint32_t posdiff) {
-    if (posdiff <= 2) return 100.f;
-    if (posdiff <= 5) return 50.f;
-    if (posdiff <= 10) return 25.f;
-    if (posdiff <= 20) return 10.f;
-    if (posdiff <= 50) return 1.f;
-    return 0.9f;
+    for (int i = 0; i < query_terms.size(); i++) {
+        std::string terms_list{};
+        positions_list[i] = index.get_positions_for_term(query_terms[i]);
+        terms_list += std::string(query_terms[i]) + " ";
+        log("terms list: ", terms_list);
+    }
+
+    return positions_list;
+}
+
+int position_difference_scaler(uint32_t posdiff) {
+    if (posdiff <= 2) return 100;
+    if (posdiff <= 5) return 50;
+    if (posdiff <= 10) return 25;
+    if (posdiff <= 20) return 10;
+    if (posdiff <= 50) return 1;
+    return 1;
 }
 
 template<typename Container>
@@ -188,6 +186,7 @@ void insert_to_array(Container &array, uint32_t value) {
 
 
 
+
 // ------------------------------------------------------
 
 /***
@@ -196,6 +195,7 @@ void insert_to_array(Container &array, uint32_t value) {
 #include "DocumentsTier.h"
 #include <ctime>
 #include <cstdlib>
+
 static std::vector<DocumentPositionPointer> a{};
 
 void Push_random_test() {

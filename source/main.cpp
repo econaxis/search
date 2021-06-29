@@ -35,7 +35,7 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
             if (!query.empty()) {
                 for (auto &j : index) {
                     auto temp = j.search_many_terms(query);
-                    size += DocumentsMatcher::combiner_with_position(j, temp).docs.size();
+                    size += DocumentsMatcher::combiner_with_position(j, temp, query).docs.size();
                 }
                 i++;
             }

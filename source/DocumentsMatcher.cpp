@@ -48,6 +48,7 @@ const uint32_t *find_avx_256(const uint32_t *start, const uint32_t *end, uint32_
 
 #include <chrono>
 #include <iostream>
+#include <span>
 
 
 using DPP = DocumentFrequency;
@@ -180,6 +181,8 @@ TopDocs AND(std::vector<TopDocs> &results) {
 
     exit_loop:;
 
+    log("AND query final number of elements: ", accepted_list.size());
+
     return accepted_list;
 
 }
@@ -206,7 +209,8 @@ TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
 constexpr char PLACEHOLDER[] = "(null word)";
 
 TopDocsWithPositions
-DocumentsMatcher::combiner_with_position(SortedKeysIndexStub &index, std::vector<TopDocs> &outputs) {
+DocumentsMatcher::combiner_with_position(SortedKeysIndexStub &index, std::vector<TopDocs> &outputs,
+    const std::vector<std::string> &query_terms) {
 
     // We'll do operations on outputs, adding to it lesser-frequencied documents.
     // If we can't find enough documents that match an AND boolean query, then we'll
@@ -223,7 +227,11 @@ DocumentsMatcher::combiner_with_position(SortedKeysIndexStub &index, std::vector
         log("Warning: using OR backup ", str1, str2);
         return TopDocsWithPositions(DocumentsMatcher::backup(outputs_backup));
     } else {
-        return PositionsSearcher::rerank_by_positions(index, outputs, ret);
+        // We get a positions matrix of all the document positions for each term in the query
+        auto pos_mat = PositionsSearcher::fill_positions_from_docs(index, query_terms);
+
+        // Use that position matrix to rerank/boost documents if they have proximal matching terms.
+        return PositionsSearcher::rerank_by_positions(pos_mat, ret, query_terms);
     }
 }
 

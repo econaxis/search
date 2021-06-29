@@ -5,7 +5,6 @@
 #include "rust-interface.h"
 #include "Tokenizer.h"
 #include "DocumentFrequency.h"
-#include <fmt/core.h>
 #include "DocumentsMatcher.h"
 #include <fmt/ostream.h>
 
@@ -34,18 +33,6 @@ void read_from_ifstream(ifstream *stream, char *buffer, uint32_t max_len) {
     stream->read(buffer, max_len);
 }
 
-uint32_t read_str(ifstream *stream, char *buf) {
-    std::string str = sr::read_str(*stream);
-    if (str.size() >= 500) {
-        throw std::runtime_error("String too big");
-    }
-    str.copy(buf, str.size());
-    return str.size();
-}
-
-uint32_t read_vnum(ifstream *stream) {
-    return sr::read_vnum(*stream);
-}
 
 
 void read_filepairs(ifstream *stream, std::vector<DocIDFilePair> **vecpointer, uint32_t *length) {
@@ -91,8 +78,8 @@ struct DocumentPositionPointer_v2_imbued {
 
 void
 serialize_final_doc_to_json(std::ostream &out, dm::TopDocsWithPositions::Elem &entry, const std::string &filename) {
-    static const auto format_string = R"({{"fn":"{0}","df":{1},"matches":{2}}})";
-    static const auto matches_array_format_string = R"([{0},{1},{2},{3}])";
+    static constexpr auto format_string = R"({{"fn":"{0}","df":{1},"matches":{2}}})";
+    static constexpr auto matches_array_format_string = R"([{0},{1},{2},{3}])";
 
     std::string match_str = "";
     if (entry.matches[0])
@@ -185,12 +172,6 @@ SortedKeysIndexStub *load_one_index(const char *suffix_name) {
 
 void delete_one_index(SortedKeysIndexStub *ssk) {
     delete ssk;
-}
-
-
-SortedKeysIndexStub *clone_one_index(SortedKeysIndexStub *other) {
-    auto *clone = new SortedKeysIndexStub(*other);
-    return clone;
 }
 
 

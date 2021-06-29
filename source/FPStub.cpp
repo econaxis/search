@@ -1,18 +1,18 @@
-
-
 #include "Serializer.h"
 #include <filesystem>
 #include "FPStub.h"
+#include <fstream>
 
 #include <algorithm>
 
 
-FPStub::FPStub(const fs::path& path) : stream(path, std::ios_base::binary) {
+FPStub::FPStub(const fs::path& path)  {
+    auto stream = std::ifstream(path, std::ios_base::binary);
     assert(stream);
-    auto sz = Serializer::read_vnum(stream);
-    for (auto i = 0; i < sz; i++) {
-        auto dfp = Serializer::read_pair(stream);
-        map.emplace(dfp.document_id, dfp.file_name);
+    Serializer::read_vnum(stream);
+    auto fp = Serializer::read_filepairs(stream);
+    for (auto &p : fp) {
+        map.emplace(p.document_id, p.file_name);
     }
 }
 

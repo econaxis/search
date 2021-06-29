@@ -6,8 +6,8 @@
 #include "DocumentsTier.h"
 #include "DocumentFrequency.h"
 #include <execinfo.h>
-#include "PositionsSearcher.h"
 
+using namespace Serializer;
 void print_backtrace() {
     void *tracePtrs[15];
     auto count = backtrace(tracePtrs, 15);
@@ -17,7 +17,59 @@ void print_backtrace() {
     }
 }
 
-void Serializer::serialize(std::ostream &stream, const DocIDFilePair &p) {
+
+std::string read_str(std::istream &stream) {
+    auto length = read_vnum(stream);
+    std::string buffer(length, ' ');
+    stream.read(buffer.data(), length);
+    return buffer;
+}
+
+uint32_t Serializer::read_vnum(std::istream &stream) {
+    uint32_t holder = 0;
+    uint8_t byte = 0;
+    stream.read(reinterpret_cast<char *> (&byte), 1);
+
+    if (byte & 1 << 0) {
+        // 8 bit number
+        holder = byte >> 1; // byte has 7 bits of info.
+    } else if (byte & 1 << 1) {
+        stream.read(reinterpret_cast<char *> (&holder), 1);
+        // 16 bit number
+        byte = byte >> 2; // byte has 6 bits of info
+        holder = (holder << 6) | byte;
+    } else if (byte & 1 << 2) {
+        stream.read(reinterpret_cast<char *> (&holder), 3);
+        byte = byte >> 3; // byte has 4 bits of info.
+        // 32 bit number
+        holder = (holder << 5) | byte;
+    } else if (byte & 1 << 3) {
+        uint64_t bigholder = 0;
+        stream.read(reinterpret_cast<char *>(&bigholder), 7);
+        byte = byte >> 4;
+        bigholder = (bigholder << 4) | byte;
+
+        if (holder > (1 >> 31)) {
+            throw std::runtime_error("64 bit number can't be coerced to 32 bits");
+        }
+        holder = static_cast<uint32_t>(bigholder);
+    } else {
+        int a = stream.tellg();
+        int b = stream.good();
+        int c = stream.eof();
+        std::cout << "Error: not a valid number; " << a <<" "<< b <<" "<< c;
+        print_backtrace();
+
+        throw std::runtime_error("Error: not a valid number " + std::to_string(a) + " " + std::to_string(c));
+//        return 1<<31;
+    }
+
+    return holder;
+}
+
+
+
+void serialize(std::ostream &stream, const DocIDFilePair &p) {
     serialize_vnum(stream, p.document_id, false);
     serialize_str(stream, p.file_name);
 }
@@ -77,48 +129,6 @@ void Serializer::serialize_vnum(std::ostream &stream, uint32_t number, bool pad3
 }
 
 
-uint32_t Serializer::read_vnum(std::istream &stream) {
-    uint32_t holder = 0;
-    uint8_t byte = 0;
-    stream.read(reinterpret_cast<char *> (&byte), 1);
-
-    if (byte & 1 << 0) {
-        // 8 bit number
-        holder = byte >> 1; // byte has 7 bits of info.
-    } else if (byte & 1 << 1) {
-        stream.read(reinterpret_cast<char *> (&holder), 1);
-        // 16 bit number
-        byte = byte >> 2; // byte has 6 bits of info
-        holder = (holder << 6) | byte;
-    } else if (byte & 1 << 2) {
-        stream.read(reinterpret_cast<char *> (&holder), 3);
-        byte = byte >> 3; // byte has 4 bits of info.
-        // 32 bit number
-        holder = (holder << 5) | byte;
-    } else if (byte & 1 << 3) {
-        uint64_t bigholder = 0;
-        stream.read(reinterpret_cast<char *>(&bigholder), 7);
-        byte = byte >> 4;
-        bigholder = (bigholder << 4) | byte;
-
-        if (holder > (1 >> 31)) {
-            throw std::runtime_error("64 bit number can't be coerced to 32 bits");
-        }
-        holder = static_cast<uint32_t>(bigholder);
-    } else {
-        int a = stream.tellg();
-        int b = stream.good();
-        int c = stream.eof();
-        std::cout << "Error: not a valid number; " << a <<" "<< b <<" "<< c;
-        print_backtrace();
-
-        throw std::runtime_error("Error: not a valid number " + std::to_string(a) + " " + std::to_string(c));
-//        return 1<<31;
-    }
-
-    return holder;
-}
-
 
 void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostream &terms, std::ostream &positions,
                                             const WordIndexEntry &ie) {
@@ -164,28 +174,6 @@ PreviewResult Serializer::preview_work_index_entry(std::istream &terms) {
 
 #include <immintrin.h>
 
-constexpr auto MAX_FILES_PER_TERM = SortedKeysIndexStub::MAX_FILES_PER_TERM;
-
-int Serializer::read_work_index_entry_v2_optimized(std::istream &frequencies,
-                                                   __m256 *buffer) {
-    return -1;
-
-    // TODO: no padding allowed for terms element with frequencies pos and positions pos.
-//    auto num_files = read_vnum(frequencies);
-//
-//    if (num_files > MAX_FILES_PER_TERM) {
-//        auto excess = num_files - MAX_FILES_PER_TERM;
-//        frequencies.ignore(excess * sizeof(DocumentFrequency));
-//        num_files = MAX_FILES_PER_TERM;
-//    }
-//
-//    auto *intbuffer = (uint32_t *) fstream_cache_buffer;
-//    read_packed_u32_chunk(frequencies, num_files * 2, intbuffer);
-//
-//
-//    return num_files;
-}
-
 void Serializer::read_packed_u32_chunk(std::istream &frequencies, uint32_t length, uint32_t *buffer) {
     frequencies.read(reinterpret_cast<char *>(buffer), length * sizeof(uint32_t));
 
@@ -224,12 +212,6 @@ WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies
 
     assert(std::is_sorted(out.files.begin(), out.files.end()));
     // These VInts are padded to 4 bytes, so we can do this.
-//    frequencies.read(reinterpret_cast<char *>(out.files.data()), num_files * 2 * sizeof(uint32_t));
-//
-//    for (auto &i : out.files) {
-//        i.frequency >>= 3;
-//        i.document_id >>= 3;
-//    }
 
     return out;
 }
@@ -282,11 +264,11 @@ void Serializer::serialize(const std::string &suffix, const SortedKeysIndex &ind
 }
 
 
-std::string Serializer::read_str(std::istream &stream) {
-    auto length = read_vnum(stream);
-    std::string buffer(length, ' ');
-    stream.read(buffer.data(), length);
-    return buffer;
+
+DocIDFilePair read_pair(std::istream &stream) {
+    uint32_t docid = read_vnum(stream);
+    auto str = read_str(stream);
+    return {docid, str};
 }
 
 std::vector<DocIDFilePair> Serializer::read_filepairs(std::istream &stream) {
@@ -300,11 +282,7 @@ std::vector<DocIDFilePair> Serializer::read_filepairs(std::istream &stream) {
 }
 
 
-DocIDFilePair Serializer::read_pair(std::istream &stream) {
-    uint32_t docid = read_vnum(stream);
-    auto str = read_str(stream);
-    return {docid, str};
-}
+
 
 
 std::ifstream *Serializer::ffi::create_ifstream_from_path(const char *path) {

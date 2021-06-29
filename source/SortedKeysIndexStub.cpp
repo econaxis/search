@@ -60,9 +60,9 @@ static int compute_average(Iterator begin, Iterator end) {
 
 
 std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string &term) const {
-    auto file_start = std::lower_bound(index->begin(), index->end(), Base26Num(term)) - 1;
+    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term)) - 1;
 
-    if (file_start == index->end()) { return std::nullopt; }
+    if (file_start == index.end()) { return std::nullopt; }
 
     // We assume that the positions of `terms` and `frequencies` are indetermined.
     // Therefore, we seek to the correct location as determined by the file_start StubIndEntry,
@@ -101,38 +101,40 @@ std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term
     }
 }
 
+// We assume that the positions of `terms` and `frequencies` are indetermined.
+// Therefore, we seek to the correct location as determined by the file_start StubIndEntry,
+// read the frequencies_pos, then seek the `frequencies` stream to that location.
+// Now, we have both streams at the correct location.
+void correct_freq_pos_locations(std::istream &terms, std::istream &frequencies) {
+    auto terms_pos = terms.tellg();
+    auto locations = Serializer::preview_work_index_entry(terms);
 
-
+    frequencies.seekg(locations.frequencies_pos);
+    // Seek back to original location for reading.
+    terms.seekg(terms_pos);
+}
 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
-    auto file_start = std::lower_bound(index->begin(), index->end(), Base26Num(term).fiddle(-3)) - 1;
-    auto file_end = std::upper_bound(index->begin(), index->end(), Base26Num(term).fiddle(3)) + 1;
+    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-3)) - 1;
+    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(3)) + 1;
 
-    file_start = std::clamp(file_start, index->begin(), index->end() - 1);
-    file_end = std::clamp(file_end, index->begin(), index->end() - 1);
+    file_start = std::clamp(file_start, index.begin(), index.end() - 1);
+    file_end = std::clamp(file_end, index.begin(), index.end() - 1);
 
-    if (file_start == index->end()) { return TopDocs{}; }
+    if (file_start == index.end()) { return TopDocs{}; }
 
-    // We assume that the positions of `terms` and `frequencies` are indetermined.
-    // Therefore, we seek to the correct location as determined by the file_start StubIndEntry,
-    // read the frequencies_pos, then seek the `frequencies` stream to that location.
-    // Now, we have both streams at the correct location.
-    auto terms_pos = file_start->terms_pos;
-    terms.seekg(terms_pos);
-    Serializer::read_str(terms); // First key string
-    auto frequencies_pos = Serializer::read_vnum(terms); // Frequencies position
-    auto max_terms_read = (file_end - file_start) * STUB_INTERVAL;
 
-    frequencies.seekg(frequencies_pos);
-
-    // Seek back to original location for reading.
-    terms.seekg(terms_pos);
+    terms.seekg(file_start->terms_pos);
+    correct_freq_pos_locations(terms, frequencies);
 
     TopDocs output;
     std::vector<TopDocs> outputs;
     std::vector<int> output_score;
     outputs.reserve(50);
+
+    auto max_terms_read = (file_end - file_start) * STUB_INTERVAL;
+
 
     while (max_terms_read-- || terms.tellg() < file_end->terms_pos) {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
@@ -145,10 +147,6 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         if (auto score = string_prefix_compare(term, preview.key); score >= min_cutoff_score) {
             // Seek back to original previewed position.
             frequencies.seekg(preview.frequencies_pos);
-
-            // Read the work index entry from the correct, seeked position.
-//            auto size = Serializer::read_work_index_entry_v2_optimized(frequencies, alignedbuf.get());
-//            auto wie = Serializer::read_work_index_entry_v2(frequencies, terms);
 
             auto wie = WordIndexEntry_v2{preview.key, static_cast<uint32_t>(terms.tellg()), {}};
             MultiDocumentsTier::TierIterator ti(frequencies);
@@ -195,39 +193,14 @@ std::vector<TopDocs> SortedKeysIndexStub::search_many_terms(const std::vector<st
 
 constexpr std::size_t BUFLEN = 1000;
 
-SortedKeysIndexStub::SortedKeysIndexStub(std::string suffix) : suffix(suffix),
-                                                               filemap((indice_files_dir / ("filemap-" + suffix))) {
-    frequencies = std::ifstream(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary);
-    terms = std::ifstream(indice_files_dir / ("terms-" + suffix), std::ios_base::binary);
-    positions = std::ifstream(indice_files_dir / ("positions-" + suffix), std::ios_base::binary);
-
+SortedKeysIndexStub::SortedKeysIndexStub(const std::string& suffix) :
+        frequencies(std::ifstream(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary)),
+        terms(std::ifstream(indice_files_dir / ("terms-" + suffix), std::ios_base::binary)),
+        positions(std::ifstream(indice_files_dir / ("positions-" + suffix), std::ios_base::binary)),
+        filemap((indice_files_dir / ("filemap-" + suffix))),
+        index(Serializer::read_sorted_keys_index_stub_v2(
+                this->frequencies, this->terms)) {
     assert(this->frequencies && this->terms);
-
-
-    // Setup read cache fstream_cache_buffer
-    fstream_cache_buffer = std::make_unique<char[]>(BUFLEN);
-    this->frequencies.rdbuf()->pubsetbuf(fstream_cache_buffer.get(), BUFLEN);
-
-    index = std::make_shared<const std::vector<StubIndexEntry>>(
-            Serializer::read_sorted_keys_index_stub_v2(this->frequencies, this->terms));
-}
-
-
-SortedKeysIndexStub::SortedKeysIndexStub(const SortedKeysIndexStub &other) : filemap(
-        indice_files_dir / ("filemap-" + other.suffix)) {
-    frequencies = std::ifstream(indice_files_dir / ("frequencies-" + other.suffix), std::ios_base::binary);
-    terms = std::ifstream(indice_files_dir / ("terms-" + other.suffix), std::ios_base::binary);
-    positions = std::ifstream(indice_files_dir / ("positions-" + other.suffix), std::ios_base::binary);
-    assert(this->frequencies && this->terms && this->positions);
-
-    // Setup read cache fstream_cache_buffer
-    fstream_cache_buffer = std::make_unique<char[]>(BUFLEN);
-    this->frequencies.rdbuf()->pubsetbuf(fstream_cache_buffer.get(), BUFLEN);
-
-    index = other.index;
-
-    // Copy other suffix to this suffix.
-    suffix = other.suffix;
 }
 
 std::string SortedKeysIndexStub::query_filemap(uint32_t docid) const {

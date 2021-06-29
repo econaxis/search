@@ -5,8 +5,8 @@
 #ifndef GAME_LOGGER_H
 #define GAME_LOGGER_H
 
+#include <fmt/ostream.h>
 #include <experimental/source_location>
-#include <fmt/core.h>
 #include <syslog.h>
 #include <iostream>
 namespace log_priv {

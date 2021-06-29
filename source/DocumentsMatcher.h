@@ -4,6 +4,7 @@
 #include "TopDocs.h"
 #include <vector>
 #include "SortedKeysIndexStub.h"
+#include <cstdint>
 
 namespace DocumentsMatcher {
 

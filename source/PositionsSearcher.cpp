@@ -1,3 +1,7 @@
+//
+// Created by henry on 2021-06-03.
+//
+#include <unordered_map>
 #include "DocumentFrequency.h"
 #include "DocumentsMatcher.h"
 #include <cassert>
@@ -67,7 +71,7 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
                 throw std::runtime_error("Number overflow");
             }
             counter += pos;
-            out.push_back({df.document_id, counter});
+            out.emplace_back(df.document_id, counter);
         }
     }
 
@@ -75,23 +79,6 @@ PositionsSearcher::read_positions_all(std::istream &positions, const std::vector
 
 }
 
-
-static std::vector<DocumentPositionPointer> a{};
-
-
-#include "DocumentsTier.h"
-#include <ctime>
-#include <cstdlib>
-
-void Push_random_test() {
-    std::srand(std::time(nullptr));
-    int num = 100000;
-    uint maxint = 1 << 31;
-    while (num-- > 10) {
-        a.emplace_back(std::rand() % (num / 9) + (1 << 25), std::rand() % maxint);
-    }
-    std::sort(a.begin(), a.end());
-}
 
 
 
@@ -134,6 +121,7 @@ PositionsSearcher::rerank_by_positions(const SortedKeysIndexStub &index, std::ve
     using TopDocsWithPositions = DocumentsMatcher::TopDocsWithPositions;
     TopDocsWithPositions ret(td);
     if (tds.size() >= 32 || tds.size() < 2) {
+        log("Positions searcher not active: terms size not within bounds [2, 32]");
         return ret;
     }
 
@@ -166,7 +154,7 @@ PositionsSearcher::rerank_by_positions(const SortedKeysIndexStub &index, std::ve
             }
 
             auto a0 = two_finger_find_min(first1, last1, first2, last2);
-            a0 -= strlen(*tds[i].get_first_term());
+            a0 -= std::strlen(*tds[i].get_first_term());
 
             if (a0 <= 3)
                 log("Two finger find min result: ", index.query_filemap(d->document_id), first1->document_position,
@@ -174,7 +162,7 @@ PositionsSearcher::rerank_by_positions(const SortedKeysIndexStub &index, std::ve
             pos_difference += abs(a0);
             insert_to_array(d->matches, first1->document_position);
         }
-        d->document_freq = d->document_freq * position_difference_scaler(pos_difference);
+        d->document_freq *= position_difference_scaler(pos_difference);
     }
     ret.sort_by_frequencies();
     return ret;
@@ -200,3 +188,41 @@ void insert_to_array(Container &array, uint32_t value) {
 
 
 
+// ------------------------------------------------------
+
+/***
+* Tests
+*/
+#include "DocumentsTier.h"
+#include <ctime>
+#include <cstdlib>
+static std::vector<DocumentPositionPointer> a{};
+
+void Push_random_test() {
+    std::srand(std::time(nullptr));
+    int num = 100000;
+    uint maxint = 1 << 31;
+    while (num-- > 10) {
+        a.emplace_back(std::rand() % (num / 9) + (1 << 25), std::rand() % maxint);
+    }
+    std::sort(a.begin(), a.end());
+}
+
+void Compactor_test() {
+    Push_random_test();
+
+    WordIndexEntry wie{
+            "test", a
+    };
+    std::stringstream positions, frequencies;
+    PositionsSearcher::serialize_positions(positions, wie);
+    MultiDocumentsTier::serialize(wie, frequencies);
+
+    MultiDocumentsTier::TierIterator ti(frequencies);
+    auto sd = ti.read_all();
+    auto test = PositionsSearcher::read_positions_all(positions, sd);
+
+    std::cout << positions.str();
+    assert(test == a);
+    exit(0);
+}

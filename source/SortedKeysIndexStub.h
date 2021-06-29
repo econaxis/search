@@ -49,11 +49,8 @@ private:
 
     mutable std::ifstream frequencies, terms, positions;
 
-    std::string suffix;
-    FPStub filemap;
-    std::unique_ptr<char[]> fstream_cache_buffer;
-    std::shared_ptr<const std::vector<StubIndexEntry>> index;
-
+    const FPStub filemap;
+    const std::vector<StubIndexEntry> index;
 
     std::optional<PreviewResult> seek_to_term(const std::string &term) const;
 
@@ -61,20 +58,14 @@ private:
 
 public:
 
-    explicit SortedKeysIndexStub(std::string suffix);
-
-    static constexpr int MAX_FILES_PER_TERM = 100000;
-
+    explicit SortedKeysIndexStub(const std::string& suffix);
 
     std::string query_filemap(uint32_t docid) const;
 
-
     std::vector<TopDocs> search_many_terms(const std::vector<std::string> &terms) const;
 
-    SortedKeysIndexStub(const SortedKeysIndexStub& other);
-
-
     std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
+
 };
 
 

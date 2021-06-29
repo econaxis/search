@@ -70,7 +70,7 @@ load_all_indices() {
         if (statedb != Compactor::ReadState::GOOD) break;
 
         std::cout << "Used database file: " << line << "\n";
-        indices.emplace_back(line);
+        indices.push_back(SortedKeysIndexStub(line));
 
         if (indices.size() >= 1) break;
     }

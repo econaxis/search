@@ -30,8 +30,6 @@ public:
     void sort_and_group_all();
 
     const std::vector<WordIndexEntry> &get_index() const;
-
-    void check_dups();
 };
 
 

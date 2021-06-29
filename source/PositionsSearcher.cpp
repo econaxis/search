@@ -1,7 +1,3 @@
-//
-// Created by henry on 2021-06-03.
-//
-#include <unordered_map>
 #include "DocumentFrequency.h"
 #include "DocumentsMatcher.h"
 #include <cassert>
@@ -204,26 +200,3 @@ void insert_to_array(Container &array, uint32_t value) {
 
 
 
-// ------------------------------------------------------
-
-/***
-* Tests
-*/
-void Compactor_test() {
-    Push_random_test();
-
-    WordIndexEntry wie{
-            "test", a
-    };
-    std::stringstream positions, frequencies;
-    PositionsSearcher::serialize_positions(positions, wie);
-    MultiDocumentsTier::serialize(wie, frequencies);
-
-    MultiDocumentsTier::TierIterator ti(frequencies);
-    auto sd = ti.read_all();
-    auto test = PositionsSearcher::read_positions_all(positions, sd);
-
-    std::cout << positions.str();
-    assert(test == a);
-    exit(0);
-}

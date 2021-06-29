@@ -314,14 +314,6 @@ void Compactor::test_makes_sense(const std::string &suffix) {
 
     WordIndexEntry wie;
 
-    if (len < 5 || filepairs.size() < 5) {
-        std::cout << "Too short, failed compactation detected\n";
-        fs::remove(make_path("frequencies", suffix));
-        fs::remove(make_path("terms", suffix));
-        fs::remove(make_path("positions", suffix));
-        fs::remove(make_path("filemap", suffix));
-        return;
-    }
     while (check_stream_good(dynamic_cast<std::ifstream &>(streamset.terms)) && len > 0) {
         len--;
         wie = read_work_index_entry(streamset.frequencies, streamset.terms, streamset.positions);

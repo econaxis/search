@@ -1,6 +1,13 @@
 # Full Text Search Engine
-This project is a full text search engine, based upon an on-disk, binary inverted index data structure. All queries are done on-disk, so this engine can cover many gigabytes of text with just a limited amount of memory. It can search through 10GB of Wikipedia text archives using just 50MB of physical memory.
+This project is a full text search engine, based upon an on-disk, binary inverted index data structure. All queries are done on-disk, so we can search through many gigabytes of text with constant memory usage (~50MB).
 
+## Demo
+
+Around 50,000 Instructables documents are searched near-instantly as the user types. 
+
+![image](/demo.gif)
+
+These queries use all 4 threads but just 40MB memory on an i7-6500U processor. 
 
 ## Inspirations
 I wrote this engine to learn how large, distributed databases can scale to many terabytes of data. Many techniques and implementation details here are inspired off Apache Lucene and Google's SSTable. I learned about ranking functions, stop word detection, inverted indices, and phrase queries from the book *Introduction to Information Retrieval*. I designed my data serialization model, like variable-length integers, delta encoding, and organization of the inverted index (into terms, positions, and frequency specific files) from studying Lucene's Java implementation. I implemented packed integer blocking/shuffling inspired by Blosc. The binary representation of my inverted index closely resembles SSTables and is inspired by LevelDB's merge-based approach (/source/compactor/Compactor.cpp). This allows parallelized index building of many gigabytes of documents while having very low memory usage.

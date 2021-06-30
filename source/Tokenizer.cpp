@@ -68,8 +68,10 @@ std::vector<WordPos> clean_string(std::string &file) {
             is_in_xml = true;
         }
         i++;
-
     }
+
+    if(is_in_word) result.push_back({last_end, i});
+
     return result;
 }
 

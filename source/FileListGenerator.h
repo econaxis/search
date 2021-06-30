@@ -14,10 +14,10 @@ constexpr unsigned int MAX_FILES_PER_INDEX = 300000;
 namespace FileListGenerator {
     using FilePairs = std::vector<DocIDFilePair>;
     namespace fs = std::filesystem;
-    std::shared_ptr<NamesDatabase *> ndb{nullptr};
+    inline std::shared_ptr<NamesDatabase *> ndb{nullptr};
 
 
-    NamesDatabase *get_ndb() {
+    inline NamesDatabase *get_ndb() {
         if (!ndb || *ndb == nullptr) {
             auto path = indice_files_dir;
             ndb = std::make_shared<NamesDatabase *>(new_name_database(path.c_str()));
@@ -26,21 +26,21 @@ namespace FileListGenerator {
         return *ndb;
     }
 
-    void delete_names_db() {
+    inline void delete_names_db() {
         if (*ndb != nullptr) {
             // NO need to do it, hold NDB for the rest of the program
             // drop_name_database(*ndb);
         }
     }
 
-    std::ifstream &get_index_files() {
+    inline std::ifstream &get_index_files() {
         static auto dir_it = std::ifstream(data_files_dir / "total-files-list");
         return dir_it;
     }
 
     // Creates a list of files to index.
     // Deals with multiple processes by acquiring a lock file.
-    FilePairs from_file() {
+    inline FilePairs from_file() {
         using namespace std::chrono;
 
         // Add some jitter as we're not sure that creating a file is an atomic operation in the filesystem implementation.

@@ -18,7 +18,7 @@ namespace IndexFileLocker {
 
 
 
-    bool acquire_lock_file() {
+    inline bool acquire_lock_file() {
         using namespace std::chrono;
 
         while (fs::exists(LOCKFILE)) {
@@ -35,11 +35,11 @@ namespace IndexFileLocker {
         return true;
     }
 
-    void release_lock_file() {
+    inline void release_lock_file() {
         fs::remove(fs::path(LOCKFILE));
     }
 
-    void move_all(std::string old_suffix, std::string new_suffix) {
+    inline void move_all(std::string old_suffix, std::string new_suffix) {
         fs::rename(indice_files_dir / ("filemap-" + old_suffix), indice_files_dir / ("filemap-" + new_suffix));
         fs::rename(indice_files_dir / ("terms-" + old_suffix), indice_files_dir / ("terms-" + new_suffix));
         fs::rename(indice_files_dir / ("frequencies-" + old_suffix), indice_files_dir / ("frequencies-" + new_suffix));
@@ -47,7 +47,7 @@ namespace IndexFileLocker {
     }
 
     template<typename Callable>
-    void do_lambda(Callable c) {
+    inline void do_lambda(Callable c) {
         acquire_lock_file();
         c();
         release_lock_file();

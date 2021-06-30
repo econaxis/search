@@ -197,7 +197,6 @@ void Serializer::read_packed_u32_chunk(std::istream &frequencies, uint32_t lengt
 
 // cooperate with MultiDocumentsTier stream wrapper to iterate through frequency-sorted blocks.
 WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies, std::istream &terms) {
-    unsigned int term_pos = terms.tellg();
     auto key = read_str(terms);
     auto frequencies_pos = read_vnum(terms);
     read_vnum(terms); // positions_pos
@@ -206,7 +205,7 @@ WordIndexEntry_v2 Serializer::read_work_index_entry_v2(std::istream &frequencies
 
     frequencies.seekg(frequencies_pos);
 
-    WordIndexEntry_v2 out{key, term_pos, {}};
+    WordIndexEntry_v2 out{key, {}};
 
     out.files = MultiDocumentsTier::TierIterator(frequencies).read_all();
 

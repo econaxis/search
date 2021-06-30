@@ -19,8 +19,6 @@ struct PreviewResult {
 
 struct WordIndexEntry_v2 {
     std::string key;
-    uint32_t term_pos;
-
     SingleDocumentsTier files;
 };
 

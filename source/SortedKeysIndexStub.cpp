@@ -148,18 +148,17 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             // Seek back to original previewed position.
             frequencies.seekg(preview.frequencies_pos);
 
-            auto wie = WordIndexEntry_v2{preview.key, static_cast<uint32_t>(terms.tellg()), {}};
             MultiDocumentsTier::TierIterator ti(frequencies);
-            wie.files = ti.read_next().value();
+            auto files = ti.read_next().value();
 
 
             auto tot_score = 0;
-            for (auto &i : wie.files) {
+            for (auto &i : files) {
                 float coefficient = std::log10(i.document_freq) + 1;
                 i.document_freq = coefficient * score;
                 tot_score += i.document_freq;
             }
-            TopDocs td(std::move(wie.files));
+            TopDocs td(std::move(files));
 
             if (tot_score >= 4000 || preview.key == term) td.add_term_str(preview.key, ti);
 

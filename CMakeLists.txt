@@ -89,3 +89,6 @@ target_include_directories(c-search-abi PUBLIC extern/fmt/include)
 
 
 target_precompile_headers(search-share PUBLIC source/logger.h)
+
+
+add_subdirectory(source/test)

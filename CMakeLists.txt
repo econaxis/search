@@ -91,6 +91,8 @@ target_include_directories(c-search-abi PUBLIC extern/fmt/include)
 
 
 target_precompile_headers(search-share PUBLIC source/logger.h)
+target_precompile_headers(general-indexer PRIVATE source/logger.h)
 
+target_link_libraries(general-indexer PRIVATE fmt::fmt)
 
 add_subdirectory(source/test)

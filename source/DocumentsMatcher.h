@@ -13,9 +13,6 @@ namespace DocumentsMatcher {
 
     TopDocs backup(std::vector<TopDocs> &results);
 
-    TopDocs
-    collection_merge_search(std::vector<SortedKeysIndexStub> &indices, const std::vector<std::string> &search_terms);
-
     struct TopDocsWithPositions {
         TopDocsWithPositions() = default;
 

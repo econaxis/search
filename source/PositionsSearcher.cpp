@@ -132,6 +132,8 @@ PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, co
             auto[first2, last2] = std::equal_range(positions_list[i + 1].begin(), positions_list[i + 1].end(),
                                                    d->document_id);
 
+            // This shouldn't happen if DocumentsMatcher::AND_Driver does its job correctly.
+            // Still, we should check.
             if (first1 == positions_list[i].end() || first2 == positions_list[i + 1].end() ||
                 first1->document_id != d->document_id || first2->document_id != d->document_id) {
                 print_range("error: Pos dont exist, probably AND error?", query_terms.begin(), query_terms.end());

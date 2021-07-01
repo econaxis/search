@@ -27,12 +27,12 @@ inline void log(const std::string &log_string, const std::experimental::source_l
     auto deb_FUNCTION = fmt::format("SOURCE_FUNCTION={}", std::string(location.function_name()));
     auto deb_THREADID = fmt::format("THREADID={}", std::this_thread::get_id());
     auto deb_STRING = fmt::format("MESSAGE=\"{}\"", log_string);
-    auto final = fmt::format("{},{},{},{},{}",
+    auto final = fmt::format("{}\n[{},{},{},{}]",
+                             deb_STRING,
                              deb_FILE,
                              deb_FUNCTION,
                              deb_LINE,
-                             deb_THREADID,
-                             deb_STRING
+                             deb_THREADID
     );
     syslog(LOG_DEBUG, "%s", final.c_str());
 }
@@ -67,7 +67,8 @@ inline void log(auto var1,
 template<typename ...Params>
 inline void print(Params &&... params) {
     log(std::forward<Params>(params)...);
-    (std::cout<<...<<params);
+    ((std::cout << " " << params), ...);
+    std::cout<<"\n";
 }
 
 inline void print_range(const std::string& str, auto beg, auto end) {

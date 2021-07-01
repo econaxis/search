@@ -88,7 +88,6 @@ load_all_indices() {
     return ret;
 }
 
-
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
     initialize_directory_variables();
@@ -119,7 +118,7 @@ int main(int argc, char *argv[]) {
                 terms.emplace_back(s);
             }
         }
-        auto temp1 = DocumentsMatcher::collection_merge_search(indices, terms);
-        std::cout << temp1.size() << " matches found\n";
+//        auto temp1 = DocumentsMatcher::collection_merge_search(indices, terms);
+//        std::cout << temp1.size() << " matches found\n";
     }
 }

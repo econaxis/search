@@ -9,11 +9,12 @@
 #include <type_traits>
 #include <unordered_map>
 #include "DocumentsTier.h"
+#include "PossiblyMatchingTerm.h"
 
 
 class TopDocs {
 
-    std::unordered_map<std::string, MultiDocumentsTier::TierIterator> included_terms;
+    std::vector<PossiblyMatchingTerm> included_terms;
 
 
     // From https://en.cppreference.com/w/cpp/algorithm/merge
@@ -29,8 +30,8 @@ public:
     TopDocs() = default;
 
 
-    void add_term_str(const std::string &term, MultiDocumentsTier::TierIterator it) {
-        included_terms.emplace(std::move(term), it);
+    void add_term_str(PossiblyMatchingTerm term) {
+        included_terms.push_back(std::move(term));
     }
 
     std::optional<const char *> get_first_term() const;

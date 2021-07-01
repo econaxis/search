@@ -161,7 +161,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             }
             TopDocs td(std::move(files));
 
-            if (tot_score >= 4000 || preview.key == term) td.add_term_str(preview.key, ti);
+            if (tot_score >= 4000 || preview.key == term) td.add_term_str(PossiblyMatchingTerm(term, ti, score));
 
             if (preview.key == term) return td;
 
@@ -171,7 +171,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     }
 
     if (outputs.empty()) {
-        log("WARN: No terms found for ", term);
+        print("WARN: No terms found for ", term);
         return TopDocs{};
     };
 

@@ -37,9 +37,6 @@ struct DocumentPositionPointer {
     DocumentPositionPointer(uint32_t docid, uint32_t docpos) : document_id(docid), document_position(docpos) {};
 };
 
-inline bool operator==(const DocumentPositionPointer& one, const DocumentFrequency& two) {
-    return one.document_id == two.document_id;
-}
 inline bool operator<(const DocumentPositionPointer& one, const DocumentFrequency& two) {
     return one.document_id < two.document_id;
 }

@@ -5,10 +5,6 @@
 #ifndef GAME_ALL_INCLUDES_H
 #define GAME_ALL_INCLUDES_H
 
-#ifndef LOOP_ITERS
-#define LOOP_ITERS 1000
-#endif
-
 #include "rust-interface.h"
 #include "c_abi.h"
 #include "SortedKeysIndex.h"
@@ -27,7 +23,6 @@
 #include "DocumentsMatcher.h"
 #include "DocumentPositionPointer.h"
 #include "DocumentFrequency.h"
-#include "ContiguousAllocator.h"
 #include "TopDocs.h"
 #include "FPStub.h"
 #include "DocumentsTier.h"
@@ -37,6 +32,8 @@
 #include "Constants.h"
 #include "StdinIndexer.h"
 #include "PositionsSearcher.h"
+
+inline unsigned int LOOP_ITERS = 200;
 
 namespace utils {
     inline unsigned long rand() {
@@ -75,7 +72,7 @@ inline std::string generate_words(int num = 100) {
 inline std::string do_index_custom(auto callable) {
     std::stringstream fakecin;
     std::cin.rdbuf(fakecin.rdbuf());
-    std::array<std::string, LOOP_ITERS> filenames, files;
+    std::vector<std::string> filenames(LOOP_ITERS), files(LOOP_ITERS);
     repeat(LOOP_ITERS, [&](int i) {
         filenames[i] = random_b64_str(10);
         files[i] = fmt::format("{}", callable(i));

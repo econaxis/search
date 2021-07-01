@@ -15,38 +15,6 @@
 
 using namespace DocumentsMatcher;
 
-// Inspired from https://gms.tf/stdfind-and-memchr-optimizations.html#what-about-avx-512
-// I adapted AVX2 code from finding bytes to finding 32 bit integers.
-const uint32_t *find_avx_256(const uint32_t *start, const uint32_t *end, uint32_t value) {
-    __m256i avxvalue = _mm256_set1_epi32(value);
-
-    for (; start + 8 <= end; start += 8) {
-        __m256i avxstart = _mm256_load_si256((__m256i *) start);
-        __m256i comp = _mm256_cmpeq_epi32(avxstart, avxvalue);
-
-        int movemask = _mm256_movemask_epi8(comp);
-
-        if (movemask) {
-            // __builtin_ffs returns the first bit that is 1.
-            // Unfortunately, first bit is one-indexed, so we have to subtract 1.
-            int firstfound = __builtin_ffs(movemask) - 1;
-
-            // Since uint32's have 4 bytes each, and movemask is a mask of one byte, we have to divide by 4
-            // to get the correct offset.
-            firstfound /= 4;
-            return start + firstfound;
-        }
-    }
-
-    for (; start < end; start++) {
-        if (*start == value) {
-            return start;
-        }
-    }
-    return nullptr;
-}
-
-
 using DPP = DocumentFrequency;
 
 static const DPP *run_prediction(const DPP *&start, const DPP *end, const DPP *value) {
@@ -186,7 +154,7 @@ TopDocs AND(std::vector<TopDocs> &results) {
 
 TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
     auto ret = AND(outputs);
-    while (ret.size() < 10) {
+    while (ret.size() < 20) {
         bool has_more = false;
         for (auto &td : outputs) {
             if (td.extend_from_tier_iterator(3)) {
@@ -234,17 +202,3 @@ DocumentsMatcher::combiner_with_position(SortedKeysIndexStub &index, std::vector
 TopDocsWithPositions::Elem::Elem(unsigned int i, unsigned int i1) : document_id(i), document_freq(i1) {}
 
 
-TopDocs DocumentsMatcher::collection_merge_search(std::vector<SortedKeysIndexStub> &indices,
-                                                  const std::vector<std::string> &search_terms) {
-    TopDocs joined;
-    for (auto &index : indices) {
-        auto temp = index.search_many_terms(search_terms);
-        auto t = AND(temp);
-        if (!temp.empty()) joined.append_multi(t);
-    };
-
-    joined.merge_similar_docs();
-    joined.sort_by_frequencies();
-
-    return joined;
-}

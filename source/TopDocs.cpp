@@ -19,7 +19,7 @@ void TopDocs::append_multi(TopDocs other) {
     docs = std::move(merged);
 
     // Copy their included terms to ours.
-    for(auto& [str, iter] : other.included_terms) add_term_str(str, iter);
+    std::move(other.included_terms.begin(), other.included_terms.end(), std::back_inserter(included_terms));
 }
 
 
@@ -84,9 +84,9 @@ bool TopDocs::extend_from_tier_iterator(int how_many) {
     };
 
     bool has_more = false;
-    for (auto &[k, ti] : included_terms) {
+    for (auto& possible_matching_term : included_terms) {
         for (int i = 0; i < how_many; i++) {
-            auto n = ti.read_next();
+            auto n = possible_matching_term.extend(1);
             if (n) {
                 auto oldrange = ptr;
                 auto newrange = flip();
@@ -111,5 +111,5 @@ bool TopDocs::extend_from_tier_iterator(int how_many) {
 std::optional<const char *> TopDocs::get_first_term() const {
     if(included_terms.empty()) {
         return std::nullopt;
-    } else return included_terms.begin()->first.data();
+    } else return included_terms.front().term.data();
 }

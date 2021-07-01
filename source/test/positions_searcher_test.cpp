@@ -26,30 +26,7 @@ testing::Environment *const foo_env =
         testing::AddGlobalTestEnvironment(new Environment);
 
 
-namespace {
-    [[maybe_unused]] unsigned long rand() {
-        static std::random_device dev;
-        static std::mt19937 rng(dev());
-        static std::uniform_int_distribution<std::mt19937::result_type> dist6; // distribution in range [1, 6]
 
-        return dist6(rng);
-    }
-}
-void repeat(int num, auto call) {
-    for (int i = 0; i < num; i++) {
-        call(i);
-    }
-}
-std::string generate_words(int num = 100) {
-    auto totsize = std::size(strings);
-    std::ostringstream res;
-
-    repeat(num, [&](int _) {
-        res << strings[::rand() % totsize] << " ";
-    });
-
-    return res.str();
-}
 
 WordIndexEntry gen_random_wie() {
     std::vector<DocumentPositionPointer> a{};
@@ -63,25 +40,6 @@ WordIndexEntry gen_random_wie() {
     return WordIndexEntry{
             random_b64_str(10), a
     };
-}
-
-
-std::string do_index(std::string must_include = "empty") {
-    std::stringstream fakecin;
-    std::cin.rdbuf(fakecin.rdbuf());
-    constexpr int iters = 1000;
-    std::array<std::string, iters> filenames, files;
-    repeat(iters, [&](int i) {
-        filenames[i] = random_b64_str(10);
-        files[i] = generate_words(100);
-        files[i].append(" " + must_include);
-        fmt::print(fakecin, "filename {} /endfilename file {} /endfile ", filenames[i], files[i]);
-    });
-
-    fmt::print(fakecin, "/endindexing\n");
-
-    auto suffix = GeneralIndexer::read_some_files(queue_produce_file_contents_stdin);
-    return *suffix;
 }
 
 
@@ -101,18 +59,6 @@ TEST(SerializationWordIndexEntry, can_serialize_positions_for_one_wie) {
     ASSERT_EQ(test, wie.files);
 }
 
-TEST(indexing, indexes_correctly_and_deserialize_correctly) {
-    auto suffix = do_index("fddsvc fewivx vncms");
-    SortedKeysIndexStub index(suffix);
-
-    // At least one of these terms should match
-    auto res = index.search_many_terms({"FDDSVC", "FEWIVX", "VNCMS"});
-
-    EXPECT_EQ(res.size(), 3);
-    EXPECT_GT(res[0].size(), 0);
-    EXPECT_GT(res[1].size(), 0);
-    EXPECT_GT(res[2].size(), 0);
-}
 
 
 std::string serialize_test(std::string suffix) {
@@ -157,51 +103,5 @@ TEST(FilePairs, filepairs_test) {
     for (auto&[id, filename] : fp) {
         ASSERT_EQ(fpstub.query(id), filename) << "ID is: " << id;
     }
-}
-
-
-
-void toggle_cout() {
-    static std::ostringstream fakecout;
-    static std::optional<streambuf *> coutbuf = fakecout.rdbuf();
-    coutbuf = std::cout.rdbuf(coutbuf.value());
-}
-
-TEST(indexing, indexing) {
-    std::stringstream fakecin;
-    std::cin.rdbuf(fakecin.rdbuf());
-    SyncedQueue queue;
-
-    constexpr int iters = 1000;
-
-    std::array<std::string, iters> filenames, files;
-    repeat(iters, [&](int i) {
-        filenames[i] = random_b64_str(10);
-        files[i] = random_b64_str(100);
-        fmt::print(fakecin, "filename {} /endfilename file {} /endfile ", filenames[i], files[i]);
-    });
-
-    fmt::print(fakecin, "/endindexing\n");
-
-
-    std::thread thread([&]() { queue_produce_file_contents_stdin(queue); });
-
-    thread.join();
-
-    int curiter = 0;
-    while (!queue.done_flag || queue.size()) {
-        ASSERT_EQ(files[curiter++], queue.pop().first);
-    }
-
-
-
-
-    SUCCEED() << "Done indexing";
-}
-
-
-
-TEST(indexing, indexes_ok) {
-    do_index();
 }
 

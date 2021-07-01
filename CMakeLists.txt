@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
 project("search")
+enable_testing()
+
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
@@ -30,7 +32,7 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         source/FPStub.cpp
         source/DocumentsTier.cpp
         source/PositionsSearcher.cpp
-        source/Constants.h source/DocumentsMatcher.cpp source/ResultsPrinter.cpp source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/CustomAllocatedVec.cpp source/SyncedQueue.cpp source/logger.h)
+        source/Constants.h source/DocumentsMatcher.cpp source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/CustomAllocatedVec.cpp source/SyncedQueue.cpp source/logger.h)
 target_include_directories(search-share PUBLIC source extern extern/mio/include)
 
 target_include_directories(general-indexer PUBLIC source extern extern/mio/include)

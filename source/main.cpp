@@ -1,4 +1,3 @@
-#include "ResultsPrinter.h"
 #include "Tokenizer.h"
 #include "GeneralIndexer.h"
 #include "compactor/Compactor.h"
@@ -8,6 +7,7 @@
 #include <immintrin.h>
 #include <chrono>
 #include "DocumentsMatcher.h"
+#include "Constants.h"
 
 namespace fs = std::filesystem;
 

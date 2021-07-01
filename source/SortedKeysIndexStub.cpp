@@ -136,7 +136,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     auto max_terms_read = (file_end - file_start) * STUB_INTERVAL;
 
 
-    while (max_terms_read-- || terms.tellg() < file_end->terms_pos) {
+    while (max_terms_read-- > 0 || terms.tellg() <= file_end->terms_pos) {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
         // and since majority of keys don't fit within our criteria, previewing reduces computation and memory.
         auto preview = Serializer::preview_work_index_entry(terms);
@@ -145,6 +145,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         // to process it.
         auto min_cutoff_score = compute_average(output_score.begin(), output_score.end());
         if (auto score = string_prefix_compare(term, preview.key); score >= min_cutoff_score) {
+            log("Matched term, searched term ", preview.key, term, " score: ", score);
             // Seek back to original previewed position.
             frequencies.seekg(preview.frequencies_pos);
 
@@ -169,7 +170,10 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         }
     }
 
-    if (outputs.empty()) return TopDocs{};
+    if (outputs.empty()) {
+        log("WARN: No terms found for ", term);
+        return TopDocs{};
+    };
 
     for (int i = 1; i < outputs.size(); i++) {
         outputs[0].append_multi(outputs[i]);

@@ -52,7 +52,6 @@ inline void queue_produce_file_contents_stdin(SyncedQueue &contents) {
             continue;
         }
 
-        log("Processing file: ", filename);
         thread_local_holder.emplace_back(std::move(file), DocIDFilePair{docid++, filename});
 
         if (thread_local_holder.size() >= 50) {

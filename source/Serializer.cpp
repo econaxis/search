@@ -239,7 +239,7 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
 
 
     for (int i = 0; i < num_entries; i++) {
-        if (i % INTERVAL == 0) {
+        if (i % INTERVAL == 0 || i == num_entries - 1) {
             out.push_back(read_stub_index_entry_v2(frequencies, terms));
         } else preview_work_index_entry(terms);
     }

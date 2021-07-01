@@ -119,7 +119,8 @@ int two_finger_find_min(T &first1, T last1, T &first2, T last2) {
 //! \param td
 //! \return
 DocumentsMatcher::TopDocsWithPositions
-PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, const TopDocs &td, const std::vector<std::string> &query_terms) {
+PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, const TopDocs &td,
+                                       const std::vector<std::string> &query_terms) {
     using TopDocsWithPositions = DocumentsMatcher::TopDocsWithPositions;
     TopDocsWithPositions ret(td);
 
@@ -132,7 +133,8 @@ PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, co
             auto[first2, last2] = std::equal_range(positions_list[i + 1].begin(), positions_list[i + 1].end(),
                                                    d->document_id);
 
-            if (first1->document_id != d->document_id || first2->document_id != d->document_id) {
+            if (first1 == positions_list[i].end() || first2 == positions_list[i + 1].end() ||
+                first1->document_id != d->document_id || first2->document_id != d->document_id) {
                 print_range("error: Pos dont exist, probably AND error?", query_terms.begin(), query_terms.end());
                 pos_difference = 1 << 29;
                 break;
@@ -148,8 +150,10 @@ PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, co
     ret.sort_by_frequencies();
     return ret;
 }
+
 PositionsMatrix
-PositionsSearcher::fill_positions_from_docs(const SortedKeysIndexStub &index, const std::vector<std::string>& query_terms) {
+PositionsSearcher::fill_positions_from_docs(const SortedKeysIndexStub &index,
+                                            const std::vector<std::string> &query_terms) {
     if (query_terms.size() >= 32 || query_terms.size() < 2) {
         log("Positions searcher not active: terms size not within bounds [2, 32]");
         return {};

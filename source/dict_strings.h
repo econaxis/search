@@ -1,3 +1,4 @@
+#pragma once
 #include <experimental/string_view>
 inline constexpr std::string_view strings[] = {"liberal", "livecam",
 "jay",

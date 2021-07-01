@@ -139,12 +139,7 @@ GeneralIndexer::thread_process_files(SyncedQueue &file_contents) {
 std::string GeneralIndexer::persist_indices(const SortedKeysIndex &master,
                                             const FilePairs &filepairs) {// Multiple indices output possible. Check them.
 
-    std::string suffix = random_b64_str(5);
-    if (std::filesystem::is_regular_file(
-            fs::path(indice_files_dir / ("master_index" + suffix)))) {
-        // File already exists. Get a new suffix that's more random.
-        suffix += random_b64_str(50);
-    }
+    std::string suffix = random_b64_str(6);
 
     auto temp_suffix = "TEMP-" + suffix;
     Serializer::serialize(temp_suffix, filepairs);

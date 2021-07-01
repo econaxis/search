@@ -1,3 +1,6 @@
+#ifndef C_ABI_H
+#define C_ABI_H
+
 #include <fstream>
 #include <vector>
 #include "DocIDFilePair.h"
@@ -21,6 +24,7 @@ void read_filepairs(ifstream *stream, std::vector<DocIDFilePair> **vecpointer, u
 void deallocate_vec(std::vector<DocIDFilePair> *ptr);
 void copy_filepairs_to_buf(std::vector<DocIDFilePair> *vec, RustDIFP *buf, uint32_t max_length);
 
+#endif
 
 
 

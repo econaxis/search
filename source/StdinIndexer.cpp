@@ -1,10 +1,6 @@
-//
-// Created by henry on 2021-06-23.
-//
+#define STDININDEXER_PRINT_PROGRESS
 
 #include <iostream>
-#include <atomic>
-#include "SyncedQueue.h"
 #include "GeneralIndexer.h"
 #include "Constants.h"
 #include "FileListGenerator.h"

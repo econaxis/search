@@ -57,7 +57,10 @@ inline void queue_produce_file_contents_stdin(SyncedQueue &contents) {
         if (thread_local_holder.size() >= 50) {
             contents.push_multi(thread_local_holder.begin(), thread_local_holder.end());
             thread_local_holder.clear();
+
+#ifdef STDININDEXER_PRINT_PROGRESS
             std::cout << "Progress: " << docid - contents.size() << "\r";
+#endif
         }
     }
     contents.done_flag = true;

@@ -114,10 +114,19 @@ std::optional<std::string> GeneralIndexer::read_some_files(GeneralIndexer::Conte
 SortedKeysIndex
 GeneralIndexer::thread_process_files(SyncedQueue &file_contents) {
     std::array<SortedKeysIndex, 10> reducer{};
-    while (file_contents.size() || !file_contents.done_flag) {
+    while (true) {
+        if(file_contents.done_flag && !file_contents.size()) {
+            break;
+        }
+
         auto[contents, docidfilepair] = file_contents.pop();
 
-        if (contents == "EMPTY" || file_contents.done_flag) break;
+
+        if (contents == "EMPTY") {
+            break;
+        }
+
+        log("Processing file ", docidfilepair.document_id);
 
         auto should_insert = std::min_element(reducer.begin(), reducer.end(), [](auto &i, auto &b) {
             return i.get_index().size() < b.get_index().size();

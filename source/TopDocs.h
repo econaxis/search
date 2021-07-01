@@ -5,7 +5,6 @@
 #include <vector>
 #include <cassert>
 #include "DocumentFrequency.h"
-#include "CustomAllocatedVec.h"
 #include "DocumentFrequency.h"
 #include <type_traits>
 #include <unordered_map>

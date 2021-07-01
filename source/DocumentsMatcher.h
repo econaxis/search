@@ -5,7 +5,6 @@
 #include <vector>
 #include "SortedKeysIndexStub.h"
 #include <cstdint>
-#include <span>
 
 namespace DocumentsMatcher {
 

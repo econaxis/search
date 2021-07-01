@@ -32,10 +32,10 @@ void Tokenizer::remove_bad_words(std::vector<std::string>& terms) {
 std::vector<WordPos> clean_string(std::string &file) {
     std::vector<WordPos> result;
 
-    uint last_end = -1;
+    unsigned int last_end = 1<<31;
     bool is_in_word = false;
     bool is_in_xml = false;
-    uint i = 0;
+    unsigned int i = 0;
     while (i < file.size()) {
         if (is_in_xml) {
             if (file[i] == '>') {

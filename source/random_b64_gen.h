@@ -12,7 +12,7 @@ inline constexpr std::string_view b64chars = "abcdefghijklmnopqrstuvwxyzABCDEFGH
 
 // Generates a random alphanumeric (and some other URL-safe characters)
 inline std::string random_b64_str(int length = 5) {
-    static std::uniform_int_distribution<uint> dist(0, b64chars.size() - 1); // ASCII table codes for normal characters.
+    static std::uniform_int_distribution<unsigned int> dist(0, b64chars.size() - 1); // ASCII table codes for normal characters.
 
     std::string output;
     output.reserve(length);
@@ -24,8 +24,9 @@ inline std::string random_b64_str(int length = 5) {
     }
     return output;
 }
-inline ulong random_long(ulong min = 0, ulong max = 1UL<<63) {
-    std::uniform_int_distribution<ulong> dist(min, max);
+using ullong = unsigned long long;
+inline ullong random_long(ullong min = 0, ullong max = 1UL<<63) {
+    std::uniform_int_distribution<ullong> dist(min, max);
 
     return dist(randgen());
 }

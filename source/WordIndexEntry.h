@@ -7,7 +7,6 @@
 #include <cassert>
 #include <numeric>
 #include "DocumentPositionPointer.h"
-#include "CustomAllocatedVec.h"
 #include "DocumentsTier.h"
 #include "DocumentFrequency.h"
 

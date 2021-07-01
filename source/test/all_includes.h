@@ -5,6 +5,8 @@
 #ifndef GAME_ALL_INCLUDES_H
 #define GAME_ALL_INCLUDES_H
 
+#define LOOP_ITERS 800
+
 #include "rust-interface.h"
 #include "c_abi.h"
 #include "SortedKeysIndex.h"
@@ -15,7 +17,6 @@
 #include "Base26Num.h"
 #include "SortedKeysIndexStub.h"
 #include "compactor/Compactor.h"
-#include "CustomAllocatedVec.h"
 #include "Tokenizer.h"
 #include "DocIDFilePair.h"
 #include "FileListGenerator.h"

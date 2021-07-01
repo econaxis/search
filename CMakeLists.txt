@@ -32,7 +32,7 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         source/FPStub.cpp
         source/DocumentsTier.cpp
         source/PositionsSearcher.cpp
-        source/Constants.h source/DocumentsMatcher.cpp source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/CustomAllocatedVec.cpp source/SyncedQueue.cpp source/logger.h)
+        source/Constants.h source/DocumentsMatcher.cpp source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/SyncedQueue.cpp source/logger.h)
 target_include_directories(search-share PUBLIC source extern extern/mio/include)
 
 target_include_directories(general-indexer PUBLIC source extern extern/mio/include)

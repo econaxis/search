@@ -3,7 +3,6 @@
 #include "DocumentsMatcher.h"
 #include <cassert>
 #include <iostream>
-#include <span>
 #include "Serializer.h"
 #include "WordIndexEntry.h"
 #include "PositionsSearcher.h"

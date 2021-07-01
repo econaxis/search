@@ -5,15 +5,30 @@
 #include "SortedKeysIndex.h"
 #include "DocumentsTier.h"
 #include "DocumentFrequency.h"
+
+namespace {
+#ifdef HAS_EXEC_INFO
 #include <execinfo.h>
+#else
+#warning "No exec info header found."
+    int backtrace(void **arg1, int arg2) {
+        std::cout << "No backtrace available";
+        return 0;
+    }
+    char** backtrace_symbols(void** arg1, int arg2) {
+        return nullptr;
+    }
+#endif
+}
 
 using namespace Serializer;
+
 void print_backtrace() {
     void *tracePtrs[15];
     auto count = backtrace(tracePtrs, 15);
-    char** funcnames = backtrace_symbols(tracePtrs, count);
-    for(int i = 0; i < count; i++) {
-        std::cout<<"Backtrace: "<<funcnames[i]<<"\n";
+    char **funcnames = backtrace_symbols(tracePtrs, count);
+    for (int i = 0; i < count; i++) {
+        std::cout << "Backtrace: " << funcnames[i] << "\n";
     }
 }
 
@@ -57,7 +72,7 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
         int a = stream.tellg();
         int b = stream.good();
         int c = stream.eof();
-        std::cout << "Error: not a valid number; " << a <<" "<< b <<" "<< c;
+        std::cout << "Error: not a valid number; " << a << " " << b << " " << c;
         print_backtrace();
 
         throw std::runtime_error("Error: not a valid number " + std::to_string(a) + " " + std::to_string(c));
@@ -66,7 +81,6 @@ uint32_t Serializer::read_vnum(std::istream &stream) {
 
     return holder;
 }
-
 
 
 void serialize(std::ostream &stream, const DocIDFilePair &p) {
@@ -129,7 +143,6 @@ void Serializer::serialize_vnum(std::ostream &stream, uint32_t number, bool pad3
 }
 
 
-
 void Serializer::serialize_work_index_entry(std::ostream &frequencies, std::ostream &terms, std::ostream &positions,
                                             const WordIndexEntry &ie) {
     /**
@@ -158,7 +171,7 @@ Serializer::read_work_index_entry(std::istream &frequencies, std::istream &terms
     // then read the positions
     auto dpp = PositionsSearcher::read_positions_all(positions, wie2.files);
 
-    WordIndexEntry wie {wie2.key, dpp};
+    WordIndexEntry wie{wie2.key, dpp};
     return wie;
 }
 
@@ -263,7 +276,6 @@ void Serializer::serialize(const std::string &suffix, const SortedKeysIndex &ind
 }
 
 
-
 DocIDFilePair read_pair(std::istream &stream) {
     uint32_t docid = read_vnum(stream);
     auto str = read_str(stream);
@@ -279,9 +291,6 @@ std::vector<DocIDFilePair> Serializer::read_filepairs(std::istream &stream) {
     }
     return out;
 }
-
-
-
 
 
 std::ifstream *Serializer::ffi::create_ifstream_from_path(const char *path) {

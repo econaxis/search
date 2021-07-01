@@ -7,7 +7,6 @@
 #include "DocumentFrequency.h"
 #include "DocumentsMatcher.h"
 #include <fmt/ostream.h>
-#include <span>
 
 namespace ffi = Serializer::ffi;
 namespace sr = Serializer;

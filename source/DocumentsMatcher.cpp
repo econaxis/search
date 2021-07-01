@@ -46,10 +46,6 @@ const uint32_t *find_avx_256(const uint32_t *start, const uint32_t *end, uint32_
     return nullptr;
 }
 
-#include <chrono>
-#include <iostream>
-#include <span>
-
 
 using DPP = DocumentFrequency;
 

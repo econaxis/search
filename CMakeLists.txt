@@ -96,3 +96,14 @@ target_precompile_headers(general-indexer PRIVATE source/logger.h)
 target_link_libraries(general-indexer PRIVATE fmt::fmt)
 
 add_subdirectory(source/test)
+
+
+include(CheckIncludeFileCXX)
+check_include_file_cxx(execinfo.h HAS_EXEC_INFO)
+
+if(HAS_EXEC_INFO)
+    target_compile_definitions(search-share PRIVATE HAS_EXEC_INFO)
+    message("has exec info")
+else()
+    message("no exec info")
+endif()

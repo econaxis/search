@@ -58,7 +58,7 @@ if (CMAKE_BUILD_TYPE MATCHES RelWithDebInfo OR CMAKE_BUILD_TYPE MATCHES Release)
     set(CARGO_RELEASE_MODE "--release")
     message("MESSAGE: Using release build " ${rust-build-command})
 endif ()
-set(rust-build-command $ENV{HOME}/.cargo/bin/cargo build ${CARGO_RELEASE_MODE} --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
+set(rust-build-command cargo build ${CARGO_RELEASE_MODE} --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
 
 message("Rust build command: " ${rust-build-command})
 

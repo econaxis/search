@@ -97,7 +97,7 @@ int two_finger_find_min(T &first1, T last1, T &first2, T last2) {
     assert(first1->document_id == (last1 - 1)->document_id);
     assert(first2->document_id == (last2 - 1)->document_id);
 
-    uint32_t curmin = 1 << 30;
+    uint32_t curmin = std::numeric_limits<uint32_t>::max();
     while (first1 < last1) {
         if (first2 == last2) break;
         if (first1->document_position > first2->document_position)
@@ -135,12 +135,13 @@ PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, co
             if (first1 == positions_list[i].end() || first2 == positions_list[i + 1].end() ||
                 first1->document_id != d->document_id || first2->document_id != d->document_id) {
                 print_range("error: Pos dont exist, probably AND error?", query_terms.begin(), query_terms.end());
-                pos_difference = 1 << 29;
+                pos_difference = std::numeric_limits<int>::max();
                 break;
             }
 
             auto a0 = two_finger_find_min(first1, last1, first2, last2);
-            a0 -= query_terms[i].size();
+
+            a0 -= query_terms[i].size() + 1;
             pos_difference += abs(a0);
             insert_to_array(d->matches, first1->document_position);
         }

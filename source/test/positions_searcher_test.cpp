@@ -10,7 +10,7 @@ public:
 
     // Override this to define how to set up the environment.
     void SetUp() override {
-        data_files_dir = "/tmp/gtest-search-dir/";
+        data_files_dir = filesystem::temp_directory_path() / "gtest-search-dir/";
         indice_files_dir = data_files_dir / std::string("indices");
         fs::create_directories(data_files_dir);
         fs::create_directories(indice_files_dir);
@@ -26,14 +26,12 @@ testing::Environment *const foo_env =
         testing::AddGlobalTestEnvironment(new Environment);
 
 
-
-
 WordIndexEntry gen_random_wie() {
     std::vector<DocumentPositionPointer> a{};
     int num = 1000;
     const uint maxint = 1 << 31;
     while (num--) {
-        a.emplace_back(::rand() % (100) + (1 << 25), ::rand() % maxint);
+        a.emplace_back(utils::rand() % (100) + (1 << 25), utils::rand() % maxint);
     }
     std::sort(a.begin(), a.end());
 
@@ -41,7 +39,6 @@ WordIndexEntry gen_random_wie() {
             random_b64_str(10), a
     };
 }
-
 
 
 TEST(SerializationWordIndexEntry, can_serialize_positions_for_one_wie) {
@@ -58,7 +55,6 @@ TEST(SerializationWordIndexEntry, can_serialize_positions_for_one_wie) {
 
     ASSERT_EQ(test, wie.files);
 }
-
 
 
 std::string serialize_test(std::string suffix) {

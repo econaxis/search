@@ -28,8 +28,8 @@ TEST(Searching, should_not_contain) {
     SortedKeysIndexStub index(suffix);
 
     auto aaaaa = index.search_many_terms({"AAAAAAAAAAAAAAAA"})[0];
-    auto zzzzz = index.search_many_terms({"ZZZZZ"})[0];
-    auto zzzzzz = index.search_many_terms({"ZZZZZZ"})[0];
+    auto zzzzz = index.search_many_terms({"ZZZZZZZZZZZZZZ~"})[0];
+    auto zzzzzz = index.search_many_terms({"ZZZZZZZZ~"})[0];
     auto punctuation = index.search_many_terms({";f4280f.!?"})[0];
 
     EXPECT_EQ(aaaaa.size(), 0);
@@ -57,6 +57,5 @@ TEST(Searching, more_precise_searching_test_please) {
     // If we dont' want positions_matching, call DocumentsMatcher::AND_Driver(temp);
     auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(index, temp, {"RUDSVF", "UVNCXK", "AVNCXRU"});
 
-    ASSERT_LT(topdocs_with_pos.docs.size(), MultiDocumentsTier::BLOCKSIZE);
     ASSERT_EQ(topdocs_with_pos.docs.size(), good_docs);
 }

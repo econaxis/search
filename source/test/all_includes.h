@@ -5,6 +5,7 @@
 #ifndef GAME_ALL_INCLUDES_H
 #define GAME_ALL_INCLUDES_H
 
+
 #define LOOP_ITERS 800
 
 #include "rust-interface.h"
@@ -36,8 +37,8 @@
 #include "StdinIndexer.h"
 #include "PositionsSearcher.h"
 
-namespace {
-    [[maybe_unused]] unsigned long rand() {
+namespace utils {
+    inline unsigned long rand() {
         static std::random_device dev;
         static std::mt19937 rng(dev());
         static std::uniform_int_distribution<unsigned long> dist6;
@@ -63,7 +64,7 @@ inline std::string generate_words(int num = 100) {
     std::ostringstream res;
 
     repeat(num, [&](int _) {
-        auto word_size = ::rand() % 12 + 2;
+        auto word_size =utils::rand() % 12 + 2;
         res << random_alphabetic_string(word_size)<<" ";
     });
 

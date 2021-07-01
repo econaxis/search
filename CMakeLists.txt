@@ -37,14 +37,14 @@ target_include_directories(search-share PUBLIC source extern extern/mio/include)
 
 target_include_directories(general-indexer PUBLIC source extern extern/mio/include)
 
-target_link_libraries(general-indexer PRIVATE pthread ${CMAKE_BINARY_DIR}/libnamesdb.so tbb)
+target_link_libraries(general-indexer PRIVATE ${CMAKE_BINARY_DIR}/libnamesdb.so tbb)
 
 add_executable(search source/main.cpp source/TermsListSearcher.cpp source/DocumentsTier.cpp)
 target_link_libraries(search PRIVATE search-share general-indexer)
 
 
 add_executable(compactor source/compactor/main.cpp)
-target_link_libraries(compactor PRIVATE search-share pthread ${CMAKE_BINARY_DIR}/libnamesdb.so)
+target_link_libraries(compactor PRIVATE search-share ${CMAKE_BINARY_DIR}/libnamesdb.so)
 
 target_link_options(compactor PRIVATE -rdynamic)
 
@@ -65,7 +65,7 @@ message("Rust build command: " ${rust-build-command})
 
 add_custom_target(
         rust-server ALL
-        COMMAND ${rust-build-command}
+        COMMAND CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR} ${rust-build-command}
         DEPENDS ${CMAKE_SOURCE_DIR}/rust/webserver/src
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
 )

@@ -39,14 +39,26 @@ TEST(Searching, should_not_contain) {
 }
 
 
-TEST(Searching, more_precise_searching_test_please) {
-    auto good_docs = 0;
+// tests that documents with terms closer together should rank higher.
+TEST(Searching, more_precise_searching_test) {
+    std::vector<int> good_docs;
     auto generator = [&](int index) -> std::string {
-        if (index % 10 == 0) {
-            good_docs++;
-            return fmt::format("{} {} {}", generate_words(5), "RUDSVF UVNCXK AVNCXRU", generate_words(5));
+        if (utils::rand() % (LOOP_ITERS / 10 + 2) == 0) {
+            good_docs.push_back(index);
+            return fmt::format("{} {} {}", generate_words(100), "RUDSVF UVNCXK AVNCXRU", generate_words(100));
         } else {
-            return generate_words(5);
+            std::ostringstream random_words;
+            std::vector<std::string_view> must_include {"RUDSVF", "UVNCXK", "AVNCXRU"};
+            int counter = 0;
+            while(!must_include.empty()) {
+                if(counter++ % 20 == 0) {
+                    random_words<<must_include.back()<<" ";
+                    must_include.pop_back();
+                } else {
+                    random_words<<generate_words(2);
+                }
+            }
+            return random_words.str();
         }
     };
 
@@ -54,8 +66,17 @@ TEST(Searching, more_precise_searching_test_please) {
     SortedKeysIndexStub index(suffix);
     auto temp = index.search_many_terms({"RUDSVF", "UVNCXK", "AVNCXRU"});
 
-    // If we dont' want positions_matching, call DocumentsMatcher::AND_Driver(temp);
+    // Expand all to avoid the chunking optimization
+    for(auto& td : temp) td.extend_from_tier_iterator(std::numeric_limits<int>::max());
+
     auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(index, temp, {"RUDSVF", "UVNCXK", "AVNCXRU"});
 
-    ASSERT_EQ(topdocs_with_pos.docs.size(), good_docs);
+    std::reverse(topdocs_with_pos.begin(), topdocs_with_pos.end());
+    std::sort(topdocs_with_pos.begin(), topdocs_with_pos.begin() + good_docs.size(), [](const auto& a, const auto& b) {
+        return a.document_id < b.document_id;
+    });
+    std::sort(good_docs.begin(), good_docs.end());
+    ASSERT_TRUE(std::equal(good_docs.begin(), good_docs.end(), topdocs_with_pos.begin(), [](int i, DocumentsMatcher::TopDocsWithPositions::Elem& j) {
+        return i == j.document_id;
+    }));
 }

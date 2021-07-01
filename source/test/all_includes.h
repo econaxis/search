@@ -5,8 +5,9 @@
 #ifndef GAME_ALL_INCLUDES_H
 #define GAME_ALL_INCLUDES_H
 
-
-#define LOOP_ITERS 800
+#ifndef LOOP_ITERS
+#define LOOP_ITERS 1000
+#endif
 
 #include "rust-interface.h"
 #include "c_abi.h"

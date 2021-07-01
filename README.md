@@ -7,7 +7,7 @@ Around 50,000 Instructables documents are searched near-instantly as the user ty
 
 ![image](/demo.gif)
 
-These queries use all 4 threads but just 40MB memory on an i7-6500U processor. 
+These queries are run in parallel across independent, horizontal-sharded indices. 
 
 ## Inspirations
 I wrote this engine to learn how large, distributed databases can scale to many terabytes of data. Many techniques and implementation details here are inspired off Apache Lucene and Google's SSTable. I learned about ranking functions, stop word detection, inverted indices, and phrase queries from the book *Introduction to Information Retrieval*. I designed my data serialization model, like variable-length integers, delta encoding, and organization of the inverted index (into terms, positions, and frequency specific files) from studying Lucene's Java implementation. I implemented packed integer blocking/shuffling inspired by Blosc. The binary representation of my inverted index closely resembles SSTables and is inspired by LevelDB's merge-based approach (/source/compactor/Compactor.cpp). This allows parallelized index building of many gigabytes of documents while having very low memory usage.

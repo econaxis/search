@@ -68,7 +68,7 @@ inline void print(Params &&... params) {
 inline void print_range(const std::string& str, auto beg, auto end) {
     std::string buffer;
     while(beg != end) {
-        buffer.append(*beg);
+        buffer.append(*(beg++));
         buffer.append(" ");
     }
     log(fmt::format("{} {}", str, buffer));

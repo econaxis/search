@@ -8,7 +8,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 
-add_executable(default-tests positions_searcher_test.cpp indexing_test.cpp doc-matcher-test.cpp searching-strings.cpp topdocs-test.cpp multiple-indices-test.cpp)
+add_executable(default-tests positions_searcher_test.cpp indexing_test.cpp doc-matcher-test.cpp searching-strings.cpp topdocs-test.cpp multiple-indices-test.cpp test-main.cpp)
 
 target_include_directories(default-tests PRIVATE . ../)
 #message("binary dir: " ${CMAKE_BINARY_DIR})

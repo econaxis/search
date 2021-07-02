@@ -180,6 +180,6 @@ pub fn generate_metadata_for_dir<P: AsRef<Path>>(path: P, processed_already: &Ha
 
         // println!("Total files currently {}", fp_total.len());
     }
-    println!("Size: {} files", dup_finder.len());
+    println!("NDB size: {} files", dup_finder.len());
     dup_finder.into_keys().collect()
 }

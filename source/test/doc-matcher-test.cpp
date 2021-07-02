@@ -126,7 +126,7 @@ TEST(DocumentsMatcher, two_filled_test_v4) {
 TEST(DocumentsMatcher, can_extend_if_needed) {
     LOOP_ITERS = MultiDocumentsTier::BLOCKSIZE * 100;
     int total_and_size = 0;
-    auto suffix = do_index_custom([&](int index) {
+    auto suffix = do_index_custom([&](int index, auto _) {
         auto before = generate_words(3);
         if (index % 3 == 0) before += " testword ";
         if (index % 4 == 0) before += " testwordone ";

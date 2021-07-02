@@ -122,8 +122,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     file_start = std::clamp(file_start, index.begin(), index.end() - 1);
     file_end = std::clamp(file_end, index.begin(), index.end() - 1);
 
-    if (file_start == index.end()) { return TopDocs{}; }
-
+    if(file_end == index.end()) file_end = index.end() -1;
 
     terms.seekg(file_start->terms_pos);
     correct_freq_pos_locations(terms, frequencies);
@@ -133,7 +132,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     std::vector<int> output_score;
     outputs.reserve(50);
 
-    auto max_terms_read = (file_end - file_start) * STUB_INTERVAL;
+    auto max_terms_read = (file_end - file_start - 1) * STUB_INTERVAL;
 
 
     while (max_terms_read-- > 0 || terms.tellg() <= file_end->terms_pos) {

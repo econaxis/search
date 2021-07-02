@@ -42,8 +42,8 @@ TEST(Searching, should_not_contain) {
 // tests that documents with terms closer together should rank higher.
 TEST(Searching, more_precise_searching_test) {
     std::vector<int> good_docs;
-    auto generator = [&](int index) -> std::string {
-        if (utils::rand() % (LOOP_ITERS / 20 + 5) == 0) {
+    auto generator = [&](int index, auto _) -> std::string {
+        if (utils::rand() % (LOOP_ITERS / 20) == 0) {
             good_docs.push_back(index);
             return fmt::format("{} {} {}", generate_words(100), "RUDSVF UVNCXK AVNCXRU", generate_words(100));
         } else {

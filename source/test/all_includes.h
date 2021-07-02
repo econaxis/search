@@ -75,7 +75,8 @@ inline std::string do_index_custom(auto callable) {
     std::vector<std::string> filenames(LOOP_ITERS), files(LOOP_ITERS);
     repeat(LOOP_ITERS, [&](int i) {
         filenames[i] = random_b64_str(10);
-        files[i] = fmt::format("{}", callable(i));
+
+        files[i].append(fmt::format(" {} ", callable(i, filenames[i])));
         fmt::print(fakecin, "filename {} /endfilename file {} /endfile ", filenames[i], files[i]);
     });
 
@@ -86,7 +87,7 @@ inline std::string do_index_custom(auto callable) {
 }
 
 inline std::string do_index(std::string must_include = "empty") {
-    auto call = [&](int _) {
+    auto call = [&](int _, auto __unused) {
         return fmt::format("{} {} {}", generate_words(100), must_include, generate_words(100));
     };
 

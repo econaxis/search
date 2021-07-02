@@ -57,7 +57,7 @@ namespace DocumentsMatcher {
         return one.document_freq < two;
     }
 
-    TopDocsWithPositions combiner_with_position(SortedKeysIndexStub &index, std::vector<TopDocs> &outputs,
+    TopDocsWithPositions combiner_with_position(const SortedKeysIndexStub &index, std::vector<TopDocs> &outputs,
                                                 const std::vector<std::string> &query_terms);
 };
 

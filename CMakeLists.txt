@@ -17,7 +17,7 @@ add_library(general-indexer SHARED
 set(CMAKE_BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 
-add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
+add_library(search-share SHARED
         "source/DocIDFilePair.cpp"
         "source/Serializer.h"
         "source/Tokenizer.cpp"
@@ -34,7 +34,7 @@ add_library(search-share SHARED "source/DocumentPositionPointer.cpp"
         source/FPStub.cpp
         source/DocumentsTier.cpp
         source/PositionsSearcher.cpp
-        source/Constants.h source/DocumentsMatcher.cpp source/ContiguousAllocator.cpp source/ContiguousAllocator.h source/TopDocs.cpp source/SyncedQueue.cpp source/logger.h)
+        source/Constants.h source/DocumentsMatcher.cpp source/TopDocs.cpp source/SyncedQueue.cpp source/logger.h source/PossiblyMatchingTerm.cpp source/PossiblyMatchingTerm.h source/TopDocsResultsJoiner.cpp source/TopDocsResultsJoiner.h)
 target_include_directories(search-share PUBLIC source extern extern/mio/include)
 
 target_include_directories(general-indexer PUBLIC source extern extern/mio/include)
@@ -57,7 +57,10 @@ file(GLOB rust-sources rust/webserver/src/*)
 if (CMAKE_BUILD_TYPE MATCHES RelWithDebInfo OR CMAKE_BUILD_TYPE MATCHES Release)
     set(CARGO_RELEASE_MODE "--release")
     message("MESSAGE: Using release build " ${rust-build-command})
-endif ()
+else ()
+    set(CARGO_RELEASE_MODE "")
+    add_compile_definitions(DEBUG_MODE_ON)
+endif()
 set(rust-build-command cargo build ${CARGO_RELEASE_MODE} --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
 
 

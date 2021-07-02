@@ -7,6 +7,7 @@
 #include "DocumentFrequency.h"
 #include "DocumentsMatcher.h"
 #include <fmt/ostream.h>
+#include "TopDocsResultsJoiner.h"
 
 namespace ffi = Serializer::ffi;
 namespace sr = Serializer;
@@ -32,7 +33,6 @@ void deallocate_ofstream(ofstream *stream) {
 void read_from_ifstream(ifstream *stream, char *buffer, uint32_t max_len) {
     stream->read(buffer, max_len);
 }
-
 
 
 void read_filepairs(ifstream *stream, std::vector<DocIDFilePair> **vecpointer, uint32_t *length) {
@@ -89,54 +89,30 @@ serialize_final_doc_to_json(std::ostream &out, dm::TopDocsWithPositions::Elem &e
     fmt::print(out, format_string, filename, entry.document_freq, match_str);
 }
 
-void search_multi_indices(int num_indices, SortedKeysIndexStub **indices, int num_terms, const char **query_terms_ptr,
-                          RustVec *output_buffer) {
+void
+search_multi_indices(int num_indices, const SortedKeysIndexStub **indices, int num_terms, const char **query_terms_ptr,
+                     RustVec *output_buffer) {
     try {
-        assert(num_indices < 32);
-        constexpr uint32_t tag_remover = (1 << 27) - 1;
         std::vector<std::string> query(num_terms);
         for (int i = 0; i < num_terms; i++) {
             auto as_str = std::string(query_terms_ptr[i]);
             Tokenizer::clean_token_to_index(as_str);
             query[i] = as_str;
         }
-        DocumentsMatcher::TopDocsWithPositions joined;
-        for (std::size_t i = 0; i < num_indices; i++) {
-            auto temp = indices[i]->search_many_terms(query);
+        auto indices_span = std::span(*indices, num_indices);
 
-            // If we dont' want positions_matching, call DocumentsMatcher::AND_Driver(temp);
-            auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(*indices[i], temp, query);
-
-            uint32_t curtag = i << 27;
-
-            // Imbue top 4 bits of docid with index tag (which index the doc id is associated with)
-            for (auto &pair: topdocs_with_pos) {
-                assert(pair.document_id < 1 << 27);
-                pair.document_id |= curtag;
-            }
-            if (!topdocs_with_pos.docs.empty()) joined.insert(topdocs_with_pos);
-        }
-
-        joined.sort_by_frequencies();
-        if (joined.docs.size() > 40) {
-            auto bound = std::lower_bound(joined.docs.begin(), joined.docs.end(), 60);
-
-            if (joined.docs.end() - bound > 40) {
-                joined.docs.erase(joined.docs.begin(), bound);
-            }
-        }
-        std::reverse(joined.docs.begin(), joined.docs.end());
+        auto result = TopDocsResultsJoiner::query_multiple_indices(indices_span, query);
 
         std::ostringstream out{};
         out << "[";
-        for (auto &i : joined) {
-            auto docid = i.document_id & tag_remover;
-            auto index = i.document_id >> 27;
-            serialize_final_doc_to_json(out, i, indices[index]->query_filemap(docid));
+        auto it = result.get_results();
+        while (it.valid()) {
+            serialize_final_doc_to_json(out, it->doc, indices[it->indexno]->query_filemap(it->doc.document_id));
 
-            if (i.document_id != (joined.end() - 1)->document_id) {
-                out << ",";
-            }
+            // If the next one is also valid, then we need a comma.
+            // JSON spec forbids trailing commas, so we always need this check.
+            if((it+1).valid()) out << ",";
+            it.next();
         }
         out << "]";
 

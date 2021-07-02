@@ -41,10 +41,12 @@ TEST(indexing, indexing) {
 
 
 TEST(indexing, indexes_ok) {
+    LOOP_ITERS = 50;
     do_index();
 }
 
 TEST(indexing, indexes_correctly_and_deserialize_correctly) {
+    LOOP_ITERS = 500;
     auto suffix = do_index("fddsvc fewivx vncms");
     SortedKeysIndexStub index(suffix);
 
@@ -60,7 +62,7 @@ TEST(indexing, indexes_correctly_and_deserialize_correctly) {
 
     EXPECT_GT(AND.size(), 0);
 
-    auto res_bad = index.search_many_terms({"shouldnothave~", "shouldnothaveagain"});
+    auto res_bad = index.search_many_terms({"SHOULDNOTHAVE~", "SHOULDNOTHAVEAGAIN"});
     EXPECT_EQ(res_bad[0].size(), 0);
     EXPECT_EQ(res_bad[1].size(), 0);
 

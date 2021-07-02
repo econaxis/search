@@ -173,8 +173,8 @@ TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
 constexpr char PLACEHOLDER[] = "(null word)";
 
 TopDocsWithPositions
-DocumentsMatcher::combiner_with_position(SortedKeysIndexStub &index, std::vector<TopDocs> &outputs,
-    const std::vector<std::string> &query_terms) {
+DocumentsMatcher::combiner_with_position(const SortedKeysIndexStub &index, std::vector<TopDocs> &outputs,
+                                         const std::vector<std::string> &query_terms) {
 
     // We'll do operations on outputs, adding to it lesser-frequencied documents.
     // If we can't find enough documents that match an AND boolean query, then we'll

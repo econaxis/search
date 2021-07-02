@@ -96,7 +96,14 @@ search_multi_indices(int num_indices, const SortedKeysIndexStub **indices, int n
         std::vector<std::string> query(num_terms);
         for (int i = 0; i < num_terms; i++) {
             auto as_str = std::string(query_terms_ptr[i]);
-            Tokenizer::clean_token_to_index(as_str);
+            if(!Tokenizer::clean_token_to_index(as_str)) {
+                log("Word ", as_str, " removed from query because it fails clean_token");
+                continue;
+            }
+            if(Tokenizer::check_stop_words(as_str, 0, as_str.size())) {
+                log("Word ", as_str, " removed from query because it is stop word");
+                continue;
+            }
             query[i] = as_str;
         }
         auto indices_span = std::span(*indices, num_indices);

@@ -6,12 +6,12 @@
 
 std::string get_random_word() {
     constexpr auto sz = std::size(strings);
-    return std::string(strings[::rand() % sz]);
+    return std::string(strings[utils::rand() % sz]);
 }
 
 
-void get_or_insert(std::unordered_map<std::string, int>& map, std::string& val) {
-    if(auto it = map.find(val); it != map.end()) {
+void get_or_insert(std::unordered_map<std::string, int> &map, std::string &val) {
+    if (auto it = map.find(val); it != map.end()) {
         it->second++;
     } else {
         map.emplace(val, 0);
@@ -21,23 +21,24 @@ void get_or_insert(std::unordered_map<std::string, int>& map, std::string& val) 
 
 // Tests that multiple indices actually work.
 TEST(MultipleIndices, multiple_indices) {
-    LOOP_ITERS = 2000;
     std::unordered_map<std::string, std::string> docs;
     std::unordered_map<std::string, int> freq;
 
+    int num_index = 0;
     auto generator = [&](int index, std::string filename) {
         std::string file;
         while (file.size() < 200) {
             auto word = get_random_word();
-            if(!Tokenizer::clean_token_to_index(word)) {
+            if (!Tokenizer::clean_token_to_index(word)) {
                 continue;
             }
+
             get_or_insert(freq, word);
             file.append(word);
             file.append(" ");
         }
 
-        docs.emplace(filename, file);
+        docs.emplace(filename, file + " " + std::to_string(num_index));
         return file;
     };
 
@@ -45,18 +46,25 @@ TEST(MultipleIndices, multiple_indices) {
     std::vector<SortedKeysIndexStub> indices;
 
     indices.emplace_back(do_index_custom(generator));
+    num_index++;
     indices.emplace_back(do_index_custom(generator));
+    num_index++;
     indices.emplace_back(do_index_custom(generator));
+    num_index++;
     indices.emplace_back(do_index_custom(generator));
+    num_index++;
     indices.emplace_back(do_index_custom(generator));
+    num_index++;
     indices.emplace_back(do_index_custom(generator));
 
 
     std::span indices_span(indices);
 
 
-    for(auto& [word, frequency] : freq) {
-        if(frequency < 10) continue;
+    for (auto&[word, frequency] : freq) {
+        if (frequency < 10) continue;
+
+        if(Tokenizer::check_stop_words(word, 0, word.size())) continue;
         print("Testing ", word);
 
         std::vector<std::string> query{word};
@@ -64,7 +72,7 @@ TEST(MultipleIndices, multiple_indices) {
 
         auto it = result.get_results();
         int num_results = 0;
-        while(it.valid()) {
+        while (it.valid()) {
             num_results++;
             auto filename = indices[it->indexno].query_filemap(it->doc.document_id);
             auto file = docs[filename];

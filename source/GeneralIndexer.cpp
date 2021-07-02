@@ -88,7 +88,7 @@ std::optional<std::string> GeneralIndexer::read_some_files(GeneralIndexer::Conte
 
 
     std::vector<std::future<SortedKeysIndex>> threads;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 1; i++) {
         threads.emplace_back(std::async(std::launch::async | std::launch::deferred, [&]() {
             return thread_process_files(file_contents);
         }));

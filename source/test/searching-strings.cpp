@@ -24,13 +24,12 @@ TEST(Searching, bad_strings) {
 }
 
 TEST(Searching, should_not_contain) {
-    auto suffix = do_index();
-    SortedKeysIndexStub index(suffix);
+    const auto& index = get_index();
 
     auto aaaaa = index.search_many_terms({"AAAAAAAAAAAAAAAA"})[0];
     auto zzzzz = index.search_many_terms({"ZZZZZZZZZZZZZZ~"})[0];
     auto zzzzzz = index.search_many_terms({"ZZZZZZZZ~"})[0];
-    auto punctuation = index.search_many_terms({";f4280f.!?"})[0];
+    auto punctuation = index.search_many_terms({";F4280F.!?"})[0];
 
     EXPECT_EQ(aaaaa.size(), 0);
     EXPECT_EQ(zzzzz.size(), 0);
@@ -43,7 +42,7 @@ TEST(Searching, should_not_contain) {
 TEST(Searching, more_precise_searching_test) {
     std::vector<int> good_docs;
     auto generator = [&](int index, auto _) -> std::string {
-        if (utils::rand() % (LOOP_ITERS / 20) == 0) {
+        if (utils::rand() % (LOOP_ITERS / 50) == 0) {
             good_docs.push_back(index);
             return fmt::format("{} {} {}", generate_words(100), "RUDSVF UVNCXK AVNCXRU", generate_words(100));
         } else {
@@ -51,11 +50,11 @@ TEST(Searching, more_precise_searching_test) {
             std::vector<std::string_view> must_include {"RUDSVF", "UVNCXK", "AVNCXRU"};
             int counter = 0;
             while(!must_include.empty()) {
-                if(counter++ % 20 == 0 && !must_include.empty()) {
+                if(counter++ % 30 == 0 && !must_include.empty()) {
                     random_words<<must_include.back()<<" ";
                     must_include.pop_back();
                 } else {
-                    random_words<<generate_words(2);
+                    random_words<<generate_words(10);
                 }
             }
             return random_words.str();

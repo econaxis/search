@@ -10,5 +10,6 @@ extern "C" bool search_name_database(const NamesDatabase* ndb, const char *key);
 extern "C" void serialize_namesdb(NamesDatabase* ndb);
 extern "C" void fill_rust_vec (RustVec*, void* data, std::size_t size);
 extern "C" void register_temporary_file(const NamesDatabase *, const char* path, uint32_t docid);
+extern "C" void drop_name_database(NamesDatabase *);
 
 #endif //GAME_RUST_INTERFACE_H

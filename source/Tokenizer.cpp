@@ -11,7 +11,6 @@ struct WordPos {
     unsigned int start, end;
 };
 
-static bool check_stop_words(const std::string &s, int bi, int ei);
 
 
 bool Tokenizer::clean_token_to_index(std::string &token) {
@@ -21,8 +20,8 @@ bool Tokenizer::clean_token_to_index(std::string &token) {
 }
 
 
-void Tokenizer::remove_bad_words(std::vector<std::string>& terms) {
-    terms.erase(std::remove_if(terms.begin(), terms.end(), [](auto& t) {
+void Tokenizer::remove_bad_words(std::vector<std::string> &terms) {
+    terms.erase(std::remove_if(terms.begin(), terms.end(), [](auto &t) {
         return !clean_token_to_index(t);
     }), terms.end());
 }
@@ -32,7 +31,7 @@ void Tokenizer::remove_bad_words(std::vector<std::string>& terms) {
 std::vector<WordPos> clean_string(std::string &file) {
     std::vector<WordPos> result;
 
-    unsigned int last_end = 1<<31;
+    unsigned int last_end = 1 << 31;
     bool is_in_word = false;
     bool is_in_xml = false;
     unsigned int i = 0;
@@ -50,7 +49,7 @@ std::vector<WordPos> clean_string(std::string &file) {
                     last_end = i - 50;
                 }
 
-                if (!check_stop_words(file, last_end, i)) {
+                if (!Tokenizer::check_stop_words(file, last_end, i)) {
                     result.push_back({last_end, i});
                 }
 
@@ -70,7 +69,7 @@ std::vector<WordPos> clean_string(std::string &file) {
         i++;
     }
 
-    if(is_in_word) result.push_back({last_end, i});
+    if (is_in_word) result.push_back({last_end, i});
 
     return result;
 }
@@ -83,7 +82,6 @@ std::vector<WordIndexEntry> Tokenizer::index_string_file(std::string file, uint3
 
     for (auto[start, end] : positions) {
         auto temp = file.substr(start, end - start);
-
         if (clean_token_to_index(temp)) {
             if (auto it = index_temp.find(temp); it == index_temp.end()) {
                 index_temp.emplace(temp, WordIndexEntry{temp, {}});
@@ -93,7 +91,8 @@ std::vector<WordIndexEntry> Tokenizer::index_string_file(std::string file, uint3
     }
     std::vector<WordIndexEntry> final;
     final.reserve(index_temp.size());
-    std::transform(std::make_move_iterator(index_temp.begin()), std::make_move_iterator(index_temp.end()), std::back_inserter(final),
+    std::transform(std::make_move_iterator(index_temp.begin()), std::make_move_iterator(index_temp.end()),
+                   std::back_inserter(final),
                    [](auto pair) {
                        return std::move(pair.second);
                    });
@@ -113,7 +112,7 @@ void Tokenizer::remove_punctuation(std::string &a) {
 }
 
 
-bool check_stop_words(const std::string &s, int bi, int ei) {
+bool Tokenizer::check_stop_words(const std::string &s, int bi, int ei) {
     static constexpr std::string_view stopwords[] = {"I", "ME", "MY", "MYSELF", "WE", "OUR", "OURS", "OURSELVES",
                                                      "YOU",
                                                      "YOUR", "YOURS", "HE", "HIM", "HIS", "HIMSELF", "SHE", "HER",

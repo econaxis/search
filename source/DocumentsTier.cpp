@@ -3,7 +3,6 @@
 #include "Serializer.h"
 #include "DocumentFrequency.h"
 #include <ostream>
-#include <iostream>
 
 
 
@@ -110,9 +109,4 @@ SingleDocumentsTier MultiDocumentsTier::TierIterator::read_all() {
 MultiDocumentsTier::TierIterator::TierIterator(std::istream &frequencies) : frequencies(frequencies) {
     remaining = Serializer::read_vnum(frequencies);
     read_position = frequencies.tellg();
-}
-
-
-void MultiDocs_test() {
-
 }

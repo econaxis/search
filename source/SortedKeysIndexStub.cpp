@@ -138,7 +138,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     while (max_terms_read-- > 0 || terms.tellg() <= file_end->terms_pos) {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
         // and since majority of keys don't fit within our criteria, previewing reduces computation and memory.
-        auto preview = Serializer::preview_work_index_entry(terms);
+         auto preview = Serializer::preview_work_index_entry(terms);
 
         // If the preview fits within the score cutoff, then we seek back to the previewed position and read the whole thing into memory
         // to process it.

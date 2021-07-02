@@ -46,7 +46,6 @@ TEST(indexing, indexes_ok) {
 }
 
 TEST(indexing, indexes_correctly_and_deserialize_correctly) {
-    LOOP_ITERS = 500;
     auto suffix = do_index("fddsvc fewivx vncms");
     SortedKeysIndexStub index(suffix);
 

@@ -27,7 +27,7 @@ inline void log(const std::string &log_string, const std::experimental::source_l
     auto deb_FUNCTION = fmt::format("SOURCE_FUNCTION={}", std::string(location.function_name()));
     auto deb_THREADID = fmt::format("THREADID={}", std::this_thread::get_id());
     auto deb_STRING = fmt::format("MESSAGE=\"{}\"", log_string);
-    auto final = fmt::format("{}\n[{},{},{},{}]",
+    auto final = fmt::format("{}         [{},{},{},{}]",
                              deb_STRING,
                              deb_FILE,
                              deb_FUNCTION,

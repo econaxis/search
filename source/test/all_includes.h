@@ -39,8 +39,16 @@ inline float LOOP_ITERS_MULTIPLY = 1;
 namespace utils {
     inline unsigned long rand() {
         static std::random_device dev;
-        static std::mt19937 rng(dev());
+        static const std::random_device::result_type seed = dev();
+        static std::mt19937 rng(seed);
         static std::uniform_int_distribution<unsigned long> dist6;
+        static bool printed = false;
+
+        // problematic seed: 485041656
+        if(!printed){
+            print("random seed: ", seed);
+            printed = true;
+        }
 
         return dist6(rng);
     }
@@ -94,6 +102,15 @@ inline std::string do_index(std::string must_include = "empty") {
     };
 
     return do_index_custom(call);
+}
+
+inline const SortedKeysIndexStub& get_index() {
+    static std::unique_ptr<SortedKeysIndexStub> index (nullptr);
+    if(index.get() == nullptr) {
+        LOOP_ITERS = 3000;
+        index  = std::make_unique<SortedKeysIndexStub>(do_index());
+    }
+    return *index;
 }
 
 

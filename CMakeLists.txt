@@ -77,20 +77,15 @@ add_custom_target(
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
 )
 add_custom_target(
-        namesdb ALL
+        namesdb2 ALL
         DEPENDS ${CMAKE_SOURCE_DIR}/rust/namesdb/src ${CMAKE_BINARY_DIR}/libnamesdb.so
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
 )
 
-add_library(libnamesdb SHARED IMPORTED)
-add_dependencies(libnamesdb namesdb)
-set_target_properties(libnamesdb
-        PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/libnamesdb.so)
-
-
-set_target_properties(namesdb PROPERTIES IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/libnamesdb.so)
-set_target_properties(c-search-abi PROPERTIES IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/libc-search-abi.so)
+#add_library(libnamesdb SHARED IMPORTED)
+#add_dependencies(libnamesdb namesdb)
+#set_target_properties(namesdb PROPERTIES IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/libnamesdb.so)
+#set_target_properties(c-search-abi PROPERTIES IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/libc-search-abi.so)
 
 add_dependencies(compactor rust-server)
 add_dependencies(general-indexer rust-server)
@@ -99,7 +94,7 @@ add_dependencies(rust-server c-search-abi)
 
 add_executable(stdinindexer source/StdinIndexer.cpp)
 target_include_directories(stdinindexer PRIVATE source/)
-target_link_libraries(stdinindexer PRIVATE general-indexer search-share libnamesdb)
+target_link_libraries(stdinindexer PRIVATE general-indexer search-share namesdb)
 
 
 add_subdirectory(extern/fmt)
@@ -158,5 +153,5 @@ endif ()
 #
 #include(CTest)
 #target_link_directories(default-tests PRIVATE ${CMAKE_BINARY_DIR})
-target_link_libraries(default-tests PRIVATE gtest_main search-share general-indexer libnamesdb)
+target_link_libraries(default-tests PRIVATE gtest_main search-share general-indexer namesdb )
 

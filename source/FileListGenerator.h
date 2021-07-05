@@ -29,7 +29,7 @@ namespace FileListGenerator {
     inline void delete_names_db() {
         if (*ndb != nullptr) {
             // NO need to do it, hold NDB for the rest of the program
-            // drop_name_database(*ndb);
+             drop_name_database(*ndb);
         }
     }
 

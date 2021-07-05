@@ -45,6 +45,11 @@ mod public_ffi {
         ndb.get_from_str(key).is_some()
     }
 
+    #[no_mangle]
+    pub extern fn drop_name_database(ndb: *mut NamesDatabase) {
+        unsafe {Box::from_raw(ndb)};
+    }
+
 
     #[no_mangle]
     pub extern fn serialize_namesdb(ndb: *mut NamesDatabase) {

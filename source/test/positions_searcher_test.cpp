@@ -19,6 +19,7 @@ public:
     // Override this to define how to tear down the environment.
     void TearDown() override {
         fs::remove_all(data_files_dir);
+        FileListGenerator::delete_names_db();
     }
 };
 

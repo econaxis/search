@@ -24,39 +24,6 @@ void TopDocs::append_multi(TopDocs other) {
 
 
 
-void TopDocs::merge_similar_docs() {
-    if (size() == 0) return;
-
-    auto &prev_doc = *begin();
-    auto collected_score = 0;
-
-    bool deleted_any = false;
-
-    // Merge similar docs.
-    for (auto &doc : docs) {
-        if (doc.document_id != prev_doc.document_id) {
-            prev_doc.document_freq += collected_score;
-            prev_doc = doc;
-            collected_score = 0;
-        } else {
-            collected_score += doc.document_freq;
-
-            // Invalidate the document's information.
-            doc.document_freq = 0;
-            doc.document_id = 0;
-            deleted_any = true;
-        }
-        prev_doc = doc;
-    }
-    prev_doc.document_freq = collected_score;
-
-    if (deleted_any)
-        docs.erase(std::remove_if(begin(), end(), [](const auto &t) {
-            return t.document_freq == 0 || t.document_id == 0;
-        }), end());
-
-}
-
 // Partial sorts the TopDocs collection by frequency. Useful for the last stage of processing when we don't care about maintaining
 // document id order, and instead want the top ranking documents.
 void TopDocs::sort_by_frequencies() {

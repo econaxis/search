@@ -27,7 +27,7 @@ constexpr uint64_t alphabet_pow[] = {LETTER_POW1, LETTER_POW2, LETTER_POW3, LETT
                                      LETTER_POW7, LETTER_POW8, LETTER_POW9, LETTER_POW10, LETTER_POW11, LETTER_POW12};
 
 
-constexpr std::size_t MAX_CHARS = 10;
+constexpr std::size_t MAX_CHARS = 11;
 
 /**
  * Used to convert a string to a 64 bit unsigned integer for quicker comparison and easier memory usage.
@@ -44,12 +44,13 @@ Base26Num::Base26Num(std::string from) {
     }
 }
 
+// Increment/decrement (determined by sign of idx) the "abs(idx)"th index of the string.
 Base26Num Base26Num::fiddle(int idx) {
     assert(std::abs(idx) < MAX_CHARS);
     assert(idx != 0);
 
     auto absidx = std::abs(idx);
-    int sign = !std::signbit(idx);
+    int sign = idx / absidx;
 
     return Base26Num{num + sign * alphabet_pow[MAX_CHARS - (absidx - 1) - 1]};
 }

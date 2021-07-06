@@ -114,22 +114,26 @@ void correct_freq_pos_locations(std::istream &terms, std::istream &frequencies) 
 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
-    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-3));
-    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(3));
-
+    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-4));
+    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(4));
 
     // Occurs when there's an empty index. No way to prefix-match, and we have to exit early.
-    if (file_start == index.end()) {
+    if (file_start >= index.end()) {
         print("ERROR: Cannot seek to index for search term ", term);
         return {};
     };
 
-    if (file_end == index.end()) file_end = index.end() - 1;
+    if (file_end >= index.end()) file_end = index.end() - 1;
+
+    // Want to support prefix searching, so we'll start from way before "term" is supposed to be, and look for all possible matches.
+    // Looking at a whole range from before and after "term" to imitate fuzzy searching.
+    // We can't decrement this when calling std::lower_bound because pointer overflow might occur, and the check
+    // "file_start >= index.end()" would be faulty.
+    if(file_start > index.begin()) file_start--;
 
     terms.seekg(file_start->terms_pos);
     correct_freq_pos_locations(terms, frequencies);
 
-    TopDocs output;
     std::vector<TopDocs> outputs;
     std::vector<int> output_score;
     outputs.reserve(50);
@@ -146,7 +150,6 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         // to process it.
         auto min_cutoff_score = compute_average(output_score.begin(), output_score.end());
         if (auto score = string_prefix_compare(term, preview.key); score >= min_cutoff_score) {
-            log("Matched term, searched term ", preview.key, term, " score: ", score);
             // Seek back to original previewed position.
             frequencies.seekg(preview.frequencies_pos);
 
@@ -154,10 +157,10 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             auto files = ti.read_next().value();
 
 
+            log("Matched term, searched term " +  preview.key + " " + term, "score:", score, "docs size:", files.size());
             auto tot_score = 0;
             for (auto &i : files) {
-                float coefficient = std::log10(i.document_freq) + 1;
-                i.document_freq = coefficient * score;
+                i.document_freq = (std::log10(i.document_freq) + 1) * score;
                 tot_score += i.document_freq;
             }
             TopDocs td(std::move(files));

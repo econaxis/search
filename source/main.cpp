@@ -40,7 +40,6 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
                 i++;
             }
         }
-//        ResultsPrinter::print_results(result, filemap, query);
 
         if (i % 3 == 0)
             std::cout << "Matched " << size << " files for " << temp1 << " " << temp << " "
@@ -50,7 +49,6 @@ void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::
     auto timedbl = duration_cast<milliseconds>(time).count();
     std::cout << "Time for " << NUM_SEARCHES << " queries: " << timedbl << "\n";
 
-    exit(0);
 }
 
 std::pair<std::vector<SortedKeysIndexStub>, std::vector<std::vector<DocIDFilePair>>>

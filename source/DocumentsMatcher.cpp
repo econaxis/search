@@ -110,7 +110,8 @@ TopDocs AND(std::vector<TopDocs> &results) {
 
     if (!min_docs.size()) return TopDocs();
 
-    TopDocs accepted_list;
+    // The underlying container type of `TopDocs`, so we can manipulate it easily.
+    std::vector<TopDocs::value_type> accepted_list;
 
     // Cutoff must be above the average score.
     for (auto pair = min_docs.begin(); pair != min_docs.end(); pair++) {
@@ -139,15 +140,14 @@ TopDocs AND(std::vector<TopDocs> &results) {
 
         if (exists_in_all) {
             // Walk vector again to find the positions.
-            accepted_list.docs.emplace_back(pair->document_id, acculumated_score);
+            accepted_list.emplace_back(pair->document_id, acculumated_score);
         }
     }
-
     exit_loop:;
 
     log("AND query final number of elements: ", accepted_list.size());
 
-    return accepted_list;
+    return TopDocs(std::move(accepted_list));
 
 }
 
@@ -157,7 +157,7 @@ TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
     while (ret.size() < 20) {
         bool has_more = false;
         for (auto &td : outputs) {
-            if (td.extend_from_tier_iterator(3)) {
+            if (td.extend_from_tier_iterators()) {
                 has_more = true;
                 log("search extended from tier iterator once");
             }

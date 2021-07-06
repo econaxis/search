@@ -6,7 +6,7 @@ using namespace std;
 TEST(DocumentsMatcher, test) {
     constexpr int MAXDOCID = 2000000;
     constexpr int num_elems = MAXDOCID / 6;
-    std::vector<TopDocs> a(6);
+    std::vector<std::vector<TopDocs::value_type>> a(6);
     vector<set<uint32_t>> intersect(6);
 
     for (int i = 0; i < a.size(); i++) {
@@ -23,20 +23,23 @@ TEST(DocumentsMatcher, test) {
             this_docids.insert(static_cast<uint32_t>(id));
         }
         for (auto &j : this_docids) {
-            a[i].docs.emplace_back(j, 1);
+            a[i].emplace_back(j, 1);
         }
-        std::sort(a[i].docs.begin(), a[i].docs.end());
+        std::sort(a[i].begin(), a[i].end());
     }
 
     log("TEST: Matching:", intersect.back().size(), "total:", MAXDOCID);
 
-    auto and_result = DocumentsMatcher::AND_Driver(a);
+    std::vector<TopDocs> td;
+    for (auto &v : a) td.emplace_back(v);
+
+    auto and_result = DocumentsMatcher::AND_Driver(td);
 
     std::vector<uint32_t> intersected(intersect.back().begin(), intersect.back().end());
 
     ASSERT_EQ(intersected.size(), and_result.size());
-    for (int i = 0; i < and_result.size(); i++) {
-        ASSERT_EQ(intersected[i], and_result.docs[i].document_id);
+    for (auto i = and_result.begin(); i != and_result.end(); i++) {
+        ASSERT_EQ(intersected[i - and_result.begin()], i->document_id);
     }
 }
 
@@ -51,9 +54,9 @@ TEST(TopDocs, empty_term) {
 
     auto tdbak = td;
 
-    td.extend_from_tier_iterator(1);
+    td.extend_from_tier_iterators();
 
-    ASSERT_EQ(tdbak.docs, td.docs);
+    ASSERT_TRUE(std::equal(tdbak.begin(), tdbak.end(), td.begin(), td.end()));
 }
 
 TEST(DocumentsMatcher, one_filled_test) {
@@ -103,7 +106,7 @@ TEST(DocumentsMatcher, two_filled_test_v3) {
                             {3002, 9}
                     });
     ASSERT_EQ(DocumentsMatcher::AND_Driver(td).size(), 1);
-    ASSERT_EQ(DocumentsMatcher::AND_Driver(td).docs[0].document_id, 12);
+    ASSERT_EQ(DocumentsMatcher::AND_Driver(td).get_inner()[0].document_id, 12);
 }
 
 TEST(DocumentsMatcher, two_filled_test_v4) {
@@ -119,7 +122,7 @@ TEST(DocumentsMatcher, two_filled_test_v4) {
                             {3002, 9}
                     });
     ASSERT_EQ(DocumentsMatcher::AND_Driver(td).size(), 1);
-    ASSERT_EQ(DocumentsMatcher::AND_Driver(td).docs[0].document_id, 12);
+    ASSERT_EQ(DocumentsMatcher::AND_Driver(td).get_inner()[0].document_id, 12);
 }
 
 
@@ -151,15 +154,17 @@ TEST(DocumentsMatcher, can_extend_if_needed) {
 
         ASSERT_GE(total_and_size, 0);
 
-        for(auto& d : anded) {
-            for(auto& td : res) {
-                auto find = std::find(td.docs.begin(), td.docs.end(), d);
-                ASSERT_NE(find, td.docs.end());
-                td.docs.erase(find);
+        for (auto &d : anded) {
+            for (auto &td : res) {
+                auto cloned = td.get_inner();
+                auto find = std::find(cloned.begin(), cloned.end(), d);
+                ASSERT_NE(find, cloned.end());
+                cloned.erase(find);
+                td = TopDocs(cloned);
             }
         }
 
-        if(anded.size() == 0) {
+        if (anded.size() == 0) {
             break;
         }
     }

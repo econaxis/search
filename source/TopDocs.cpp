@@ -1,5 +1,8 @@
 #include "TopDocs.h"
 
+template<class InputIt1,  class OutputIt>
+static OutputIt merge_combine(InputIt1 first1, InputIt1 last1, InputIt1 first2, InputIt1 last2, OutputIt d_first);
+
 void TopDocs::append_multi(TopDocs other) {
     const auto iend = other.end();
     const auto ibegin = other.begin();
@@ -9,7 +12,6 @@ void TopDocs::append_multi(TopDocs other) {
 
     std::vector<value_type> merged(prev + addsize);
 
-    
 
     auto lastelem = merge_combine(ibegin, iend, begin(), end(), merged.begin());
 
@@ -33,9 +35,14 @@ void TopDocs::sort_by_frequencies() {
     });
 }
 
-bool TopDocs::extend_from_tier_iterator(int how_many) {
+//static T
+
+// Extends the sorted TopDocs list to include more documents.
+// Since there could be multiple matching terms, we have to merge multiple sorted lists iteratively.
+// Implemented using a double-buffer to do merges.
+bool TopDocs::extend_from_tier_iterators() {
     std::vector<DocumentFrequency> extended;
-    extended.resize(how_many * MultiDocumentsTier::BLOCKSIZE * 2 * included_terms.size());
+    extended.resize(MultiDocumentsTier::BLOCKSIZE * 2 * included_terms.size());
     auto extended1 = extended;
 
     auto ptr = &extended;
@@ -51,20 +58,18 @@ bool TopDocs::extend_from_tier_iterator(int how_many) {
     };
 
     bool has_more = false;
-    for (auto& possible_matching_term : included_terms) {
-        for (int i = 0; i < how_many; i++) {
-            auto n = possible_matching_term.extend(1);
-            if (n) {
-                auto oldrange = ptr;
-                auto newrange = flip();
+    for (auto &possible_matching_term : included_terms) {
+        auto n = possible_matching_term.extend();
+        if (n) {
+            auto oldrange = ptr;
+            auto newrange = flip();
 
-                assert(lastelem -oldrange->begin() + n->size() <= newrange->size());
+            assert(lastelem - oldrange->begin() + n->size() <= newrange->size());
 
-                lastelem = std::merge(oldrange->begin(), lastelem, n->begin(), n->end(), newrange->begin());
-                has_more = true;
-            } else {
-                break;
-            }
+            lastelem = std::merge(oldrange->begin(), lastelem, n->begin(), n->end(), newrange->begin());
+            has_more = true;
+        } else {
+            break;
         }
     }
 
@@ -76,7 +81,42 @@ bool TopDocs::extend_from_tier_iterator(int how_many) {
 }
 
 std::optional<const char *> TopDocs::get_first_term() const {
-    if(included_terms.empty()) {
+    if (included_terms.empty()) {
         return std::nullopt;
     } else return included_terms.front().term.data();
+}
+
+
+
+
+template<class InputIt1, class OutputIt>
+OutputIt merge_combine(InputIt1 first1, InputIt1 last1, InputIt1 first2, InputIt1 last2, OutputIt d_first) {
+
+    while (first1 != last1) {
+        if (first2 == last2) {
+            d_first = std::copy(first1, last1, d_first);
+            return d_first;
+        }
+        if (*first2 < *first1) {
+
+            *d_first = *first2;
+            d_first++;
+            ++first2;
+        } else if (*first1 < *first2) {
+            *d_first = *first1;
+            d_first++;
+            ++first1;
+        } else {
+            // They are equals.
+            auto merged = *first1;
+            merged.document_freq += (*first2).document_freq;
+
+            *d_first = merged;
+            d_first++;
+            ++first1;
+            ++first2;
+        }
+    }
+    d_first = std::copy(first2, last2, d_first);
+    return d_first;
 }

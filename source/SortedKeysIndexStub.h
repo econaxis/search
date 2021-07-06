@@ -33,7 +33,6 @@ inline bool operator<(const StubIndexEntry &stub, const Base26Num &other) {
     return stub.key < other;
 }
 
-#include "DocIDFilePair.h"
 #include "FPStub.h"
 #include "WordIndexEntry.h"
 #include "DocumentPositionPointer.h"

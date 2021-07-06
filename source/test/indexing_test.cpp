@@ -61,10 +61,11 @@ TEST(indexing, indexes_correctly_and_deserialize_correctly) {
 
     EXPECT_GT(AND.size(), 0);
 
-    auto res_bad = index.search_many_terms({"SHOULDNOTHAVE~", "SHOULDNOTHAVEAGAIN"});
+    auto res_bad = index.search_many_terms({"SHOULDNOTHAVE", "SHOULDNOTHAVEAGAIN"});
     EXPECT_EQ(res_bad[0].size(), 0);
     EXPECT_EQ(res_bad[1].size(), 0);
 
+    // Check documentsmatcher on empty results is OK.
     AND = DocumentsMatcher::AND_Driver(res_bad);
     EXPECT_EQ(AND.size(), 0);
 }

@@ -3,7 +3,7 @@
 #include "FPStub.h"
 #include <fstream>
 
-FPStub::FPStub(const fs::path& path)  {
+FPStub::FPStub(const fs::path &path) {
     auto stream = std::ifstream(path, std::ios_base::binary);
     assert(stream);
     auto fp = Serializer::read_filepairs(stream);
@@ -16,12 +16,14 @@ FPStub::FPStub(const fs::path& path)  {
     joined_names.reserve(fp.size() * fp[0].file_name.size());
 
     for (auto &p : fp) {
-        map.emplace(p.document_id, p.file_name);
+        map.emplace(p.document_id, FPStub::StringSlice{joined_names.size(), p.file_name.size()});
+        joined_names.append(p.file_name);
     }
 }
 
 std::string FPStub::query(uint32_t docid) const {
-    auto it =  map.find(docid);
-    if(it == map.end()) return "File not found";
-    else return it->second;
+    auto it = map.find(docid);
+    if (it == map.end()) return "File not found";
+
+    return std::string(joined_names, it->second.index, it->second.size);
 }

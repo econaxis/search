@@ -60,13 +60,13 @@ TEST(Searching, more_precise_searching_test) {
             return random_words.str();
         }
     };
-
+    LOOP_ITERS = 200;
     auto suffix = do_index_custom(generator);
     SortedKeysIndexStub index(suffix);
     auto temp = index.search_many_terms({"RUDSVF", "UVNCXK", "AVNCXRU"});
 
     // Expand all to avoid the chunking optimization
-    for(auto& td : temp) td.extend_from_tier_iterator(10000);
+    for(auto& td : temp) td.extend_from_tier_iterators();
 
     auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(index, temp, {"RUDSVF", "UVNCXK", "AVNCXRU"});
 

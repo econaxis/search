@@ -4,13 +4,13 @@
 #include <TopDocsResultsJoiner.h>
 #include <robin_hood/robin_hood.h>
 
-std::string get_random_word() {
+static std::string get_random_word() {
     constexpr auto sz = std::size(strings);
     return std::string(strings[utils::rand() % sz]);
 }
 
 
-void get_or_insert(std::unordered_map<std::string, int> &map, std::string &val) {
+static void get_or_insert(std::unordered_map<std::string, int> &map, std::string &val) {
     if (auto it = map.find(val); it != map.end()) {
         it->second++;
     } else {

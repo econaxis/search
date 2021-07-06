@@ -16,11 +16,8 @@ struct PossiblyMatchingTerm {
                          MultiDocumentsTier::TierIterator ti,
                          uint32_t score) : term(term), ti(ti), score(score) {};
 
-    std::optional<SingleDocumentsTier> extend(int how_many) {
-        auto sdt = [how_many, this]() {
-            if (how_many > 3) return std::optional(ti.read_all());
-            else return ti.read_next();
-        }();
+    std::optional<SingleDocumentsTier> extend() {
+        auto sdt =  ti.read_next();
 
         // Multiply document frequency by the score (of how well the search term matches the existing term)
         // Score is determined upstream by the index (SortedKeysIndexStub)

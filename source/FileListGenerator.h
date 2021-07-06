@@ -14,23 +14,27 @@ constexpr unsigned int MAX_FILES_PER_INDEX = 300000;
 namespace FileListGenerator {
     using FilePairs = std::vector<DocIDFilePair>;
     namespace fs = std::filesystem;
-    inline std::shared_ptr<NamesDatabase *> ndb{nullptr};
+
+    struct NamesDatabaseRAIIWrapper {
+        NamesDatabase *inner;
+
+        ~NamesDatabaseRAIIWrapper() noexcept {
+            std::cout<<"Dropping NDB";
+            drop_name_database(inner);
+        }
+        NamesDatabaseRAIIWrapper(NamesDatabase *inner) : inner(inner) {};
+    };
+
+    inline std::shared_ptr<NamesDatabaseRAIIWrapper> ndb{nullptr};
 
 
     inline NamesDatabase *get_ndb() {
-        if (!ndb || *ndb == nullptr) {
+        if (!ndb || ndb->inner == nullptr) {
             auto path = indice_files_dir;
-            ndb = std::make_shared<NamesDatabase *>(new_name_database(path.c_str()));
-            std::cout<<"Created NDB\n";
+            ndb = std::make_shared<NamesDatabaseRAIIWrapper>(new_name_database(path.c_str()));
+            std::cout << "Created NDB\n";
         }
-        return *ndb;
-    }
-
-    inline void delete_names_db() {
-        if (*ndb != nullptr) {
-            // NO need to do it, hold NDB for the rest of the program
-             drop_name_database(*ndb);
-        }
+        return ndb->inner;
     }
 
     inline std::ifstream &get_index_files() {

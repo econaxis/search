@@ -17,9 +17,11 @@
 
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
+SortedKeysIndex thread_process_files(SyncedQueue &file_contents);
+std::string persist_indices(const SortedKeysIndex &master,
+                            const FilePairs &filepairs);
 
-
-void queue_produce_file_contents(SyncedQueue &contents) {
+static void queue_produce_file_contents(SyncedQueue &contents) {
     const FilePairs filepairs = FileListGenerator::from_file();
 
     std::vector<SyncedQueue::value_type> thread_local_holder;
@@ -61,8 +63,7 @@ void queue_produce_file_contents(SyncedQueue &contents) {
     contents.cv.notify_all();
 }
 
-
-void sort_and_group_all_par(std::vector<WordIndexEntry> &index) {
+static void sort_and_group_all_par(std::vector<WordIndexEntry> &index) {
     std::for_each(std::execution::par, index.begin(), index.end(), [](WordIndexEntry &elem) {
         std::sort(elem.files.begin(), elem.files.end());
     });
@@ -109,8 +110,8 @@ std::string GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc*
     return persist_indices(a1, file_contents.filepairs);
 }
 
-SortedKeysIndex
-GeneralIndexer::thread_process_files(SyncedQueue &file_contents) {
+
+SortedKeysIndex thread_process_files(SyncedQueue &file_contents) {
     std::array<SortedKeysIndex, 10> reducer{};
     while (true) {
         if(file_contents.done_flag && !file_contents.size()) {
@@ -124,7 +125,7 @@ GeneralIndexer::thread_process_files(SyncedQueue &file_contents) {
             break;
         }
 
-        log("Processing file ", docidfilepair.document_id);
+        log("Processing file ", docidfilepair.file_name);
 
         auto should_insert = std::min_element(reducer.begin(), reducer.end(), [](auto &i, auto &b) {
             return i.get_index().size() < b.get_index().size();
@@ -142,9 +143,7 @@ GeneralIndexer::thread_process_files(SyncedQueue &file_contents) {
     return reducer[0];
 }
 
-
-std::string GeneralIndexer::persist_indices(const SortedKeysIndex &master,
-                                            const FilePairs &filepairs) {// Multiple indices output possible. Check them.
+std::string persist_indices(const SortedKeysIndex &master, const FilePairs &filepairs) {
 
     std::string suffix = random_b64_str(6);
 
@@ -157,28 +156,4 @@ std::string GeneralIndexer::persist_indices(const SortedKeysIndex &master,
 
 
     return suffix;
-}
-
-
-int GeneralIndexer::read_and_compress_files() {
-
-    auto do_two = []() -> std::optional<std::string> {
-        auto first = GeneralIndexer::read_some_files(queue_produce_file_contents);
-        if (!first) return std::nullopt;
-        auto second = GeneralIndexer::read_some_files(queue_produce_file_contents);
-        if (!second) return std::nullopt;
-        return Compactor::compact_two_files(*first, *second);
-    };
-
-    auto one = do_two();
-    auto two = do_two();
-    auto three = do_two();
-    auto four = do_two();
-
-    if (!one || !two || !three || !four) return -1;
-
-    auto onetwo = Compactor::compact_two_files(*one, *two).value();
-    auto threefour = Compactor::compact_two_files(*three, *four).value();
-    auto main_suffix = Compactor::compact_two_files(onetwo, threefour).value();
-    return 0;
 }

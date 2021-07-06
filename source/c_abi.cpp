@@ -64,19 +64,12 @@ void deallocate_vec(std::vector<DocIDFilePair> *ptr) {
 /*
  * Below are functions to load, search, and deallocate StubIndexes.
  */
-
-
 void initialize_dir_vars() {
     initialize_directory_variables();
 }
 
-struct DocumentPositionPointer_v2_imbued {
-    uint32_t document_id;
-    uint32_t frequency;
-    uint8_t index_num;
-};
 
-void
+static void
 serialize_final_doc_to_json(std::ostream &out, dm::TopDocsWithPositions::Elem &entry, const std::string &filename) {
     static constexpr auto format_string = R"({{"fn":"{0}","df":{1},"matches":{2}}})";
     static constexpr auto matches_array_format_string = R"([{0},{1},{2},{3}])";

@@ -18,8 +18,8 @@ public:
 
     // Override this to define how to tear down the environment.
     void TearDown() override {
-        fs::remove_all(data_files_dir);
-        FileListGenerator::delete_names_db();
+//        fs::remove_all(data_files_dir);
+//        FileListGenerator::delete_names_db();
     }
 };
 
@@ -89,8 +89,9 @@ TEST(SerializationWordIndexEntry, can_serialize_and_load_wies) {
 
 TEST(FilePairs, filepairs_test) {
     vector<DocIDFilePair> fp;
+    constexpr int TOTAL_FILEPAIRS = 10000;
     int i = 0;
-    for (; i < 100000; i++) fp.push_back({static_cast<uint32_t>(i + 1), random_b64_str(50)});
+    for (; i < TOTAL_FILEPAIRS; i++) fp.push_back({static_cast<uint32_t>(i + 1), random_b64_str(50)});
 
     Serializer::serialize("TEST-filepairs", fp);
     SUCCEED() << "Serialized filepairs";
@@ -100,5 +101,8 @@ TEST(FilePairs, filepairs_test) {
     for (auto&[id, filename] : fp) {
         ASSERT_EQ(fpstub.query(id), filename) << "ID is: " << id;
     }
+
+    // Now test if there's an invalid ID, what happens.
+    ASSERT_EQ(fpstub.query(59873287), "File not found");
 }
 

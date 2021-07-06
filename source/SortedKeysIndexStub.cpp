@@ -8,8 +8,6 @@
 #include "Constants.h"
 #include "DocumentFrequency.h"
 
-// TODO: implement tiered postings list for quicker retrieval of very large indexes.
-
 namespace fs = std::filesystem;
 
 
@@ -62,34 +60,34 @@ static int compute_average(Iterator begin, Iterator end) {
 std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string &term) const {
     auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term)) - 1;
 
-    if (file_start == index.end()) { return std::nullopt; }
+    // If we can get a lower bound, then continue searching more precisely.
+    if (file_start != index.end()) {
+        // We assume that the positions of `terms` and `frequencies` are indetermined.
+        // Therefore, we seek to the correct location as determined by the file_start StubIndEntry,
+        // read the frequencies_pos, then seek the `frequencies` stream to that location.
+        // Now, we have both streams at the correct location.
+        auto terms_pos = file_start->terms_pos;
+        terms.seekg(terms_pos);
 
-    // We assume that the positions of `terms` and `frequencies` are indetermined.
-    // Therefore, we seek to the correct location as determined by the file_start StubIndEntry,
-    // read the frequencies_pos, then seek the `frequencies` stream to that location.
-    // Now, we have both streams at the correct location.
-    auto terms_pos = file_start->terms_pos;
-    terms.seekg(terms_pos);
+        while (true) {
+            auto preview = Serializer::preview_work_index_entry(terms);
+            if (preview.key.compare(term) > 0 || terms.bad()) {
+                break;
+            }
 
-    while (true) {
-        auto preview = Serializer::preview_work_index_entry(terms);
-        if (preview.key.compare(term) > 0 || terms.bad()) {
-            break;
-        }
-
-        if (preview.key == term) {
-            return preview;
+            if (preview.key == term) {
+                return preview;
+            }
         }
     }
+
+    log("WARN Cannot get positions for term: ", term);
     return std::nullopt;
 }
 
 std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string &term) const {
     auto loc = seek_to_term(term);
     if (loc) {
-//        positions.clear();
-//        frequencies.clear();
-
         positions.seekg(loc->positions_pos);
         frequencies.seekg(loc->frequencies_pos);
 
@@ -197,9 +195,7 @@ std::vector<TopDocs> SortedKeysIndexStub::search_many_terms(const std::vector<st
 }
 
 
-constexpr std::size_t BUFLEN = 1000;
-
-SortedKeysIndexStub::SortedKeysIndexStub(const std::string& suffix) :
+SortedKeysIndexStub::SortedKeysIndexStub(const std::string &suffix) :
         frequencies(std::ifstream(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary)),
         terms(std::ifstream(indice_files_dir / ("terms-" + suffix), std::ios_base::binary)),
         positions(std::ifstream(indice_files_dir / ("positions-" + suffix), std::ios_base::binary)),

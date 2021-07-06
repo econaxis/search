@@ -20,5 +20,5 @@ TEST(TopDocs, append_correctly) {
                             {10, 2},
                             {11, 2}});
 
-    ASSERT_EQ(td.docs, correct.docs);
+    ASSERT_TRUE(std::equal(td.begin(), td.end(), td2.begin(), td2.end()));
 }

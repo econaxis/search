@@ -84,7 +84,7 @@ inline std::string do_index_custom(auto callable) {
     std::cin.rdbuf(fakecin.rdbuf());
     std::vector<std::string> filenames(multed), files(multed);
     repeat(multed, [&](int i) {
-        filenames[i] = random_b64_str(10);
+        filenames[i] = random_b64_str(7);
 
         files[i].append(fmt::format(" {} ", callable(i, filenames[i])));
         fmt::print(fakecin, "filename {} /endfilename file {} /endfile ", filenames[i], files[i]);
@@ -93,12 +93,12 @@ inline std::string do_index_custom(auto callable) {
     fmt::print(fakecin, "/endindexing\n");
 
     auto suffix = GeneralIndexer::read_some_files(queue_produce_file_contents_stdin);
-    return *suffix;
+    return suffix;
 }
 
-inline std::string do_index(std::string must_include = "empty") {
+inline std::string do_index(std::string must_include = "") {
     auto call = [&](int _, auto __unused) {
-        return fmt::format("{} {} {}", generate_words(100), must_include, generate_words(100));
+        return fmt::format("{} {} {}", generate_words(50), must_include, generate_words(50));
     };
 
     return do_index_custom(call);
@@ -107,7 +107,7 @@ inline std::string do_index(std::string must_include = "empty") {
 inline const SortedKeysIndexStub& get_index() {
     static std::unique_ptr<SortedKeysIndexStub> index (nullptr);
     if(index.get() == nullptr) {
-        LOOP_ITERS = 3000;
+        LOOP_ITERS = 1000;
         index  = std::make_unique<SortedKeysIndexStub>(do_index());
     }
     return *index;

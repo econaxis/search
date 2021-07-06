@@ -90,6 +90,7 @@ add_custom_target(
 add_dependencies(compactor rust-server)
 add_dependencies(general-indexer rust-server)
 add_dependencies(rust-server c-search-abi)
+add_dependencies(general-indexer namesdb2)
 
 
 add_executable(stdinindexer source/StdinIndexer.cpp)
@@ -153,5 +154,5 @@ endif ()
 #
 #include(CTest)
 #target_link_directories(default-tests PRIVATE ${CMAKE_BINARY_DIR})
-target_link_libraries(default-tests PRIVATE gtest_main search-share general-indexer namesdb )
+target_link_libraries(default-tests PRIVATE gtest_main search-share general-indexer namesdb)
 

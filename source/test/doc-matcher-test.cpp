@@ -1,3 +1,7 @@
+#define private public
+#include "TopDocs.h"
+#undef private
+
 #include "all_includes.h"
 #include <gtest/gtest.h>
 
@@ -125,18 +129,16 @@ TEST(DocumentsMatcher, two_filled_test_v4) {
     ASSERT_EQ(DocumentsMatcher::AND_Driver(td).get_inner()[0].document_id, 12);
 }
 
-
 TEST(DocumentsMatcher, can_extend_if_needed) {
-    LOOP_ITERS = MultiDocumentsTier::BLOCKSIZE * 10;
+    LOOP_ITERS = MultiDocumentsTier::BLOCKSIZE * 50;
     int total_and_size = 0;
     auto suffix = do_index_custom([&](int index, auto _) {
         auto before = generate_words(3);
-        if (index % 3 == 0) before += " testword ";
-        if (index % 4 == 0) before += " testwordone ";
-        if (index % 5 == 0) before += " testwordtwo ";
-        if (index % 7 == 0) before += " testwordthree ";
+        if (index % 4 == 0) before += " testword ";
+        if (index % 5 == 0) before += " testwordone ";
+        if (index % 7 == 0) before += " testwordtwo ";
 
-        if (index % (3 * 4 * 5 * 7) == 0) {
+        if (index % (4 * 5 * 7) == 0) {
             total_and_size++;
         }
 
@@ -144,7 +146,7 @@ TEST(DocumentsMatcher, can_extend_if_needed) {
     });
     SortedKeysIndexStub index(suffix);
 
-    auto res = index.search_many_terms({"TESTWORD", "TESTWORDONE", "TESTWORDTWO", "TESTWORDTHREE"});
+    auto res = index.search_many_terms({"TESTWORD", "TESTWORDONE", "TESTWORDTWO"});
 
     while (true) {
         auto anded = DocumentsMatcher::AND_Driver(res);
@@ -155,12 +157,13 @@ TEST(DocumentsMatcher, can_extend_if_needed) {
         ASSERT_GE(total_and_size, 0);
 
         for (auto &d : anded) {
+            ASSERT_EQ(d.document_id % (4 * 5 * 7), 0);
             for (auto &td : res) {
                 auto cloned = td.get_inner();
                 auto find = std::find(cloned.begin(), cloned.end(), d);
                 ASSERT_NE(find, cloned.end());
                 cloned.erase(find);
-                td = TopDocs(cloned);
+                td.docs = cloned;
             }
         }
 

@@ -4,6 +4,9 @@
 #include <TopDocsResultsJoiner.h>
 #include <robin_hood/robin_hood.h>
 
+
+#include "dict_strings.h"
+
 static std::string get_random_word() {
     constexpr auto sz = std::size(strings);
     return std::string(strings[utils::rand() % sz]);
@@ -65,7 +68,6 @@ TEST(MultipleIndices, multiple_indices) {
         if (frequency < 10) continue;
 
         if(Tokenizer::check_stop_words(word, 0, word.size())) continue;
-        print("Testing ", word);
 
         std::vector<std::string> query{word};
         auto result = TopDocsResultsJoiner::query_multiple_indices(indices_span, query);

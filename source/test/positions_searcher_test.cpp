@@ -1,7 +1,7 @@
 #include <bits/stdc++.h>
 #include "all_includes.h"
 #include <gtest/gtest.h>
-
+#include "compactor/Compactor.h"
 using namespace std;
 
 class Environment : public ::testing::Environment {

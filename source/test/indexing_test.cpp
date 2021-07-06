@@ -28,7 +28,7 @@ TEST(indexing, indexing) {
     thread.join();
 
     int curiter = 0;
-    while (!queue.done_flag || queue.size()) {
+    while (!queue.input_is_done || queue.size()) {
         ASSERT_EQ(files[curiter++], queue.pop().first);
     }
 

@@ -8,21 +8,13 @@
 #include "rust-interface.h"
 #include "c_abi.h"
 #include "SortedKeysIndex.h"
-#include "dict_strings.h"
-#include "IndexFileLocker.h"
-#include "logger.h"
-#include "TermsListSearcher.h"
-#include "Base26Num.h"
 #include "SortedKeysIndexStub.h"
-#include "compactor/Compactor.h"
 #include "Tokenizer.h"
 #include "DocIDFilePair.h"
 #include "FileListGenerator.h"
 #include "SyncedQueue.h"
 #include "WordIndexEntry.h"
 #include "DocumentsMatcher.h"
-#include "DocumentPositionPointer.h"
-#include "DocumentFrequency.h"
 #include "TopDocs.h"
 #include "FPStub.h"
 #include "DocumentsTier.h"
@@ -40,7 +32,7 @@ namespace utils {
     inline unsigned long rand() {
         static std::random_device dev;
         static const std::random_device::result_type seed = dev();
-        static std::mt19937 rng(seed);
+        static std::mt19937 rng(8124555);
         static std::uniform_int_distribution<unsigned long> dist6;
         static bool printed = false;
 

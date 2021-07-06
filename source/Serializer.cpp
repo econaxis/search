@@ -131,7 +131,7 @@ void Serializer::serialize_vnum(std::ostream &stream, uint32_t number, bool pad3
         number = number << 3;
         number |= 1 << 2;
         write_num(static_cast<uint32_t>(number));
-    } else if (number <= uint64max && !pad32) { // not supported
+    } else if (!pad32) {
         uint64_t num64 = ((uint64_t) number) << 4;
         num64 |= 1 << 3;
         write_num(num64);

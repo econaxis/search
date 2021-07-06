@@ -138,10 +138,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     std::vector<int> output_score;
     outputs.reserve(50);
 
-    auto max_terms_read = (file_end - file_start - 1) * STUB_INTERVAL;
-
-
-    while (max_terms_read-- > 0 || terms.tellg() <= file_end->terms_pos) {
+    while (true) {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
         // and since majority of keys don't fit within our criteria, previewing reduces computation and memory.
         auto preview = Serializer::preview_work_index_entry(terms);
@@ -157,7 +154,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             auto files = ti.read_next().value();
 
 
-            log("Matched term, searched term " +  preview.key + " " + term, "score:", score, "docs size:", files.size());
+//            log("Matched term, searched term " +  preview.key + " " + term, "score:", score, "docs size:", files.size());
             auto tot_score = 0;
             for (auto &i : files) {
                 i.document_freq = (std::log10(i.document_freq) + 1) * score;
@@ -172,10 +169,14 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             output_score.emplace_back(tot_score / td.size());
             outputs.push_back(std::move(td));
         }
+
+        // Check the exit condition. Has to be placed after the comparing code because file_end is inclusive (it should also be processed).
+        if(Base26Num(preview.key).num >= file_end->key.num) break;
     }
 
+
     if (outputs.empty()) {
-        print("WARN: No terms found for ", term);
+        log("WARN: No terms found for ", term);
         return TopDocs{};
     };
 

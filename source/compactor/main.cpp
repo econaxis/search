@@ -129,7 +129,6 @@ int main(int argc, char *argv[]) {
                 break;
             }
         };
-        FileListGenerator::delete_names_db();
     }
 
 

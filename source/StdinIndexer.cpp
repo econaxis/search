@@ -16,14 +16,11 @@ int main() {
     auto str = GeneralIndexer::read_some_files(queue_produce_file_contents_stdin);
     IndexFileLocker::do_lambda([&] {
         std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
-        index_file << *str << "\n";
+        index_file << str << "\n";
     });
 
 
-    if(str) std::cout<<"Suffix: " <<*str <<"\n";
-    else {
-        std::cerr<<"No suffix received\n";
-    }
+    std::cout<<"Suffix: " << str <<"\n";
 }
 
 

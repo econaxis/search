@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
 
     if (argc == 1) {
         while (true) {
-            GeneralIndexer::read_and_compress_files();
+//            GeneralIndexer::read_some_files();
         };
         return 1;
     };

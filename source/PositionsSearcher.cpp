@@ -163,10 +163,7 @@ PositionsSearcher::fill_positions_from_docs(const SortedKeysIndexStub &index,
     PositionsMatrix positions_list(query_terms.size());
 
     for (int i = 0; i < query_terms.size(); i++) {
-        std::string terms_list{};
         positions_list[i] = index.get_positions_for_term(query_terms[i]);
-        terms_list += std::string(query_terms[i]) + " ";
-        log("terms list: ", terms_list);
     }
 
     return positions_list;

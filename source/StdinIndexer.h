@@ -63,7 +63,7 @@ inline void queue_produce_file_contents_stdin(SyncedQueue &contents) {
 #endif
         }
     }
-    contents.done_flag = true;
+    contents.input_is_done = true;
     contents.cv.notify_all();
 }
 

@@ -1,19 +1,13 @@
 #ifndef GAME_TOPDOCS_H
 #define GAME_TOPDOCS_H
 
-#include <cstring>
 #include <vector>
-#include <cassert>
 #include "DocumentFrequency.h"
-#include "DocumentFrequency.h"
-#include <type_traits>
-#include <unordered_map>
-#include "DocumentsTier.h"
 #include "PossiblyMatchingTerm.h"
 
 
 class TopDocs {
-
+private:
     std::vector<PossiblyMatchingTerm> included_terms;
     std::vector<DocumentFrequency> docs;
 

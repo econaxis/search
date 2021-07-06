@@ -5,6 +5,7 @@
 #include "SortedKeysIndex.h"
 #include "DocumentsTier.h"
 #include "DocumentFrequency.h"
+#include <immintrin.h>
 
 namespace {
 #ifdef HAS_EXEC_INFO
@@ -12,7 +13,7 @@ namespace {
 #else
 #warning "No exec info header found."
     int backtrace(void **arg1, int arg2) {
-        std::cout << "No backtrace available";
+//        std::cout << "No backtrace available";
         return 0;
     }
     char** backtrace_symbols(void** arg1, int arg2) {
@@ -25,8 +26,8 @@ using namespace Serializer;
 
 void print_backtrace() {
     void *tracePtrs[15];
-    auto count = backtrace(tracePtrs, 15);
-    char **funcnames = backtrace_symbols(tracePtrs, count);
+    auto count = ::backtrace(tracePtrs, 15);
+    char **funcnames = ::backtrace_symbols(tracePtrs, count);
     for (int i = 0; i < count; i++) {
         std::cout << "Backtrace: " << funcnames[i] << "\n";
     }
@@ -114,7 +115,7 @@ void Serializer::serialize_vnum(std::ostream &stream, uint32_t number, bool pad3
     constexpr uint8_t uint8max = (1 << 7) - 1;        // 1...          one byte
     constexpr uint16_t uint16max = (1 << 14) - 1;         // 01...         two bytes
     constexpr uint32_t uint32max = (1 << 29) - 1;         // 0001...       four bytes
-    constexpr uint64_t uint64max = (1ULL << 57) - 1;    // 00000001...   eight bytes
+    [[maybe_unused]] constexpr uint64_t uint64max = (1ULL << 57) - 1;    // 00000001...   eight bytes
 
     auto write_num = [&](auto num) {
         stream.write(static_cast<const char *>((void *) (&num)), sizeof(num));
@@ -185,7 +186,6 @@ PreviewResult Serializer::preview_work_index_entry(std::istream &terms) {
     return {frequencies_pos, positions_pos, key};
 }
 
-#include <immintrin.h>
 
 void Serializer::read_packed_u32_chunk(std::istream &frequencies, uint32_t length, uint32_t *buffer) {
     frequencies.read(reinterpret_cast<char *>(buffer), length * sizeof(uint32_t));

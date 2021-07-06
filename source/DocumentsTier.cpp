@@ -61,7 +61,6 @@ void MultiDocumentsTier::serialize(const WordIndexEntry &wie, std::ostream &freq
 }
 
 std::optional<SingleDocumentsTier> MultiDocumentsTier::TierIterator::read_next() {
-    using namespace Serializer;
     if (remaining == 0) {
         return std::nullopt;
     }
@@ -71,14 +70,14 @@ std::optional<SingleDocumentsTier> MultiDocumentsTier::TierIterator::read_next()
     SingleDocumentsTier output;
     uint32_t num_elems;
 
-    if (remaining == 1) num_elems = read_vnum(frequencies);
+    if (remaining == 1) num_elems = Serializer::read_vnum(frequencies);
     else num_elems = BLOCKSIZE;
 
 
     output.resize(num_elems);
     std::vector<uint32_t> buffer(num_elems);
     // Read in the document ids
-    read_packed_u32_chunk(frequencies, num_elems, buffer.data());
+    Serializer::read_packed_u32_chunk(frequencies, num_elems, buffer.data());
     auto prevdocid = 0;
     for (int i = 0; i < num_elems; i++) {
         output[i].document_id = buffer[i] + prevdocid;
@@ -86,7 +85,7 @@ std::optional<SingleDocumentsTier> MultiDocumentsTier::TierIterator::read_next()
     }
 
     // Read in the frequencies
-    read_packed_u32_chunk(frequencies, num_elems, buffer.data());
+    Serializer::read_packed_u32_chunk(frequencies, num_elems, buffer.data());
     for (int i = 0; i < num_elems; i++) output[i].document_freq = buffer[i];
     remaining--;
 

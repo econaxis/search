@@ -75,7 +75,9 @@ inline void print_range(const std::string& str, auto beg, auto end) {
     std::string buffer;
     while(beg != end) {
         buffer.append(*(beg++));
-        buffer.append(" ");
+
+        // Only add the separator (space) if not at the last element.
+        if(beg + 1 != end) buffer.append(" ");
     }
     log(fmt::format("{} {}", str, buffer));
 }

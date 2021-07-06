@@ -59,7 +59,7 @@ static void queue_produce_file_contents(SyncedQueue &contents) {
             thread_local_holder.clear();
         }
     }
-    contents.done_flag = true;
+    contents.input_is_done = true;
     contents.cv.notify_all();
 }
 
@@ -80,7 +80,7 @@ std::string GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc*
     // file_contents: a thread-safe queue that holds the contents + filename of each file for the Tokenizer
     //      to process.
     SyncedQueue file_contents;
-    file_contents.done_flag = false;
+    file_contents.input_is_done = false;
 
     // Start our thread to open all files and load them into memory, so we don't get stuck on file IO
     // in the processing + indexing thread.
@@ -114,7 +114,7 @@ std::string GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc*
 SortedKeysIndex thread_process_files(SyncedQueue &file_contents) {
     std::array<SortedKeysIndex, 10> reducer{};
     while (true) {
-        if(file_contents.done_flag && !file_contents.size()) {
+        if(file_contents.input_is_done && !file_contents.size()) {
             break;
         }
 

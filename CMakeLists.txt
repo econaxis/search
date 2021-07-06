@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 link_directories(${CMAKE_BINARY_DIR})
 
-add_compile_options(-march=native -Wall -Wno-ignored-attributes -fno-inline -Wno-sign-compare -fPIC -fconcepts)
+add_compile_options(-march=native -Wall -Wno-ignored-attributes -fno-inline -Wno-sign-compare -fPIC )
 
 add_library(general-indexer SHARED
         "source/GeneralIndexer.cpp"
@@ -18,7 +18,6 @@ set(CMAKE_BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 
 add_library(search-share SHARED
-        "source/DocIDFilePair.cpp"
         "source/Serializer.h"
         "source/Tokenizer.cpp"
         "source/DocumentPositionPointer.h"

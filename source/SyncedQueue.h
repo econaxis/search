@@ -13,59 +13,31 @@
 
 struct SyncedQueue {
     using value_type = std::pair<std::string, DocIDFilePair>;
-    std::atomic_bool done_flag = false;
+
+    // A queue might be currently starved for input, then we want to keep waiting
+    // A queue might be done with input, but still have items to be processed.
+    // A queue might be done with input and have no items to be processed.
+    // This flag keeps track of whether there is more input to follow, for consumers to wait
+    // even if the queue is currently empty.
+    std::atomic_bool input_is_done = false;
     std::queue<value_type> queue;
     std::vector<DocIDFilePair> filepairs;
     mutable std::mutex mutex;
     std::condition_variable cv;
 
-    std::lock_guard<std::mutex> get_lock() const {
-        return std::lock_guard(mutex);
-    }
+    std::lock_guard<std::mutex> get_lock() const;
 
-    uint32_t size() const {
-        return queue.size();
-    };
+    std::size_t size() const;
 
-    void push(value_type elem) {
-        auto l = get_lock();
-        queue.push(std::move(elem));
-        cv.notify_one();
-    }
+    void push(value_type elem);
 
     template<typename T>
-    void push_multi(T begin, T end) {
-        auto l = get_lock();
+    void push_multi(T begin, T end);
 
-        for (auto i = begin; i < end; i++) {
-            queue.push(std::move(*i));
-        }
-
-        cv.notify_one();
-    }
-
-    std::pair<std::string, DocIDFilePair> pop() {
-        using namespace std::chrono_literals;
-        std::unique_lock lock(mutex);
-        cv.wait(lock, [&] {
-            return this->size() || (done_flag && !this->size());
-        });
-
-        if(done_flag && !this->size()) return {"EMPTY", {0, "EMPTY"}};
-
-        auto b = queue.front();
-        queue.pop();
-
-        filepairs.push_back(b.second);
-        cv.notify_one();
-        return b;
-    }
+    std::pair<std::string, DocIDFilePair> pop();
 
     template<typename Callable>
-    void wait_for(Callable c) {
-        std::unique_lock lock(mutex);
-        cv.wait(lock, c);
-    }
+    void wait_for(Callable c);
 };
 
 #endif //GAME_SYNCEDQUEUE_H

@@ -77,15 +77,6 @@ load_all_indices() {
     return {std::move(indices), std::move(filepairs)};
 }
 
-
-[[maybe_unused]] static unsigned long measure() {
-    using namespace std::chrono;
-    static auto lasttime = high_resolution_clock::now();
-    unsigned long ret = duration_cast<nanoseconds>(high_resolution_clock::now() - lasttime).count();
-    lasttime = high_resolution_clock::now();
-    return ret;
-}
-
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
     initialize_directory_variables();

@@ -68,3 +68,11 @@ TEST(indexing, indexes_correctly_and_deserialize_correctly) {
     AND = DocumentsMatcher::AND_Driver(res_bad);
     EXPECT_EQ(AND.size(), 0);
 }
+
+TEST(indexing, zero_documents) {
+    LOOP_ITERS = 0;
+    SortedKeysIndexStub index(do_index("SHOULDHAVE"));
+
+    auto res_bad = index.search_many_terms({"SHOULDHAVE"});
+    EXPECT_EQ(res_bad[0].size(), 0);
+}

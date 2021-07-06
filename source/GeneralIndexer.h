@@ -16,15 +16,7 @@ struct SyncedQueue;
 
 namespace GeneralIndexer {
     using ContentProducerFunc = void (SyncedQueue &);
-
-    int read_and_compress_files();
-
-
-    std::string persist_indices(const SortedKeysIndex &master, const std::vector<DocIDFilePair> &filepairs);
-
-    std::optional<std::string> read_some_files(ContentProducerFunc* func);
-
-    SortedKeysIndex thread_process_files(SyncedQueue &file_contents);
+    std::string read_some_files(ContentProducerFunc* func);
 }
 
 #endif //GAME_GENERALINDEXER_H

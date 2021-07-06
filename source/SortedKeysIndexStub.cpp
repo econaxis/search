@@ -116,13 +116,17 @@ void correct_freq_pos_locations(std::istream &terms, std::istream &frequencies) 
 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
-    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-3)) - 1;
-    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(3)) + 1;
+    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-3));
+    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(3));
 
-    file_start = std::clamp(file_start, index.begin(), index.end() - 1);
-    file_end = std::clamp(file_end, index.begin(), index.end() - 1);
 
-    if(file_end == index.end()) file_end = index.end() -1;
+    // Occurs when there's an empty index. No way to prefix-match, and we have to exit early.
+    if (file_start == index.end()) {
+        print("ERROR: Cannot seek to index for search term ", term);
+        return {};
+    };
+
+    if (file_end == index.end()) file_end = index.end() - 1;
 
     terms.seekg(file_start->terms_pos);
     correct_freq_pos_locations(terms, frequencies);
@@ -138,7 +142,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     while (max_terms_read-- > 0 || terms.tellg() <= file_end->terms_pos) {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
         // and since majority of keys don't fit within our criteria, previewing reduces computation and memory.
-         auto preview = Serializer::preview_work_index_entry(terms);
+        auto preview = Serializer::preview_work_index_entry(terms);
 
         // If the preview fits within the score cutoff, then we seek back to the previewed position and read the whole thing into memory
         // to process it.

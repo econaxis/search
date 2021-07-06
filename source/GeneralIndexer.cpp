@@ -11,7 +11,6 @@
 #include <condition_variable>
 #include <iostream>
 #include <queue>
-#include "compactor/Compactor.h"
 #include <execution>
 
 #include "SyncedQueue.h"
@@ -72,7 +71,7 @@ void sort_and_group_all_par(std::vector<WordIndexEntry> &index) {
 //! Reads some files from a specified func* and indexes them.
 //! \param func function that produces content from a source (e.g. socket, STDIN, file) for the indexer to index.
 //! \return the file name of the produced index file.
-std::optional<std::string> GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc* func) {
+std::string GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc* func) {
     // Vector of arrays with custom allocator.
     SortedKeysIndex a1;
 
@@ -98,8 +97,7 @@ std::optional<std::string> GeneralIndexer::read_some_files(GeneralIndexer::Conte
     filecontentproducer.join();
 
     if (a1.get_index().empty()) {
-        std::cerr<<"Empty index\n";
-        return std::nullopt;
+        print("ERROR: Empty index");
     }
 
     a1.sort_and_group_shallow();

@@ -155,3 +155,10 @@ endif ()
 #target_link_directories(default-tests PRIVATE ${CMAKE_BINARY_DIR})
 target_link_libraries(default-tests PRIVATE gtest_main search-share general-indexer namesdb)
 
+
+add_custom_target(
+        metastore
+        COMMAND cargo build -p metastore --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust/metastore
+        DEPENDS rust/metastore/src
+)

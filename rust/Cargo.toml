@@ -1,6 +1,6 @@
 [workspace]
-members = ["namesdb", "webserver"]
-default-members=["namesdb", "webserver"]
+members = ["namesdb", "webserver", "metastore"]
+default-members=["namesdb", "webserver", "metastore"]
 
 [profile.dev]
 rpath=true

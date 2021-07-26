@@ -1,0 +1,6 @@
+POST http://localhost:8080/
+Accept: application/json
+
+< testdata.json
+###
+GET http://localhost:8080/user/name1/array

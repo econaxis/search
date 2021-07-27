@@ -11,3 +11,8 @@ futures = "*"
 tokio = { version = "^1", features = ["full"] }
 hyper = { version = "*", features = ["full"] }
 slab = "*"
+syslog = "*"
+
+[dev-dependencies]
+quickcheck = "1.0.3"
+quickcheck_macros = "1.0.0"

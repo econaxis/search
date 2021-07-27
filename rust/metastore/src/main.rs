@@ -1,54 +1,37 @@
 #![feature(min_type_alias_impl_trait)]
+#![feature(assert_matches)]
 
-use std::cell::{RefCell, UnsafeCell};
-use std::collections::HashMap;
+use std::cell::{UnsafeCell};
+
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+
+
+
 
 use hyper::service::{make_service_fn, service_fn};
 
 use btreemap_kv_backend::MutBTreeMap;
-use kv_backend::{IntentMapType, ValueWithMVCC};
-use mvcc_manager::WriteIntentStatus;
+use kv_backend::ValueWithMVCC;
+use lock_data_manager::IntentMap;
 
-use timestamp::Timestamp;
+
 
 mod btreemap_kv_backend;
 mod debugging_utils;
 mod hyper_error_converter;
 mod hyperserver;
 mod json_processing;
-pub mod kv_backend;
+mod kv_backend;
 mod mvcc_manager;
-mod mvcc_metadata;
 mod object_path;
 mod parsing;
 mod rwtransaction_wrapper;
 mod timestamp;
-
-// Contains only write intent status for now, but may contain more in the future.
-pub struct TransactionLockData(pub WriteIntentStatus);
-
-#[derive(Eq, PartialEq, Hash, Debug, Copy, Clone)]
-pub struct LockDataRef {
-    pub id: u64,
-    pub timestamp: Timestamp,
-}
-
-impl TransactionLockData {
-    pub fn get_write_intent(&self) -> WriteIntentStatus {
-        self.0
-    }
-}
-
-impl LockDataRef {
-    pub fn to_txn<'a>(
-        &self,
-        map: &'a HashMap<LockDataRef, TransactionLockData>,
-    ) -> &'a TransactionLockData {
-        map.get(self).unwrap()
-    }
-}
+mod lock_data_manager;
+mod C_interface;
+mod json_data_model_tests;
 
 pub struct MutSlab(pub UnsafeCell<slab::Slab<ValueWithMVCC>>);
 
@@ -58,22 +41,33 @@ impl MutSlab {
     }
 }
 
+pub fn create_empty_context() -> DbContext {
+    DbContext {
+        db: MutBTreeMap::new(),
+        transaction_map: IntentMap::new(),
+        old_values_store: MutSlab(UnsafeCell::new(slab::Slab::new())),
+    }
+}
+
 pub struct DbContext {
     pub db: MutBTreeMap,
-    pub transaction_map: RefCell<IntentMapType>,
+    pub transaction_map: IntentMap,
     pub old_values_store: MutSlab,
 }
 
 #[tokio::main]
 async fn main() {
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    let ctx = DbContext {
-        db: MutBTreeMap::new(),
-        transaction_map: RefCell::new(HashMap::new()),
-        old_values_store: MutSlab(UnsafeCell::new(slab::Slab::new())),
-    };
+    let ctx = create_empty_context();
 
     let ctx = Arc::new(Mutex::new(ctx));
+
+    let server = create_web_server(ctx);
+
+    server.await;
+}
+
+fn create_web_server(ctx: Arc<Mutex<DbContext>>) -> impl Future {
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
 
     let make_svc = make_service_fn(move |_conn| {
         // Since this outer closure is called everytime a new TCP connection comes in,
@@ -90,6 +84,7 @@ async fn main() {
     });
 
     let server = hyper::Server::bind(&addr).serve(make_svc);
-
-    server.await;
+    server
+    // Box::pin(server)
 }
+

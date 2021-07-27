@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
-
-use crate::mvcc_manager::write_intent_manager::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Hash)]
 pub struct Timestamp(pub u64);

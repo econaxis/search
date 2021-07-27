@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 
-use crate::mvcc_metadata::MVCCMetadata;
-use crate::{LockDataRef, TransactionLockData};
+
+
+use crate::mvcc_manager::MVCCMetadata;
+
 
 #[derive(Debug)]
 pub struct ValueWithMVCC(pub MVCCMetadata, pub String);
-
-pub type IntentMapType = HashMap<LockDataRef, TransactionLockData>;

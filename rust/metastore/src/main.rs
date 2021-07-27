@@ -30,7 +30,7 @@ mod parsing;
 mod rwtransaction_wrapper;
 mod timestamp;
 mod lock_data_manager;
-mod C_interface;
+mod c_interface;
 mod json_data_model_tests;
 
 pub struct MutSlab(pub UnsafeCell<slab::Slab<ValueWithMVCC>>);

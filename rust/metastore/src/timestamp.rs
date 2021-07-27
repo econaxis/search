@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Hash)]
 pub struct Timestamp(pub u64);
 
+
 impl PartialOrd for Timestamp {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(match (self.0, other.0) {

@@ -87,6 +87,7 @@ impl MVCCMetadata {
     pub(in crate::mvcc_manager) fn become_newer_version(
         ctx: &DbContext,
         ValueWithMVCC(oldmvcc, oldvalue): &mut ValueWithMVCC,
+        newvalue: String
     ) {
         assert_ne!(oldmvcc.end_ts, Timestamp::maxtime());
 
@@ -97,7 +98,6 @@ impl MVCCMetadata {
             cur_write_intent: None,
             previous_mvcc_value: None,
         };
-        let newvalue = String::new();
 
         let oldmetadata_ = std::mem::replace(oldmvcc, newmvcc);
         let oldvalue_ = std::mem::replace(oldvalue, newvalue);
@@ -147,6 +147,18 @@ pub struct MVCCMetadata {
     pub(in crate::mvcc_manager) previous_mvcc_value: Option<usize>,
 }
 
+#[cfg(test)]
+impl Default for MVCCMetadata {
+    fn default() -> Self {
+        Self {
+            begin_ts: Timestamp::mintime(),
+            end_ts: Timestamp::maxtime(),
+            last_read: Timestamp::mintime(),
+            cur_write_intent: None,
+            previous_mvcc_value: None
+        }
+    }
+}
 
 impl Display for MVCCMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -222,14 +234,12 @@ mod tests {
         let mvcc = MVCCMetadata {
             begin_ts: Timestamp(1),
             end_ts: Timestamp(5),
-            last_read: Timestamp(0),
-            cur_write_intent: None,
-            previous_mvcc_value: None,
+            ..Default::default()
         };
 
         let value = String::new();
         let mut combined = ValueWithMVCC(mvcc.clone(), value);
-        MVCCMetadata::become_newer_version(&ctx, &mut combined);
+        MVCCMetadata::become_newer_version(&ctx, &mut combined, "fdsvc".to_string());
 
 
         assert_matches!(combined.0, MVCCMetadata {
@@ -249,5 +259,40 @@ mod tests {
         let prevvalue = ctx.old_values_store.get().get_mut(combined.0.previous_mvcc_value.unwrap()).unwrap();
         assert_matches!(combined.0.check_read(&ctx.transaction_map, txn), Err(..));
         assert_matches!(prevvalue.0.check_read(&ctx.transaction_map, txn), Ok(()));
+    }
+
+    #[test]
+    fn test_become_newer_version2() {
+        let ctx = create_empty_context();
+        let mvcc = MVCCMetadata {
+            begin_ts: Timestamp(1),
+            end_ts: Timestamp::maxtime(),
+            ..Default::default()
+        };
+        let value = "zeroth".to_string();
+        let key = ObjectPath::new("key");
+        ctx.db.insert(key.clone(), ValueWithMVCC(mvcc.clone(), value));
+        let mut combined = ctx.db.get_mut(&key).unwrap();
+
+        combined.0.deactivate(Timestamp(5));
+        MVCCMetadata::become_newer_version(&ctx, &mut combined, "first".to_string());
+
+        combined.0.deactivate(Timestamp(10));
+        MVCCMetadata::become_newer_version(&ctx, &mut combined, "second".to_string());
+
+        combined.0.deactivate(Timestamp(15));
+        MVCCMetadata::become_newer_version(&ctx, &mut combined, "third".to_string());
+
+        let mut txn = RWTransactionWrapper::new_with_time(&ctx, Timestamp(16));
+        assert_matches!(txn.read(key.as_cow_str()).unwrap(), "third");
+
+        let mut txn = RWTransactionWrapper::new_with_time(&ctx, Timestamp(11));
+        assert_matches!(txn.read(key.as_cow_str()).unwrap(), "second");
+
+        let mut txn = RWTransactionWrapper::new_with_time(&ctx, Timestamp(6));
+        assert_matches!(txn.read(key.as_cow_str()).unwrap(), "first");
+
+        let mut txn = RWTransactionWrapper::new_with_time(&ctx, Timestamp(1));
+        assert_matches!(txn.read(key.as_cow_str()).unwrap(), "zeroth");
     }
 }

@@ -61,9 +61,7 @@ mod qctests {
             let mut map = Vec::with_capacity(allpaths.len());
             for p in allpaths {
                 let str = String::arbitrary(g);
-
-                let str = truncate_string(&str, 5);
-                map.push((ObjectPath::arbitrary(g, &p), PrimitiveValue::String(str.to_string())));
+                map.push((ObjectPath::arbitrary(g, &p), PrimitiveValue::String(str)));
             };
 
             let mut value = map_to_json(&map);

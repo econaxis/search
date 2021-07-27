@@ -35,9 +35,7 @@ pub fn update(
         let res = get_latest_mvcc_value(&ctx.db, key);
         res.0.check_write(&ctx.transaction_map, txn)?;
         res.0.deactivate(txn.timestamp)?;
-        MVCCMetadata::become_newer_version(ctx, res);
-
-        res.1 = new_value;
+        MVCCMetadata::become_newer_version(ctx, res, new_value);
         res.0.add_write_intent(wi);
     } else {
         // We're inserting a new key here.

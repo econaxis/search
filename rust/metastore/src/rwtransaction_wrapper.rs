@@ -1,14 +1,18 @@
 use std::borrow::{Cow};
 
-use crate::{DbContext, mvcc_manager};
-use crate::kv_backend::ValueWithMVCC;
-use crate::lock_data_manager::LockDataRef;
-use crate::mvcc_manager::WriteIntentStatus;
+mod mvcc_manager;
+pub mod json_request_writers;
+
+use crate::{DbContext};
+use mvcc_manager::LockDataRef;
+use mvcc_manager::WriteIntentStatus;
 use crate::object_path::ObjectPath;
+pub use mvcc_manager::ValueWithMVCC;
+pub use mvcc_manager::MVCCMetadata;
+pub use mvcc_manager::IntentMap;
+pub use mvcc_manager::MutBTreeMap;
 
 
-#[cfg(test)]
-use crate::timestamp::Timestamp;
 
 pub struct RWTransactionWrapper<'a> {
     ctx: &'a DbContext,
@@ -17,7 +21,10 @@ pub struct RWTransactionWrapper<'a> {
 }
 
 #[cfg(test)]
+use crate::timestamp::Timestamp;
+#[cfg(test)]
 impl<'a> RWTransactionWrapper<'a> {
+
     pub fn new_with_time(ctx: &'a DbContext, time: Timestamp) -> Self {
         let txn = ctx.transaction_map.make_write_txn_with_time(time);
 
@@ -87,7 +94,6 @@ mod tests {
     use serde_json::Value;
 
     use crate::create_empty_context;
-    use crate::json_processing::{json_to_map, PrimitiveValue};
 
     use super::*;
     use std::borrow::Cow::Borrowed;
@@ -153,47 +159,5 @@ mod tests {
 
         txn0.commit();
         txn1.commit();
-    }
-
-    #[test]
-    fn testbig() {
-        let ctx = create_empty_context();
-        let ctx = &ctx;
-        let mut txn0 = RWTransactionWrapper::new(ctx);
-        let mut txn1 = RWTransactionWrapper::new(ctx);
-
-        test_json().into_iter().enumerate().for_each(|(index, (path, value))| {
-            if index % 2 == 0 {
-                txn0.write(&path, Cow::from(value.to_string())).unwrap();
-            } else {
-                txn1.write(&path, Cow::from(value.to_string())).unwrap();
-            }
-        });
-
-        txn0.commit();
-        txn1.commit();
-
-        let mut txn2 = RWTransactionWrapper::new(ctx);
-        test_json().into_iter().for_each(|(path, value)| {
-            assert_eq!(txn2.read(Borrowed(path.as_str())).unwrap(), value.to_string());
-        });
-        txn2.commit();
-    }
-
-    fn test_json() -> Vec<(ObjectPath, PrimitiveValue)> {
-        let _map = BTreeMap::<ObjectPath, i64>::new();
-
-        let json = serde_json::json!({"nested": {
-        "nested_arr": [1, 4, 2, {
-                "what": true,
-                "what2": "fdsav"
-            }, 6, 3, 2]
-    }, "nested_2": {
-        "test": true,
-        "ads": Value::Null,
-        "vcxf": [Value::Null, 5, "fdvc"]
-    }});
-
-        json_to_map(json)
     }
 }

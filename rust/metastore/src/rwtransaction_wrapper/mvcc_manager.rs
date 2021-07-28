@@ -1,28 +1,19 @@
-
-
 mod mvcc_metadata;
-
+mod lock_data_manager;
+mod kv_backend;
+mod btreemap_kv_backend;
 pub use mvcc_metadata::MVCCMetadata;
-use crate::btreemap_kv_backend::MutBTreeMap;
+
 use crate::DbContext;
-use crate::kv_backend::ValueWithMVCC;
-use crate::lock_data_manager::LockDataRef;
+pub use kv_backend::ValueWithMVCC;
 use crate::object_path::ObjectPath;
 
+pub use btreemap_kv_backend::MutBTreeMap;
 
-#[derive(PartialEq, Copy, Clone)]
-pub enum WriteIntentStatus {
-    Aborted,
-    Pending,
-    Committed,
-}
+pub use lock_data_manager::{LockDataRef, IntentMap};
+pub use mvcc_metadata::{WriteIntent, WriteIntentStatus};
 
-#[derive(Debug, Clone)]
-pub struct WriteIntent {
-    pub associated_transaction: LockDataRef,
-}
-
-pub fn update(
+pub(super) fn update(
     ctx: &DbContext,
     key: &ObjectPath,
     new_value: String,
@@ -81,7 +72,7 @@ fn get_correct_mvcc_value<'a>(
     Err("no value found")
 }
 
-pub fn read<'a>(
+pub(super) fn read<'a>(
     ctx: &'a DbContext,
     key: &ObjectPath,
     cur_txn: LockDataRef,

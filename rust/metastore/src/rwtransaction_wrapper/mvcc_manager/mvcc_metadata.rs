@@ -1,9 +1,10 @@
-use crate::DbContext;
-use crate::kv_backend::ValueWithMVCC;
-use crate::lock_data_manager::{IntentMap, LockDataRef};
-use crate::mvcc_manager::{WriteIntent, WriteIntentStatus};
-use crate::timestamp::Timestamp;
 use std::fmt::{Display, Formatter};
+
+use crate::DbContext;
+use super::kv_backend::ValueWithMVCC;
+use super::lock_data_manager::{IntentMap, LockDataRef};
+use crate::timestamp::Timestamp;
+
 
 impl MVCCMetadata {
     pub fn new_default(timestamp: Timestamp) -> Self {
@@ -16,7 +17,7 @@ impl MVCCMetadata {
         }
     }
 
-    pub(in crate::mvcc_manager) fn add_write_intent(&mut self, wi: WriteIntent) {
+    pub(in super) fn add_write_intent(&mut self, wi: WriteIntent) {
         if self.cur_write_intent.is_some() {
             println!("warning: inserting write intent when it already exists. make sure already ran check");
         }
@@ -65,7 +66,7 @@ impl MVCCMetadata {
         }
     }
 
-    pub(in crate::mvcc_manager) fn check_write(
+    pub(in super) fn check_write(
         &mut self,
         txnmap: &IntentMap,
         cur_txn: LockDataRef,
@@ -84,7 +85,7 @@ impl MVCCMetadata {
         }
     }
 
-    pub(in crate::mvcc_manager) fn become_newer_version(
+    pub(in super) fn become_newer_version(
         ctx: &DbContext,
         ValueWithMVCC(oldmvcc, oldvalue): &mut ValueWithMVCC,
         newvalue: String
@@ -113,14 +114,14 @@ impl MVCCMetadata {
         newmetadata_.previous_mvcc_value.insert(oldmetadata_key);
     }
 
-    pub(in crate::mvcc_manager) fn deactivate(&mut self, timestamp: Timestamp) -> Result<(), String> {
+    pub(in super) fn deactivate(&mut self, timestamp: Timestamp) -> Result<(), String> {
         self.end_ts = timestamp;
         self.last_read = self.last_read.max(timestamp);
         assert!(self.begin_ts <= self.end_ts);
         Ok(())
     }
 
-    pub(in crate::mvcc_manager) fn check_read(
+    pub(in super) fn check_read(
         &mut self,
         txnmap: &IntentMap,
         cur_txn: LockDataRef,
@@ -132,7 +133,7 @@ impl MVCCMetadata {
         Ok(())
     }
 
-    pub(in crate::mvcc_manager) fn confirm_read(&mut self, cur_txn: LockDataRef) {
+    pub(in super) fn confirm_read(&mut self, cur_txn: LockDataRef) {
         // todo: only set this when the reads commit
         self.last_read = self.last_read.max(cur_txn.timestamp);
     }
@@ -144,7 +145,7 @@ pub struct MVCCMetadata {
     end_ts: Timestamp,
     last_read: Timestamp,
     cur_write_intent: Option<WriteIntent>,
-    pub(in crate::mvcc_manager) previous_mvcc_value: Option<usize>,
+    pub(in super) previous_mvcc_value: Option<usize>,
 }
 
 #[cfg(test)]
@@ -174,10 +175,11 @@ impl Display for MVCCMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::*;
-    use crate::rwtransaction_wrapper::RWTransactionWrapper;
     use crate::object_path::ObjectPath;
+    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+
+    use super::*;
 
     #[test]
     fn check_read() {
@@ -295,4 +297,17 @@ mod tests {
         let mut txn = RWTransactionWrapper::new_with_time(&ctx, Timestamp(1));
         assert_matches!(txn.read(key.as_cow_str()).unwrap(), "zeroth");
     }
+}
+
+
+#[derive(PartialEq, Copy, Clone)]
+pub enum WriteIntentStatus {
+    Aborted,
+    Pending,
+    Committed,
+}
+
+#[derive(Debug, Clone)]
+pub struct WriteIntent {
+    pub associated_transaction: LockDataRef,
 }

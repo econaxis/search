@@ -1,15 +1,14 @@
 #[cfg(test)]
-mod qctests {
-    
+mod tests {
     use std::iter::FromIterator;
-    
+
 
     use quickcheck::{Arbitrary, Gen, TestResult};
     use quickcheck_macros::quickcheck;
     use serde_json::Value;
 
     use crate::create_empty_context;
-    use crate::json_processing::{check_valid_json, json_to_map, map_to_json, PrimitiveValue};
+    use super::super::json_processing::{check_valid_json, json_to_map, map_to_json, PrimitiveValue};
     use crate::object_path::ObjectPath;
     use crate::rwtransaction_wrapper::RWTransactionWrapper;
 
@@ -33,7 +32,7 @@ mod qctests {
             let mut v: String = v.join("/");
             v.push('/');
 
-            ObjectPath(v.into_bytes())
+            ObjectPath::from(v)
         }
     }
 
@@ -117,6 +116,7 @@ mod qctests {
     fn test_arbjson1(ArbJson(v): ArbJson) -> TestResult {
         test_json(v)
     }
+
     #[quickcheck]
     fn test_arbjson2(ArbJson2(v): ArbJson2) -> TestResult {
         test_json(v)
@@ -129,19 +129,23 @@ mod qctests {
 
         let ctx = create_empty_context();
         let mut txn = RWTransactionWrapper::new(&ctx);
-        crate::hyperserver::write_json(v.clone(), &mut txn);
+        super::super::write_json(v.clone(), &mut txn);
         txn.commit();
 
-        let value = crate::hyperserver::read_json_request("", &ctx);
+        let value = crate::rwtransaction_wrapper::json_request_writers::read_json_request("/", &ctx);
 
         let map = json_to_map(v.clone());
 
 
         map.iter().for_each(|(path, _value)| {
-            let new = ObjectPath::from_iter(path.split_parts().skip(1));
-            let _a = crate::hyperserver::read_json_request(new.as_str(), &ctx);
-            let _b = v.pointer(new.as_str()).unwrap();
-            assert_eq!(*v.pointer(new.as_str()).unwrap(), crate::hyperserver::read_json_request(new.as_str(), &ctx));
+            let new = path.as_str().strip_prefix("/user").unwrap();
+            let _a = crate::rwtransaction_wrapper::json_request_writers::read_json_request(new, &ctx);
+            let stripped = match new.strip_suffix('/') {
+                Some(x) => x,
+                None => new
+            };
+            let _b = v.pointer(stripped).unwrap();
+            assert_eq!(*v.pointer(stripped).unwrap(), crate::rwtransaction_wrapper::json_request_writers::read_json_request(new, &ctx));
         });
 
         assert_eq!(value, v);

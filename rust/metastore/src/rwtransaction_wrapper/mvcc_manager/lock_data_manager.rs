@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::mvcc_manager::WriteIntentStatus;
+use super::mvcc_metadata::WriteIntentStatus;
 use crate::timestamp::Timestamp;
 use std::cell::RefCell;
 

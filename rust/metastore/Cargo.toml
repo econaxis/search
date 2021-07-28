@@ -7,6 +7,7 @@ edition = "2018"
 
 [dependencies]
 serde_json = "*"
+serde = {version = "*", features = ["derive"]}
 futures = "*"
 tokio = { version = "^1", features = ["full"] }
 hyper = { version = "*", features = ["full"] }

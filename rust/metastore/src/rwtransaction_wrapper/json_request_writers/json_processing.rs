@@ -86,6 +86,7 @@ pub fn map_to_json(map: &Vec<(ObjectPath, PrimitiveValue)>) -> Value {
     start
 }
 
+
 pub fn check_valid_json(json: &Value) -> bool {
     match json {
         Value::Object(map) => if map.is_empty() {
@@ -126,7 +127,12 @@ pub fn create_materialized_path<RawValue: ToString>(json: &mut Value, path: &[&s
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::create_empty_context;
+    use std::borrow::Cow;
+    use std::collections::BTreeMap;
+    use std::borrow::Cow::Borrowed;
+
 
     #[test]
     fn materialized_test() {
@@ -147,7 +153,45 @@ mod tests {
             "user": {"obj": {"obj1": {"obj2": {"float": "5", "float2": "5"}}, "float3": "5"}}
         }));
     }
+    #[test]
+    fn testbig() {
+        let ctx = create_empty_context();
+        let ctx = &ctx;
+        let mut txn0 = RWTransactionWrapper::new(ctx);
+        let mut txn1 = RWTransactionWrapper::new(ctx);
 
+        test_json().into_iter().enumerate().for_each(|(index, (path, value))| {
+            if index % 2 == 0 {
+                txn0.write(&path, Cow::from(value.to_string())).unwrap();
+            } else {
+                txn1.write(&path, Cow::from(value.to_string())).unwrap();
+            }
+        });
+
+        txn0.commit();
+        txn1.commit();
+
+        let mut txn2 = RWTransactionWrapper::new(ctx);
+        test_json().into_iter().for_each(|(path, value)| {
+            assert_eq!(txn2.read(Borrowed(path.as_str())).unwrap(), value.to_string());
+        });
+        txn2.commit();
+    }
+
+    fn test_json() -> Vec<(ObjectPath, PrimitiveValue)> {
+        let json = serde_json::json!({"nested": {
+        "nested_arr": [1, 4, 2, {
+                "what": true,
+                "what2": "fdsav"
+            }, 6, 3, 2]
+    }, "nested_2": {
+        "test": true,
+        "ads": Value::Null,
+        "vcxf": [Value::Null, 5, "fdvc"]
+    }});
+
+        json_to_map(json)
+    }
 
 }
 

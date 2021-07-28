@@ -3,13 +3,14 @@ use std::collections::Bound;
 use std::fmt::{Display, Formatter};
 use std::iter::FromIterator;
 use std::borrow::Cow::Borrowed;
+use serde::{Serialize, Deserialize};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct ObjectPath(pub Vec<u8>);
+pub struct ObjectPath(String);
 
 impl From<String> for ObjectPath {
     fn from(a: String) -> Self {
-        Self(a.into_bytes())
+        Self(a)
     }
 }
 
@@ -30,17 +31,17 @@ fn test_from_iterator() {
 
 impl Display for ObjectPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&*String::from_utf8(self.0.clone()).unwrap())
+        f.write_str(&*String::from_utf8(self.0.as_bytes().to_vec()).unwrap())
     }
 }
 
 impl ObjectPath {
     pub fn new(str: &str) -> Self {
-        Self(Vec::from(str))
+        Self(String::from(str))
     }
 
     pub(crate) fn as_str(&self) -> &str {
-        std::str::from_utf8(self.0.as_slice()).unwrap()
+        std::str::from_utf8(self.0.as_bytes()).unwrap()
     }
 
     pub fn as_cow_str(&self) -> Cow<str> {
@@ -49,8 +50,8 @@ impl ObjectPath {
 
     pub fn concat<T: Borrow<str>>(&self, other: T) -> Self {
         let mut newone = self.0.clone();
-        newone.push(b'/');
-        newone.extend(other.borrow().as_bytes());
+        newone.push('/');
+        newone.push_str(other.borrow());
         Self(newone)
     }
 
@@ -59,29 +60,31 @@ impl ObjectPath {
         std::str::from_utf8(
             // Starting with a slash, generates empty string in the beginning
             // (undesireable)
-            &self.0[1..len - 1],
+            &self.0[1..len - 1].as_ref(),
         )
         .unwrap()
         .split('/')
     }
 
     pub fn make_correct_suffix(&mut self) {
-        if self.0.last().unwrap() != &b'/' {
-            self.0.push(b'/');
+        if self.0.chars().last().unwrap() != '/' {
+            self.0.push('/');
         }
     }
 
     pub fn get_prefix_ranges(&self) -> (Bound<Self>, Bound<Self>) {
+        assert_eq!(self.0.chars().last().unwrap(), '/');
+
         let mut min = self.0.clone();
         let mut max = min.clone();
 
         let minlen = min.len();
         let maxlen = max.len();
-        min[minlen - 1] = 1;
-        max[maxlen - 1] = 126;
+        * unsafe { min.as_bytes_mut() }.get_mut(minlen - 1).unwrap() = 1u8;
+        * unsafe { max.as_bytes_mut() }.get_mut(maxlen - 1).unwrap() = 126u8;
 
-        let min: ObjectPath = ObjectPath::from(unsafe { String::from_utf8_unchecked(min) });
-        let max: ObjectPath = ObjectPath::from(unsafe { String::from_utf8_unchecked(max) });
+        let min: ObjectPath = ObjectPath::from(min);
+        let max: ObjectPath = ObjectPath::from(max);
 
         (Bound::Included(min), Bound::Included(max))
     }
@@ -89,7 +92,7 @@ impl ObjectPath {
 
 impl Default for ObjectPath {
     fn default() -> Self {
-        let ret = Self(Vec::from("/user"));
+        let ret = Self::new("/user");
 
         return ret;
     }

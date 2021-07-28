@@ -12,26 +12,16 @@ use std::sync::{Arc, Mutex};
 
 use hyper::service::{make_service_fn, service_fn};
 
-use btreemap_kv_backend::MutBTreeMap;
-use kv_backend::ValueWithMVCC;
-use lock_data_manager::IntentMap;
-
-
-
-mod btreemap_kv_backend;
-mod debugging_utils;
 mod hyper_error_converter;
 mod hyperserver;
-mod json_processing;
-mod kv_backend;
-mod mvcc_manager;
 mod object_path;
 mod parsing;
 mod rwtransaction_wrapper;
 mod timestamp;
-mod lock_data_manager;
 mod c_interface;
-mod json_data_model_tests;
+mod wal_watcher;
+
+use rwtransaction_wrapper::{MVCCMetadata, ValueWithMVCC, MutBTreeMap, IntentMap};
 
 pub struct MutSlab(pub UnsafeCell<slab::Slab<ValueWithMVCC>>);
 
@@ -62,7 +52,6 @@ async fn main() {
     let ctx = Arc::new(Mutex::new(ctx));
 
     let server = create_web_server(ctx);
-
     server.await;
 }
 
@@ -85,6 +74,5 @@ fn create_web_server(ctx: Arc<Mutex<DbContext>>) -> impl Future {
 
     let server = hyper::Server::bind(&addr).serve(make_svc);
     server
-    // Box::pin(server)
 }
 

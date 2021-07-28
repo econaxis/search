@@ -4,6 +4,7 @@ use crate::DbContext;
 use super::kv_backend::ValueWithMVCC;
 use super::lock_data_manager::{IntentMap, LockDataRef};
 use crate::timestamp::Timestamp;
+use serde::{Serialize, Deserialize};
 
 
 impl MVCCMetadata {
@@ -137,14 +138,24 @@ impl MVCCMetadata {
         // todo: only set this when the reads commit
         self.last_read = self.last_read.max(cur_txn.timestamp);
     }
+
+    #[cfg(test)]
+    pub fn check_matching_timestamps(&self, other: &Self) -> bool {
+        self.end_ts == other.end_ts &&
+            self.begin_ts == other.begin_ts &&
+            self.last_read == other.last_read
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MVCCMetadata {
     begin_ts: Timestamp,
     end_ts: Timestamp,
     last_read: Timestamp,
+    #[serde(skip)]
     cur_write_intent: Option<WriteIntent>,
+
+    #[serde(skip)]
     pub(in super) previous_mvcc_value: Option<usize>,
 }
 

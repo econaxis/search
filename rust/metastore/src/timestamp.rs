@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-
-#[derive(Eq, PartialEq, Copy, Clone, Debug, Hash)]
+use serde::{Serialize, Deserialize};
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct Timestamp(pub u64);
 
 

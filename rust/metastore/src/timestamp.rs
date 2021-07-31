@@ -33,7 +33,7 @@ impl Timestamp {
     }
 
     pub fn now() -> Self {
-        Self(MONOTIC_COUNTER.fetch_add(1, AtomicOrdering::Relaxed))
+        Self(MONOTIC_COUNTER.fetch_add(1, AtomicOrdering::SeqCst))
     }
 }
 

@@ -19,12 +19,12 @@ pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
         }
     };
     let mut txn = RWTransactionWrapper::new(&ctx);
-    let ret = txn.read_range(&objpath);
+    let ret = txn.read_range_owned(&objpath).unwrap();
 
     let mut json = JSONValue::Null;
     for row in ret {
         let path: Vec<&str> = row.0.split_parts().collect();
-        json_processing::create_materialized_path(&mut json, &path, row.1.1.clone());
+        json_processing::create_materialized_path(&mut json, &path, row.1.into_inner().1);
     }
 
     txn.commit();
@@ -40,7 +40,7 @@ pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
 pub fn write_json(value: Value, txn: &mut RWTransactionWrapper) -> Result<(), String> {
     let map = json_processing::json_to_map(value);
     for (key, value) in map {
-        txn.write(&key, value.to_string().into())?
+        txn.write(&key, value.to_string().into())?;
     }
     Ok(())
 }

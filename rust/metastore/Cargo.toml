@@ -8,12 +8,10 @@ edition = "2018"
 [dependencies]
 serde_json = "*"
 serde = {version = "*", features = ["derive"]}
-futures = "*"
-tokio = { version = "^1", features = ["full"] }
-hyper = { version = "*", features = ["full"] }
+#futures = "*"
+#tokio = { version = "^1", features = ["full"] }
+#hyper = { version = "*", features = ["full"] }
 slab = "*"
 syslog = "*"
-
-[dev-dependencies]
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"

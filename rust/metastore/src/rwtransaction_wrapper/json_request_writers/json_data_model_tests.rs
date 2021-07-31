@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use std::iter::FromIterator;
+    
 
 
     use quickcheck::{Arbitrary, Gen, TestResult};

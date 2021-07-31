@@ -4,55 +4,93 @@ mod mvcc_manager;
 pub mod json_request_writers;
 
 use crate::{DbContext};
-use mvcc_manager::LockDataRef;
 use mvcc_manager::WriteIntentStatus;
 use crate::object_path::ObjectPath;
-pub use mvcc_manager::ValueWithMVCC;
+pub use mvcc_manager::{ValueWithMVCC, UnlockedMVCC, LockDataRef};
 pub use mvcc_manager::MVCCMetadata;
 pub use mvcc_manager::IntentMap;
 pub use mvcc_manager::MutBTreeMap;
 
 
-
 pub struct RWTransactionWrapper<'a> {
     ctx: &'a DbContext,
     txn: LockDataRef,
+    log: WalTxn,
     committed: bool,
 }
 
-#[cfg(test)]
 use crate::timestamp::Timestamp;
-#[cfg(test)]
-impl<'a> RWTransactionWrapper<'a> {
+use crate::wal_watcher::{WalTxn};
 
+impl<'a> RWTransactionWrapper<'a> {
+    pub fn get_txn(&self) -> &LockDataRef {
+        &self.txn
+    }
     pub fn new_with_time(ctx: &'a DbContext, time: Timestamp) -> Self {
         let txn = ctx.transaction_map.make_write_txn_with_time(time);
 
         Self {
             ctx,
             txn,
+            log: WalTxn::new(txn.timestamp),
             committed: false,
         }
     }
 }
 
 impl<'a> RWTransactionWrapper<'a> {
-    pub fn read_range(&mut self, key: &ObjectPath) -> impl Iterator<Item=(&ObjectPath, &ValueWithMVCC)> {
-        let range = key.get_prefix_ranges();
-        self.ctx.db.range(range)
+
+    pub fn read_range_owned(&mut self, key: &ObjectPath) -> Result<Vec<(ObjectPath, ValueWithMVCC)>, String> {
+        let (lock, range) = self.ctx.db.range_with_lock(key.get_prefix_ranges());
+
+        let _deb: Vec<_> = range.clone().collect();
+        let keys: Vec<_> = range.map(|(a, _b)| a.clone()).collect();
+        std::mem::drop(lock);
+        let mut ret = Vec::new();
+
+        for key in keys {
+            if let Ok(value) = self.read_mvcc(key.as_cow_str()) {
+
+                let val = value.as_inner().1.parse::<u64>().unwrap();
+                if val >= 9999 {
+                    unreachable!();
+                };
+                ret.push((key.clone(), value.clone()));
+            }
+        }
+
+        Ok(ret)
     }
-    #[must_use]
-    pub fn read(&mut self, key: Cow<str>) -> Result<&'a str, String> {
+    pub fn read_mvcc(&mut self, key: Cow<str>) -> Result<ValueWithMVCC, String> {
         let key = match key {
             Cow::Borrowed(a) => ObjectPath::from(a),
             Cow::Owned(a) => ObjectPath::from(a)
         };
 
-        mvcc_manager::read(self.ctx, &key, self.txn)
+        let ret = mvcc_manager::read(self.ctx, &key, self.txn)?;
+
+        let val = ret.as_inner().1.parse::<u64>().unwrap();
+        if val >= 100000 {
+            let _a = true;
+            unreachable!()
+        };
+        // println!("Val: {}", val);
+
+        self.log.log_read(ObjectPath::from(key.to_owned()));
+        Ok(ret)
     }
-    #[must_use]
-    pub fn write(&mut self, key: &ObjectPath, value: Cow<str>) -> Result<(), String> {
-        mvcc_manager::update(self.ctx, &key, value.into_owned(), self.txn)
+
+    pub fn read(&mut self, key: Cow<str>) -> Result<String, String> {
+        self.read_mvcc(key).map(|a| a.into_inner().1)
+    }
+
+    pub fn write(&mut self, key: &ObjectPath, value: Cow<str>) -> Result<&'a ValueWithMVCC, String> {
+        // TODO: if error then abort transaction
+        // not urgent or necessary, because you cannot actually write the key (lower layer prevents this), but good for WAL so theres no errors.
+        let ret = mvcc_manager::update(self.ctx, key, value.into_owned(), self.txn)?;
+
+        self.log.log_write(key.clone(), ret.clone());
+        Ok(ret)
     }
 
 
@@ -60,12 +98,23 @@ impl<'a> RWTransactionWrapper<'a> {
         self.ctx
             .transaction_map
             .set_txn_status(self.txn, WriteIntentStatus::Committed);
+
+        let mut placeholder = WalTxn::new(self.txn.timestamp);
+        std::mem::swap(&mut placeholder, &mut self.log);
+
+        // TODO: fix concurrency errors
+        // self.ctx.wallog.borrow_mut().store(placeholder);
         self.committed = true;
+        println!("Txn {} committed", self.txn.id);
     }
 
-    pub fn abort(&self) -> Result<(), String> {
-        // todo: lookup the previous mvcc value and upgrade it back to the main database
-        todo!()
+    pub fn abort(&self) {
+        // todo: lookup the previous mvcc values written and upgrade it back to the main database
+        // store the write set
+        self.ctx
+            .transaction_map
+            .set_txn_status(self.txn, WriteIntentStatus::Aborted);
+        // println!("{:?} aborted", self.txn);
     }
 
     pub fn new(ctx: &'a DbContext) -> Self {
@@ -74,6 +123,7 @@ impl<'a> RWTransactionWrapper<'a> {
         Self {
             ctx,
             txn,
+            log: WalTxn::new(txn.timestamp),
             committed: false,
         }
     }
@@ -89,14 +139,11 @@ impl Drop for RWTransactionWrapper<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
-    use serde_json::Value;
-
     use crate::create_empty_context;
 
     use super::*;
     use std::borrow::Cow::Borrowed;
+    use crate::wal_watcher::WalLoader;
 
     #[test]
     fn test1() {
@@ -132,6 +179,9 @@ mod tests {
         txn1.commit();
         assert_eq!(txn2.read(a0.as_str().into()), Ok("key0value"));
         assert_eq!(txn2.read(a1.as_str().into()), Ok("key1value"));
+        assert_matches!(txn2.read(a3.as_cow_str()), Err(..));
+        assert_matches!(txn3.read(a1.as_cow_str()), Ok("key1value"));
+        assert_matches!(txn3.read(a2.as_cow_str()), Err(..));
 
         txn2.commit();
         assert_eq!(txn3.read(a0.as_str().into()), Ok("key0value"));
@@ -139,6 +189,11 @@ mod tests {
         assert_eq!(txn3.read(a2.as_str().into()), Ok("key2value"));
 
         txn3.commit();
+
+        let blank = create_empty_context();
+        ctx.wallog.borrow().apply(&blank);
+
+        assert_eq!(blank.db.printdb(), ctx.db.printdb());
     }
 
     #[test]

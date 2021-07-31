@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use hyper::{Body, Method, Request, Response};
-use serde_json::{Value as JSONValue, Value};
+use serde_json::{Value as JSONValue};
 
 use crate::{DbContext, hyper_error_converter};
 use crate::rwtransaction_wrapper::{RWTransactionWrapper};

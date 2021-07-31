@@ -98,6 +98,8 @@ pub fn check_valid_json(json: &Value) -> bool {
     }
 }
 
+const MAXJSONDEPTH: usize = 1000;
+
 pub fn create_materialized_path<RawValue: ToString>(json: &mut Value, path: &[&str], final_value: RawValue) {
     match json {
         Value::Object(..) => (),
@@ -111,16 +113,17 @@ pub fn create_materialized_path<RawValue: ToString>(json: &mut Value, path: &[&s
     };
 
     let obj = json.as_object_mut().unwrap();
-    if path.len() == 1 {
-        obj.insert(path[0].to_owned(), Value::String(final_value.to_string()));
-    } else if path.len() > 1 {
-        if !obj.contains_key(path[0]) {
-            obj.insert(path[0].to_owned(), Value::Null);
-        }
-        create_materialized_path(obj.get_mut(path[0]).unwrap(), &path[1..], final_value);
-    } else {
-        unreachable!()
-    }
+    match path.len() {
+        1 => { obj.insert(path[0].to_owned(), Value::String(final_value.to_string())); },
+        1..=MAXJSONDEPTH =>  {
+            if !obj.contains_key(path[0]) {
+                obj.insert(path[0].to_owned(), Value::Null);
+            }
+            create_materialized_path(obj.get_mut(path[0]).unwrap(), &path[1..], final_value);
+        },
+        0 => unreachable!(),
+        _ => panic!("Maximum JSON depth exceeded")
+    };
 
 }
 
@@ -130,7 +133,7 @@ mod tests {
     use crate::rwtransaction_wrapper::RWTransactionWrapper;
     use crate::create_empty_context;
     use std::borrow::Cow;
-    use std::collections::BTreeMap;
+    
     use std::borrow::Cow::Borrowed;
 
 

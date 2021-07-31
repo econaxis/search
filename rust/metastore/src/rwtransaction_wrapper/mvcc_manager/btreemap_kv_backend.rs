@@ -1,44 +1,75 @@
 use std::borrow::Borrow;
 use std::cell::UnsafeCell;
-use std::collections::btree_map::{BTreeMap, Range, RangeMut};
+use std::collections::btree_map::{BTreeMap, Range};
 use std::ops::RangeBounds;
 
-use super::kv_backend::ValueWithMVCC;
+use crate::rwtransaction_wrapper::mvcc_manager::value_with_mvcc::ValueWithMVCC;
 use crate::object_path::ObjectPath;
 use std::collections::Bound;
 use std::fmt::Write;
+use std::sync::{Mutex, MutexGuard};
 
-pub struct MutBTreeMap(UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>);
+pub struct MutBTreeMap(Mutex<UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>);
+
+unsafe impl Sync for MutBTreeMap {}
+
+unsafe impl Send for MutBTreeMap {}
 
 impl MutBTreeMap {
+    pub fn lock_for_write(&self) -> MutexGuard<UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>> {
+        self.0.lock().unwrap()
+    }
+
+    pub fn remove_key(&self, key: &ObjectPath) {
+
+    }
+
     pub fn new() -> Self {
-        Self(UnsafeCell::new(BTreeMap::new()))
+        Self(Mutex::new(UnsafeCell::new(BTreeMap::new())))
     }
 
     pub fn range<R>(&self, range: R) -> Range<'_, ObjectPath, ValueWithMVCC>
-    where
-        R: RangeBounds<ObjectPath>,
+        where
+            R: RangeBounds<ObjectPath>,
     {
-        unsafe { &*self.0.get() }.range(range)
+        unsafe { &*self.0.lock().unwrap().get() }.range(range)
+    }
+
+    pub fn range_with_lock<R>(&self, range: R) -> (MutexGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>, Range<'_, ObjectPath, ValueWithMVCC>)
+        where
+            R: RangeBounds<ObjectPath>,
+    {
+        let lock = self.0.lock().unwrap();
+        let range = unsafe {&*lock.get()}.range(range);
+
+        (lock, range)
+    }
+
+    pub fn read_range_owned<R>(&self, range: R) -> Vec<(ObjectPath, ValueWithMVCC)> where R: RangeBounds<ObjectPath> {
+        unsafe { &*self.0.lock().unwrap().get() }.range(range).map(|(a, b)| (a.clone(), b.clone())).collect()
     }
 
     pub fn get_mut<T>(&self, key: &T) -> Option<&mut ValueWithMVCC>
-    where
-        ObjectPath: Borrow<T> + Ord,
-        T: Ord + ?Sized,
+        where
+            ObjectPath: Borrow<T> + Ord,
+            T: Ord + ?Sized,
     {
-        unsafe { &mut *self.0.get() }.get_mut(key)
-    }
 
-    pub fn range_mut<R>(&self, range: R) -> RangeMut<'_, ObjectPath, ValueWithMVCC>
-    where
-        R: RangeBounds<ObjectPath>,
+        unsafe { &mut *self.0.lock().unwrap().get() }.get_mut(key)
+    }
+    pub fn get_mut_with_lock<T>(&self, key: &T) -> (MutexGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>, Option<&mut ValueWithMVCC>)
+        where
+            ObjectPath: Borrow<T> + Ord,
+            T: Ord + ?Sized,
     {
-        unsafe { &mut *self.0.get() }.range_mut(range)
+        let lock = self.0.lock().unwrap();
+        let s = unsafe {&mut *lock.get()};
+
+        (lock, s.get_mut(key))
     }
 
     pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC) -> Option<ValueWithMVCC> {
-        unsafe { &mut *self.0.get() }.insert(key, value)
+        unsafe { &mut *self.0.lock().unwrap().get() }.insert(key, value)
     }
 
     pub fn iter(&self) -> Range<ObjectPath, ValueWithMVCC> {
@@ -48,23 +79,22 @@ impl MutBTreeMap {
         self.range((min, max))
     }
 
+
     // Prints the database to stdout
     pub fn printdb(&self) -> String {
         let mut str: String = String::new();
 
 
         for (key, value) in self.iter() {
-            println!("Key: {}", key.as_str());
             str.write_fmt(format_args!(
                 "{}: ({}) {}\n",
                 key.to_string(),
-                value.0,
-                value.1
+                value.as_inner().0,
+                value.as_inner().1
             ))
                 .unwrap();
         }
         str
     }
-
 }
 

@@ -30,8 +30,8 @@ pub(super) fn update<'a>(
         let res = res.unwrap();
         let mut resl = res.lock_for_write(ctx, txn)?;
         assert_eq!(resl.0.get_write_intents(&ctx.transaction_map).unwrap().1.associated_transaction, txn);
-        // todo! delaying dropping lock somehow fixes everything...
         std::mem::drop(lock);
+        // todo! delaying dropping lock somehow fixes everything...
         resl.become_newer_version(ctx, txn, new_value);
 
         res

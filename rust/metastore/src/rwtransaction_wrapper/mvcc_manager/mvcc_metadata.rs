@@ -48,7 +48,7 @@ impl MVCCMetadata {
     }
 
     pub fn atomic_insert_write_intents(&mut self, wi: WriteIntent) -> Result<(), String> {
-        println!("{} try lock", wi.associated_transaction.id);
+        //println!("{} try lock", wi.associated_transaction.id);
 
         self.cur_write_intent.compare_swap_none(wi)
 
@@ -195,11 +195,11 @@ impl WriteIntentMutex {
             None => {
                 let prev = self.write().unwrap().replace(wi.clone());
                 assert!(prev.is_none());
-                println!("{} locked", wi.associated_transaction.id);
+                //println!("{} locked", wi.associated_transaction.id);
                 Ok(())
             }
             Some(oldwi) if oldwi.associated_transaction == wi.associated_transaction => {
-                println!("{} locked", wi.associated_transaction.id);
+                //println!("{} locked", wi.associated_transaction.id);
                 Ok(())
             },
             _ => Err("Write intent atomic error, another thread has replaced value, todo!".to_string())

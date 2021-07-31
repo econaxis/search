@@ -49,7 +49,11 @@ pub mod tests {
                         let maxnumstr = max.to_string();
 
                         let first = txn.write(&ObjectPath::from(format!("/test/{}", maxnumstr)), Cow::from(format!("{}{}", BADVALUE.to_string(), txn.get_txn().id.to_string())));
-                        std::thread::sleep(Duration::from_millis(1));
+                        std::thread::sleep(Duration::from_millis((max % 10) as u64));
+
+                        let first = first.and(txn.write(&ObjectPath::from(format!("/test/{}", maxnumstr)), Cow::from(format!("{}{}", BADVALUE.to_string(), txn.get_txn().id.to_string()))));
+                        std::thread::sleep(Duration::from_millis((max % 10) as u64));
+
 
                         let second = txn.write(&ObjectPath::from(format!("/test/{}", maxnumstr)), maxnumstr.into());
 
@@ -63,7 +67,7 @@ pub mod tests {
                     });
                 } else {
                     // std::thread::sleep(Duration::from_millis(50));
-                    println!("transaction conflict {}, {:?}", range.unwrap_err(), txn.get_txn().timestamp);
+                    //println!("transaction conflict {}, {:?}", range.unwrap_err(), txn.get_txn().timestamp);
                 }
                 i += 1;
             }
@@ -71,7 +75,7 @@ pub mod tests {
 
         let mut joins = Vec::new();
 
-        for _ in 0..15 {
+        for _ in 0..16 {
             let ctx1 = ctx1.clone();
             let t1 = std::thread::spawn(move || {
                 clos(ctx1);
@@ -91,6 +95,6 @@ pub mod tests {
             uniq.insert(val)
         }));
 
-        println!("{}", ctx1.db.printdb());
+        //println!("{}", ctx1.db.printdb());
     }
 }

@@ -20,9 +20,7 @@ impl MutBTreeMap {
         self.0.lock().unwrap()
     }
 
-    pub fn remove_key(&self, key: &ObjectPath) {
-
-    }
+    pub fn remove_key(&self, _key: &ObjectPath) {}
 
     pub fn new() -> Self {
         Self(Mutex::new(UnsafeCell::new(BTreeMap::new())))
@@ -40,13 +38,9 @@ impl MutBTreeMap {
             R: RangeBounds<ObjectPath>,
     {
         let lock = self.0.lock().unwrap();
-        let range = unsafe {&*lock.get()}.range(range);
+        let range = unsafe { &*lock.get() }.range(range);
 
         (lock, range)
-    }
-
-    pub fn read_range_owned<R>(&self, range: R) -> Vec<(ObjectPath, ValueWithMVCC)> where R: RangeBounds<ObjectPath> {
-        unsafe { &*self.0.lock().unwrap().get() }.range(range).map(|(a, b)| (a.clone(), b.clone())).collect()
     }
 
     pub fn get_mut<T>(&self, key: &T) -> Option<&mut ValueWithMVCC>
@@ -54,7 +48,6 @@ impl MutBTreeMap {
             ObjectPath: Borrow<T> + Ord,
             T: Ord + ?Sized,
     {
-
         unsafe { &mut *self.0.lock().unwrap().get() }.get_mut(key)
     }
     pub fn get_mut_with_lock<T>(&self, key: &T) -> (MutexGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>, Option<&mut ValueWithMVCC>)
@@ -63,13 +56,15 @@ impl MutBTreeMap {
             T: Ord + ?Sized,
     {
         let lock = self.0.lock().unwrap();
-        let s = unsafe {&mut *lock.get()};
+        let s = unsafe { &mut *lock.get() };
 
         (lock, s.get_mut(key))
     }
 
     pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC) -> Option<ValueWithMVCC> {
-        unsafe { &mut *self.0.lock().unwrap().get() }.insert(key, value)
+        let lock = self.0.lock().unwrap();
+
+        unsafe { &mut *lock.get() }.insert(key, value)
     }
 
     pub fn iter(&self) -> Range<ObjectPath, ValueWithMVCC> {

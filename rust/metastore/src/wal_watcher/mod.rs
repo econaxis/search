@@ -132,6 +132,8 @@ pub struct WalTxn {
     timestamp: Timestamp,
 }
 
+
+
 impl PartialEq for WalTxn {
     fn eq(&self, other: &Self) -> bool {
         self.ops.iter().zip(&other.ops).all(|(my, other)| {

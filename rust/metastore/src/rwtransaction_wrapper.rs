@@ -39,27 +39,31 @@ impl<'a> RWTransactionWrapper<'a> {
 }
 
 impl<'a> RWTransactionWrapper<'a> {
-
     pub fn read_range_owned(&mut self, key: &ObjectPath) -> Result<Vec<(ObjectPath, ValueWithMVCC)>, String> {
-        let (lock, range) = self.ctx.db.range_with_lock(key.get_prefix_ranges());
-
-        let _deb: Vec<_> = range.clone().collect();
-        let keys: Vec<_> = range.map(|(a, _b)| a.clone()).collect();
+        let (lock, mut range) = self.ctx.db.range_with_lock(key.get_prefix_ranges());
+        let mut keys: Vec<_> = range.map(|a| (a.0.clone(), a.1.clone())).collect();
         std::mem::drop(lock);
-        let mut ret = Vec::new();
 
-        for key in keys {
-            if let Ok(value) = self.read_mvcc(key.as_cow_str()) {
-
-                let val = value.as_inner().1.parse::<u64>().unwrap();
-                if val >= 9999 {
-                    unreachable!();
-                };
-                ret.push((key.clone(), value.clone()));
-            }
+        if keys.iter().all(
+            |kv|
+                match self.read_mvcc(kv.0.as_cow_str()) {
+                    Ok(kv2) => {
+                        if kv.1.as_inner().1 == kv2.as_inner().1 {
+                            true
+                        } else {
+                            println!("second read failed {:?} {:?}", kv.1, kv2);
+                            false
+                        }
+                    }
+                    Err(err) => {
+                        println!("Error: {}", err);
+                        false
+                    }
+                }) {
+            Ok(Vec::new())
+        } else {
+            Err("Reread failed, different results".to_string())
         }
-
-        Ok(ret)
     }
     pub fn read_mvcc(&mut self, key: Cow<str>) -> Result<ValueWithMVCC, String> {
         let key = match key {
@@ -105,7 +109,7 @@ impl<'a> RWTransactionWrapper<'a> {
         // TODO: fix concurrency errors
         // self.ctx.wallog.borrow_mut().store(placeholder);
         self.committed = true;
-        println!("Txn {} committed", self.txn.id);
+        println!("Txn {} committed by thread {:?}", self.txn.id, std::thread::current().id());
     }
 
     pub fn abort(&self) {
@@ -132,7 +136,7 @@ impl<'a> RWTransactionWrapper<'a> {
 impl Drop for RWTransactionWrapper<'_> {
     fn drop(&mut self) {
         if !self.committed {
-            // self.abort().unwrap();
+            self.abort();
         }
     }
 }
@@ -175,18 +179,18 @@ mod tests {
         txn2.write(&a2, Cow::from("key2value"));
         txn3.write(&a3, Cow::from("key3value"));
 
-        assert_eq!(txn1.read(a0.as_str().into()), Ok("key0value"));
+        assert_eq!(txn1.read(a0.as_str().into()).unwrap().as_str(), "key0value");
         txn1.commit();
-        assert_eq!(txn2.read(a0.as_str().into()), Ok("key0value"));
-        assert_eq!(txn2.read(a1.as_str().into()), Ok("key1value"));
+        assert_eq!(txn2.read(a0.as_str().into()).unwrap().as_str(), "key0value");
+        assert_eq!(txn2.read(a1.as_str().into()).unwrap().as_str(), "key1value");
         assert_matches!(txn2.read(a3.as_cow_str()), Err(..));
-        assert_matches!(txn3.read(a1.as_cow_str()), Ok("key1value"));
+        assert_matches!(txn3.read(a1.as_cow_str()).unwrap().as_str(), "key1value");
         assert_matches!(txn3.read(a2.as_cow_str()), Err(..));
 
         txn2.commit();
-        assert_eq!(txn3.read(a0.as_str().into()), Ok("key0value"));
-        assert_eq!(txn3.read(a1.as_str().into()), Ok("key1value"));
-        assert_eq!(txn3.read(a2.as_str().into()), Ok("key2value"));
+        assert_eq!(txn3.read(a0.as_str().into()), Ok("key0value".to_string()));
+        assert_eq!(txn3.read(a1.as_str().into()), Ok("key1value".to_string()));
+        assert_eq!(txn3.read(a2.as_str().into()), Ok("key2value".to_string()));
 
         txn3.commit();
 

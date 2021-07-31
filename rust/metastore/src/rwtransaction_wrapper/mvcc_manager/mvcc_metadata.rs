@@ -4,11 +4,11 @@ use std::fmt::{Display, Formatter, Write, Debug};
 use super::lock_data_manager::{IntentMap, LockDataRef};
 use crate::timestamp::Timestamp;
 use serde::{Serialize, Deserialize};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard, LockResult, TryLockResult, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool};
+use std::sync::{LockResult, TryLockResult, Mutex, MutexGuard};
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum WriteIntentError {
     Aborted(LockDataRef),
     WritingInThePast,
@@ -33,17 +33,18 @@ impl WriteIntentError {
     }
 }
 
-static ATOMIC_LOCK_TEMP: AtomicBool = AtomicBool::new(false);
 
 impl MVCCMetadata {
-    pub fn clear_write_intents(&mut self, compare: LockDataRef) -> Result<(), &'static str> {
+    pub fn aborted_reset_write_intent(&mut self, compare: LockDataRef, new: Option<LockDataRef>) -> Result<(), String> {
         let mut writer = self.cur_write_intent.write_block();
         if writer.as_ref().unwrap().associated_transaction == compare {
             println!("Clearing {:?}", compare);
-            writer.take();
+            let wi = new.map(|a| WriteIntent {associated_transaction: a});
+            std::mem::replace(&mut *writer, wi);
+            // writer.replace(WriteIntent {associated_transaction: new});
             Ok(())
         } else {
-            Err("Compare value not same")
+            Err("Compare value not same".to_string())
         }
     }
 
@@ -82,7 +83,7 @@ impl MVCCMetadata {
         cur_txn: LockDataRef,
     ) -> Result<(), WriteIntentError> {
         // todo! make this to not write (read only) and do the commit taking later on.
-        let curwriteintent = self.cur_write_intent.try_read().map_err(|_| WriteIntentError::Other("try lock error".to_string()))?.clone();
+        let curwriteintent = self.cur_write_intent.read();
         match curwriteintent {
             None => Ok(()),
             Some(wi) if wi.associated_transaction == cur_txn => Ok(()),
@@ -98,12 +99,11 @@ impl MVCCMetadata {
                             self.cur_write_intent.write().map(|mut a| {
                                 match a.as_ref() {
                                     Some(w) if w.associated_transaction == associated_transaction => {
-                                        println!("Destroying committed intent {}", associated_transaction.id);
                                         a.take();
                                     }
                                     _ => {}
                                 }
-                            });
+                            }).unwrap();
                             Ok(())
                         } else {
                             Err(WriteIntentError::WritingInThePast)
@@ -141,18 +141,28 @@ impl MVCCMetadata {
     }
 
     // todo!
-    pub(super) fn deactivate_and_get_successor(&mut self, timestamp: Timestamp) -> Self {
+    pub(super) fn into_newer(&mut self, timestamp: Timestamp) -> Self {
         // We should have a lock on this to access the inner.
         assert!(self.cur_write_intent.read().is_some());
-        let mut new = self.clone();
-        assert!(self.cur_write_intent.read().is_some());
+
+        // Clone acquires a write lock itself, so to prevent deadlock, we acquire write lock after clone
+        let mut old = self.clone();
+
+        // Just to prevent others from reading (e.g. clone), write lock
+        let _guard = self.cur_write_intent.write_block();
+        self.begin_ts = timestamp;
+        old.end_ts = timestamp;
+
+        // Can't write to a value that has already been read before us.
+        // Should've been checked before in `check_read`. we check again for correctness, just in case
+        assert!(self.last_read <= timestamp);
+        self.last_read = timestamp;
 
 
-        new.begin_ts = timestamp;
-        self.end_ts = timestamp;
-        new.last_read = self.last_read.max(timestamp);
-        assert!(new.begin_ts <= new.end_ts);
-        new
+        assert!(old.begin_ts <= old.end_ts);
+        assert!(self.begin_ts <= self.end_ts);
+
+        old
     }
 
 
@@ -184,25 +194,43 @@ impl MVCCMetadata {
 
 struct WriteIntentMutex(Mutex<Option<WriteIntent>>);
 
-impl WriteIntentMutex {
-
+impl PartialEq for WriteIntentMutex {
+    fn eq(&self, other: &Self) -> bool {
+        if self.read() == other.read() {
+            true
+        } else {
+            let _a = self.read();
+            let _b = other.read();
+            let _c = true;
+            false
+        }
+    }
 }
+
+impl Clone for WriteIntentMutex {
+    fn clone(&self) -> Self {
+        Self(Mutex::new(self.read()))
+    }
+}
+
 
 impl WriteIntentMutex {
     pub(crate) fn compare_swap_none(&self, wi: WriteIntent) -> Result<(), String> {
-        let mut reader = self.read();
-        match reader {
+        let mut writer = self.write_block();
+        match &*writer {
             None => {
-                let prev = self.write().unwrap().replace(wi.clone());
+                let prev = writer.replace(wi);
                 assert!(prev.is_none());
-                //println!("{} locked", wi.associated_transaction.id);
                 Ok(())
             }
             Some(oldwi) if oldwi.associated_transaction == wi.associated_transaction => {
-                //println!("{} locked", wi.associated_transaction.id);
                 Ok(())
-            },
-            _ => Err("Write intent atomic error, another thread has replaced value, todo!".to_string())
+            }
+            _ => {
+                println!("warning: Write intent atomic error, another thread has replaced value, todo!");
+                writer.replace(wi);
+                Ok(())
+            }
         }
     }
 }
@@ -234,65 +262,82 @@ impl Default for WriteIntentMutex {
 
 impl Debug for WriteIntentMutex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:?}", self.read()))
+        self.try_read().map(|a|
+            f.write_fmt(format_args!("{:?}", &*a))
+        );
+        Ok(())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct MVCCMetadata {
-    pub begin_ts: Timestamp,
-    pub end_ts: Timestamp,
-    pub last_read: Timestamp,
+    begin_ts: Timestamp,
+    end_ts: Timestamp,
+    last_read: Timestamp,
     #[serde(skip)]
     cur_write_intent: WriteIntentMutex,
     #[serde(skip)]
-    pub(in super) previous_mvcc_value: Option<usize>,
+    previous_mvcc_value: Option<usize>,
 }
 
 impl Clone for MVCCMetadata {
     fn clone(&self) -> Self {
-        let wi = self.cur_write_intent.read();
+        let guard = self.cur_write_intent.write_block();
         Self {
             begin_ts: self.begin_ts,
             end_ts: self.end_ts,
             last_read: self.last_read,
-            cur_write_intent: WriteIntentMutex::new(wi),
+            cur_write_intent: WriteIntentMutex::new(guard.clone()),
             previous_mvcc_value: self.previous_mvcc_value,
         }
     }
 }
 
 impl MVCCMetadata {
+    pub(crate) fn get_prev_mvcc(&self) -> Option<usize> {
+        // Don't want to return erroneous values when another thread is doing a swap/mutating this value.
+        // Because we're just reading previous_mvcc_value and not trusting that the actual String value is correct, we can bypass putting down a write intent.
+        // This usually happens for reads.
+        let guard = self.cur_write_intent.write_block();
+        self.previous_mvcc_value
+    }
+    pub(crate) fn insert_prev_mvcc(&mut self, p0: usize) {
+        self.previous_mvcc_value.replace(p0);
+    }
+
+    // pub fn try_clone(&self, txn: LockDataRef) -> Result<Self, String> {
+    //     unimplemented!();
+    //     let wi = self.cur_write_intent.try_read().map_err(|_| "lock failed".to_string())?;
+    //
+    //     match &*wi {
+    //         Some(wi) if wi.associated_transaction == txn => {}
+    //         None => {}
+    //         _ => return Err("Write intent still exists".to_string())
+    //     };
+    //     Ok(Self {
+    //         begin_ts: self.begin_ts,
+    //         end_ts: self.end_ts,
+    //         last_read: self.last_read,
+    //         cur_write_intent: WriteIntentMutex::new(wi.clone()),
+    //         previous_mvcc_value: self.previous_mvcc_value,
+    //     })
+    // }
+}
+
+
+impl MVCCMetadata {
     pub fn sorta_equal(&self, other: &Self) -> bool {
         self.begin_ts == other.begin_ts &&
             self.end_ts == other.end_ts
     }
-}
-
-#[cfg(test)]
-impl Default for MVCCMetadata {
-    fn default() -> Self {
-        Self {
-            begin_ts: Timestamp::mintime(),
-            end_ts: Timestamp::maxtime(),
-            last_read: Timestamp::mintime(),
-            cur_write_intent: WriteIntentMutex::new(None),
-            previous_mvcc_value: None,
-        }
+    pub fn get_end_time(&self) -> Timestamp {
+        self.end_ts
+    }
+    pub fn set_end_time(&mut self, time: Timestamp) {
+        self.end_ts = time;
     }
 }
 
-impl Display for MVCCMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "beg: {}, end: {}, lr: {}, wi: {}",
-            self.begin_ts.to_string(),
-            self.end_ts.to_string(),
-            self.last_read.to_string(),
-            &self.cur_write_intent.read().is_some()
-        ))
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -332,7 +377,7 @@ mod tests {
         assert_matches!(txnread.read(ObjectPath::from("key1").as_cow_str()), Err(..));
 
         txn1.commit();
-        assert_matches!(txnread.read("key1".into()), Ok("value1"));
+        assert_eq!(txnread.read("key1".into()), Ok("value1".to_string()));
     }
 
     #[test]
@@ -367,4 +412,29 @@ pub enum WriteIntentStatus {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WriteIntent {
     pub associated_transaction: LockDataRef,
+}
+
+#[cfg(test)]
+impl Default for MVCCMetadata {
+    fn default() -> Self {
+        Self {
+            begin_ts: Timestamp::mintime(),
+            end_ts: Timestamp::maxtime(),
+            last_read: Timestamp::mintime(),
+            cur_write_intent: WriteIntentMutex::new(None),
+            previous_mvcc_value: None,
+        }
+    }
+}
+
+impl Display for MVCCMetadata {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "beg: {}, end: {}, lr: {}",
+            self.begin_ts.to_string(),
+            self.end_ts.to_string(),
+            self.last_read.to_string(),
+            // self.cur_write_intent.read()
+        ))
+    }
 }

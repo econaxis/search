@@ -12,6 +12,7 @@ serde = {version = "*", features = ["derive"]}
 #tokio = { version = "^1", features = ["full"] }
 #hyper = { version = "*", features = ["full"] }
 slab = "*"
+rand = "*"
 syslog = "*"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"

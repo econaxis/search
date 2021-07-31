@@ -2,8 +2,8 @@
 #![feature(assert_matches)]
 
 use std::cell::{RefCell, UnsafeCell};
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+
+use std::sync::{Mutex};
 
 
 use rwtransaction_wrapper::{IntentMap, MutBTreeMap};

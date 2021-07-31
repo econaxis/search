@@ -14,7 +14,7 @@ pub use btreemap_kv_backend::MutBTreeMap;
 
 pub use lock_data_manager::{LockDataRef, IntentMap};
 pub use mvcc_metadata::{WriteIntent, WriteIntentStatus};
-use std::time::Duration;
+
 use std::collections::BTreeMap;
 use std::cell::UnsafeCell;
 use std::sync::MutexGuard;
@@ -26,7 +26,7 @@ pub(super) fn update<'a>(
     txn: LockDataRef,
 ) -> Result<&'a ValueWithMVCC, String> {
     let ret = if check_has_value(&ctx.db, key) {
-        let (lock,res) = get_latest_mvcc_value(&ctx.db, key);
+        let (lock, res) = get_latest_mvcc_value(&ctx.db, key);
         let res = res.unwrap();
         let mut resl = res.lock_for_write(ctx, txn)?;
         assert_eq!(resl.0.get_write_intents(&ctx.transaction_map).unwrap().1.associated_transaction, txn);
@@ -51,55 +51,54 @@ fn check_has_value(db: &MutBTreeMap, key: &ObjectPath) -> bool {
 }
 
 fn get_latest_mvcc_value<'a>(db: &'a MutBTreeMap, key: &ObjectPath) -> (MutexGuard<'a, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>, Option<&'a mut ValueWithMVCC>) {
+    // todo! right now, we locking the whole database for each single read/write (not a transaction, which is good).
+    // this because there's no atomic way to set an enum (WriteIntent) right now.
+    // Also because I haven't thought of a way to do low-level per-value locking
+    // In MVCC and MVTO model, readers don't block writers.
+    // It's also true in this DB, but low-level locking comes in when setting atomically timestamp values, or
+    // changing the String atomically. In these cases, we must lock the value for a brief moment to do operations, then unlock it.
+    // Without this, readers might read invalid memory and will segfault.
     let res = db.get_mut_with_lock(key);
     res
 }
 
-fn get_correct_mvcc_value<'a>(
-    ctx: &'a DbContext,
+fn get_correct_mvcc_value(
+    ctx: &DbContext,
     key: &ObjectPath,
     txn: LockDataRef,
 ) -> Result<ValueWithMVCC, String> {
-    let (lock,mut res) = get_latest_mvcc_value(&ctx.db, key);
+    let (lock, res) = get_latest_mvcc_value(&ctx.db, key);
     let res = res.unwrap();
-    let read_latest = res.check_read(&ctx, txn);
+    let mut read_latest = res.check_read(&ctx, txn);
 
-
+    let fixed = if let Err(ref err) = read_latest {
+        res.fix_errors(&ctx, txn, err.clone())
+    } else {
+        Ok(())
+    };
 
     let mut error_causes = String::new();
 
-    if read_latest.is_ok() {
-        let val = res.as_inner().1.parse::<u64>().unwrap();
-        let mut res = res.clone();
-        std::mem::drop(lock);
-        if val >= 100000 {
-            unreachable!()
-        };
+    if fixed.is_ok() {
+        let _val = res.as_inner().1.parse::<u64>().unwrap();
+        let res = res.clone();
         return Ok(res);
     } else {
-        error_causes.push_str(&*read_latest.unwrap_err());
+        error_causes.push_str(&*read_latest.unwrap_err().tostring());
     }
+    std::mem::drop(lock);
 
-    return Err("unabl tor ead".to_string());
 
-    let mut prevoption = res.as_inner().0.previous_mvcc_value;
+    let mut prevoption = res.as_inner().0.get_prev_mvcc();
     while let Some(prev) = prevoption {
         let mut prevval = ctx.old_values_store.get_mut(prev).clone();
-
         let checkresult = prevval.check_read(&ctx, txn);
 
         if checkresult.is_ok() {
-            let val = prevval.as_inner().1.parse::<u64>().unwrap();
-            if val >= 100000 {
-                let result = prevval.check_read(&ctx, txn);
-
-                let key = prevval.as_inner().1.clone();
-                unreachable!()
-            };
             return Ok(prevval);
         } else {
-            error_causes.push_str(&*checkresult.unwrap_err());
-            prevoption = prevval.into_inner().0.previous_mvcc_value;
+            error_causes.push_str(&*checkresult.unwrap_err().tostring());
+            prevoption = prevval.into_inner().0.get_prev_mvcc();
         }
     }
     Err(error_causes)
@@ -110,8 +109,7 @@ pub(super) fn read(
     key: &ObjectPath,
     cur_txn: LockDataRef,
 ) -> Result<ValueWithMVCC, String> {
-    let mut v = get_correct_mvcc_value(ctx, key, cur_txn)?;
-    v.check_read(&ctx, cur_txn)?;
+    let v = get_correct_mvcc_value(ctx, key, cur_txn)?;
     Ok(v)
 }
 

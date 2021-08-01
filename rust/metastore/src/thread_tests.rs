@@ -11,6 +11,7 @@ pub mod tests {
     use std::time::{Duration, Instant};
 
     #[test]
+    #[ignore]
     pub fn run() {
         unique_set_insertion_test();
     }

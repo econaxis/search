@@ -82,7 +82,6 @@ impl MVCCMetadata {
         txnmap: &IntentMap,
         cur_txn: LockDataRef,
     ) -> Result<(), WriteIntentError> {
-        // todo! make this to not write (read only) and do the commit taking later on.
         let curwriteintent = self.cur_write_intent.read();
         match curwriteintent {
             None => Ok(()),
@@ -140,7 +139,6 @@ impl MVCCMetadata {
         }
     }
 
-    // todo!
     pub(super) fn into_newer(&mut self, timestamp: Timestamp) -> Self {
         // We should have a lock on this to access the inner.
         assert!(self.cur_write_intent.read().is_some());
@@ -179,8 +177,6 @@ impl MVCCMetadata {
     }
 
     pub(in super) fn confirm_read(&mut self, cur_txn: LockDataRef) {
-        // todo: only set this when the reads commit
-        // is this necessary for ACID?
         self.last_read = self.last_read.max(cur_txn.timestamp);
     }
 
@@ -227,7 +223,7 @@ impl WriteIntentMutex {
                 Ok(())
             }
             _ => {
-                println!("warning: Write intent atomic error, another thread has replaced value, todo!");
+                panic!("warning: Write intent atomic error, another thread has replaced value!");
                 writer.replace(wi);
                 Ok(())
             }
@@ -280,6 +276,8 @@ pub struct MVCCMetadata {
     previous_mvcc_value: Option<usize>,
 }
 
+
+
 impl Clone for MVCCMetadata {
     fn clone(&self) -> Self {
         let guard = self.cur_write_intent.write_block();
@@ -294,6 +292,9 @@ impl Clone for MVCCMetadata {
 }
 
 impl MVCCMetadata {
+    pub(crate) fn get_beg_time(&self) -> Timestamp {
+        self.begin_ts
+    }
     pub(crate) fn get_prev_mvcc(&self) -> Option<usize> {
         // Don't want to return erroneous values when another thread is doing a swap/mutating this value.
         // Because we're just reading previous_mvcc_value and not trusting that the actual String value is correct, we can bypass putting down a write intent.
@@ -305,27 +306,6 @@ impl MVCCMetadata {
         self.previous_mvcc_value.replace(p0);
     }
 
-    // pub fn try_clone(&self, txn: LockDataRef) -> Result<Self, String> {
-    //     unimplemented!();
-    //     let wi = self.cur_write_intent.try_read().map_err(|_| "lock failed".to_string())?;
-    //
-    //     match &*wi {
-    //         Some(wi) if wi.associated_transaction == txn => {}
-    //         None => {}
-    //         _ => return Err("Write intent still exists".to_string())
-    //     };
-    //     Ok(Self {
-    //         begin_ts: self.begin_ts,
-    //         end_ts: self.end_ts,
-    //         last_read: self.last_read,
-    //         cur_write_intent: WriteIntentMutex::new(wi.clone()),
-    //         previous_mvcc_value: self.previous_mvcc_value,
-    //     })
-    // }
-}
-
-
-impl MVCCMetadata {
     pub fn sorta_equal(&self, other: &Self) -> bool {
         self.begin_ts == other.begin_ts &&
             self.end_ts == other.end_ts

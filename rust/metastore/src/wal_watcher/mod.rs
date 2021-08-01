@@ -110,7 +110,7 @@ impl<'de> Deserialize<'de> for CustomSerde<ValueWithMVCC> {
             type Value = ValueWithMVCC;
 
             fn expecting(&self, _formatter: &mut Formatter) -> std::fmt::Result {
-                todo!()
+                unimplemented!()
             }
 
             fn visit_map<A>(self, mut v: A) -> Result<Self::Value, A::Error> where A: MapAccess<'de> {
@@ -164,11 +164,10 @@ impl Write for &mut ByteBufferWAL {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.buf.extend_from_slice(buf);
         Ok(buf.len())
-        // todo!()
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        todo!()
+        unimplemented!()
     }
 }
 

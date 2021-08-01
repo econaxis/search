@@ -31,7 +31,6 @@ pub(super) fn update<'a>(
         let mut resl = res.lock_for_write(ctx, txn)?;
         assert_eq!(resl.0.get_write_intents(&ctx.transaction_map).unwrap().1.associated_transaction, txn);
         std::mem::drop(lock);
-        // todo! delaying dropping lock somehow fixes everything...
         resl.become_newer_version(ctx, txn, new_value);
 
         res
@@ -62,54 +61,43 @@ fn get_latest_mvcc_value<'a>(db: &'a MutBTreeMap, key: &ObjectPath) -> (MutexGua
     res
 }
 
-fn get_correct_mvcc_value(
+pub fn read(
     ctx: &DbContext,
     key: &ObjectPath,
     txn: LockDataRef,
 ) -> Result<ValueWithMVCC, String> {
-    let (lock, res) = get_latest_mvcc_value(&ctx.db, key);
-    let res = res.unwrap();
-    let mut read_latest = res.check_read(&ctx, txn);
+    fn do_read(res: &mut ValueWithMVCC, ctx: &DbContext, txn: LockDataRef) -> Result<ValueWithMVCC, String> {
+        let mut read_latest = res.check_read(&ctx, txn);
 
-    let fixed = if let Err(ref err) = read_latest {
-        res.fix_errors(&ctx, txn, err.clone())
-    } else {
-        Ok(())
-    };
-
-    let mut error_causes = String::new();
-
-    if fixed.is_ok() {
-        let _val = res.as_inner().1.parse::<u64>().unwrap();
-        let res = res.clone();
-        return Ok(res);
-    } else {
-        error_causes.push_str(&*read_latest.unwrap_err().tostring());
-    }
-    std::mem::drop(lock);
-
-
-    let mut prevoption = res.as_inner().0.get_prev_mvcc();
-    while let Some(prev) = prevoption {
-        let mut prevval = ctx.old_values_store.get_mut(prev).clone();
-        let checkresult = prevval.check_read(&ctx, txn);
-
-        if checkresult.is_ok() {
-            return Ok(prevval);
+        let fixed = if let Err(ref err) = read_latest {
+            res.fix_errors(&ctx, txn, err.clone())
         } else {
-            error_causes.push_str(&*checkresult.unwrap_err().tostring());
-            prevoption = prevval.into_inner().0.get_prev_mvcc();
+            Ok(())
+        };
+
+        let mut error_causes = String::new();
+
+        if fixed.is_ok() {
+            res.confirm_read(txn);
+            return Ok(res.clone());
+        } else if res.as_inner().0.get_beg_time() > txn.timestamp{
+            error_causes.push_str(&*read_latest.unwrap_err().tostring());
+
+            let mut prevoption = res.as_inner().0.get_prev_mvcc();
+            if let Some(prev) = prevoption {
+                let mut prevval = ctx.old_values_store.get_mut(prev);
+                return do_read(prevval, ctx, txn);
+            } else {
+                return Err(error_causes);
+            }
+        } else {
+            Err(fixed.unwrap_err())
         }
     }
-    Err(error_causes)
+
+    let (_lock, res) = get_latest_mvcc_value(&ctx.db, key);
+    let res = res.unwrap();
+    do_read(res, ctx, txn)
 }
 
-pub(super) fn read(
-    ctx: &DbContext,
-    key: &ObjectPath,
-    cur_txn: LockDataRef,
-) -> Result<ValueWithMVCC, String> {
-    let v = get_correct_mvcc_value(ctx, key, cur_txn)?;
-    Ok(v)
-}
 

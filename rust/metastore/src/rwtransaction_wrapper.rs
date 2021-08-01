@@ -44,6 +44,8 @@ impl<'a> RWTransactionWrapper<'a> {
         let mut keys: Vec<_> = range.map(|a| (a.0.clone(), a.1.clone())).collect();
         std::mem::drop(lock);
 
+        let mut errors = String::new();
+
         if keys.iter().all(
             |kv|
                 match self.read_mvcc(kv.0.as_cow_str()) {
@@ -56,13 +58,14 @@ impl<'a> RWTransactionWrapper<'a> {
                         }
                     }
                     Err(err) => {
-                        println!("Error: {}", err);
+                        errors.push_str(&err);
+                        errors.truncate(500);
                         false
                     }
                 }) {
-            Ok(Vec::new())
+            Ok(keys)
         } else {
-            Err("Reread failed, different results".to_string())
+            Err(errors)
         }
     }
     pub fn read_mvcc(&mut self, key: Cow<str>) -> Result<ValueWithMVCC, String> {
@@ -73,13 +76,6 @@ impl<'a> RWTransactionWrapper<'a> {
 
         let ret = mvcc_manager::read(self.ctx, &key, self.txn)?;
 
-        let val = ret.as_inner().1.parse::<u64>().unwrap();
-        if val >= 100000 {
-            let _a = true;
-            unreachable!()
-        };
-        // println!("Val: {}", val);
-
         self.log.log_read(ObjectPath::from(key.to_owned()));
         Ok(ret)
     }
@@ -89,8 +85,6 @@ impl<'a> RWTransactionWrapper<'a> {
     }
 
     pub fn write(&mut self, key: &ObjectPath, value: Cow<str>) -> Result<&'a ValueWithMVCC, String> {
-        // TODO: if error then abort transaction
-        // not urgent or necessary, because you cannot actually write the key (lower layer prevents this), but good for WAL so theres no errors.
         let ret = mvcc_manager::update(self.ctx, key, value.into_owned(), self.txn)?;
 
         self.log.log_write(key.clone(), ret.clone());
@@ -113,12 +107,9 @@ impl<'a> RWTransactionWrapper<'a> {
     }
 
     pub fn abort(&self) {
-        // todo: lookup the previous mvcc values written and upgrade it back to the main database
-        // store the write set
         self.ctx
             .transaction_map
             .set_txn_status(self.txn, WriteIntentStatus::Aborted);
-        // println!("{:?} aborted", self.txn);
     }
 
     pub fn new(ctx: &'a DbContext) -> Self {
@@ -160,6 +151,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test2() {
         let ctx = create_empty_context();
         let ctx = &ctx;

@@ -9,10 +9,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Debug, PartialEq, Clone)]
 pub struct ValueWithMVCC(MVCCMetadata, String);
 
+impl ValueWithMVCC {
+    pub(crate) fn confirm_read(&mut self, p0: LockDataRef) {
+        self.0.confirm_read(p0);
+    }
+}
+
 pub struct UnlockedMVCC<'a>(pub &'a mut MVCCMetadata, pub &'a mut String);
 
-
-// todo! every modification must lock, because there might be concurrent readers.
 impl<'a> UnlockedMVCC<'a> {
     pub fn release_lock(mut self, txn: LockDataRef) {
         self.0.aborted_reset_write_intent(txn, None);
@@ -50,7 +54,6 @@ impl<'a> UnlockedMVCC<'a> {
         Ok(())
     }
     fn rescue_previous_value(&mut self, ctx: &DbContext) {
-        // TODO: dangerous multithreading, must use atomics/lock the whole ValueWithMVCC up preferably
         let cur_end_ts = self.0.get_end_time();
 
         if let Some(prev) = self.0.get_prev_mvcc() {
@@ -105,12 +108,6 @@ impl ValueWithMVCC {
 }
 
 impl ValueWithMVCC {
-    // pub fn try_clone(&self, txn: LockDataRef) -> Result<Self, String> {
-    //     let mvccclone = self.0.try_clone(txn)?;
-    //     let valueclone = self.1.clone();
-    //     Ok(Self(mvccclone, valueclone))
-    // }
-
     pub fn lock_for_write(&mut self, ctx: &DbContext, txn: LockDataRef) -> Result<UnlockedMVCC<'_>, String> {
         let res = self.check_read(ctx, txn);
 
@@ -140,12 +137,11 @@ impl ValueWithMVCC {
         Ok(unlocked)
     }
 
-
-
     fn check_write_intents(&mut self, ctx: &DbContext, txn: LockDataRef) -> Result<(), WriteIntentError> {
         self.0.check_write_intents(&ctx.transaction_map, txn)
     }
 
+    // todo! write tests for fixing errors
     pub fn fix_errors(&mut self, txnmap: &DbContext, txn: LockDataRef, err: WriteIntentError) -> Result<(), String> {
 
         match err {

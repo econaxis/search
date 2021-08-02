@@ -1,14 +1,14 @@
 #[cfg(test)]
 mod tests {
-    
-
 
     use quickcheck::{Arbitrary, Gen, TestResult};
     use quickcheck_macros::quickcheck;
     use serde_json::Value;
 
+    use super::super::json_processing::{
+        check_valid_json, json_to_map, map_to_json, PrimitiveValue,
+    };
     use crate::create_empty_context;
-    use super::super::json_processing::{check_valid_json, json_to_map, map_to_json, PrimitiveValue};
     use crate::object_path::ObjectPath;
     use crate::rwtransaction_wrapper::RWTransactionWrapper;
 
@@ -27,7 +27,7 @@ mod tests {
 
             for u in range {
                 v.push(u.to_string());
-            };
+            }
 
             let mut v: String = v.join("/");
             v.push('/');
@@ -49,7 +49,7 @@ mod tests {
             for j in 0..numelems {
                 ret[j as usize][i as usize] = (j / modulo) % max;
             }
-        };
+        }
         ret
     }
 
@@ -59,9 +59,9 @@ mod tests {
 
             let mut map = Vec::with_capacity(allpaths.len());
             for p in allpaths {
-                let str = String::arbitrary(g);
+                let mut str = String::arbitrary(g);
                 map.push((ObjectPath::arbitrary(g, &p), PrimitiveValue::String(str)));
-            };
+            }
 
             let mut value = map_to_json(&map);
             let value = value["user"].take();
@@ -71,13 +71,16 @@ mod tests {
     }
 
     fn random_ascii_string(g: &mut Gen) -> String {
-        String::arbitrary(g).chars().filter_map(|char| {
-            if char.is_ascii_alphanumeric() {
-                Some(char)
-            } else {
-                None
-            }
-        }).collect()
+        String::arbitrary(g)
+            .chars()
+            .filter_map(|char| {
+                if char.is_ascii_alphanumeric() {
+                    Some(char)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     impl Arbitrary for ArbJson2 {
@@ -102,13 +105,14 @@ mod tests {
     }
 
     fn truncate_string(str: &str, maxlen: usize) -> &str {
-        let index = str.char_indices().skip(maxlen).find(|a| {
-            str.is_char_boundary(a.0)
-        });
+        let index = str
+            .char_indices()
+            .skip(maxlen)
+            .find(|a| str.is_char_boundary(a.0));
 
         match index {
             Some(a) => &str[0..a.0],
-            None => &str
+            None => &str,
         }
     }
 
@@ -132,20 +136,24 @@ mod tests {
         super::super::write_json(v.clone(), &mut txn);
         txn.commit();
 
-        let value = crate::rwtransaction_wrapper::json_request_writers::read_json_request("/", &ctx);
+        let value =
+            crate::rwtransaction_wrapper::json_request_writers::read_json_request("/", &ctx);
 
         let map = json_to_map(v.clone());
 
-
         map.iter().for_each(|(path, _value)| {
             let new = path.as_str().strip_prefix("/user").unwrap();
-            let _a = crate::rwtransaction_wrapper::json_request_writers::read_json_request(new, &ctx);
+            let _a =
+                crate::rwtransaction_wrapper::json_request_writers::read_json_request(new, &ctx);
             let stripped = match new.strip_suffix('/') {
                 Some(x) => x,
-                None => new
+                None => new,
             };
             let _b = v.pointer(stripped).unwrap();
-            assert_eq!(*v.pointer(stripped).unwrap(), crate::rwtransaction_wrapper::json_request_writers::read_json_request(new, &ctx));
+            assert_eq!(
+                *v.pointer(stripped).unwrap(),
+                crate::rwtransaction_wrapper::json_request_writers::read_json_request(new, &ctx)
+            );
         });
 
         assert_eq!(value, v);

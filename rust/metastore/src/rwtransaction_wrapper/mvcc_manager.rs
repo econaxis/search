@@ -1,23 +1,24 @@
-mod mvcc_metadata;
-mod lock_data_manager;
-mod kv_backend;
 mod btreemap_kv_backend;
+mod kv_backend;
+mod lock_data_manager;
+mod mvcc_metadata;
 pub mod value_with_mvcc;
 
 pub use mvcc_metadata::MVCCMetadata;
-pub use value_with_mvcc::{ValueWithMVCC, UnlockedMVCC};
+pub use value_with_mvcc::{UnlockedWritableMVCC, ValueWithMVCC};
 
-use crate::DbContext;
 use crate::object_path::ObjectPath;
+use crate::DbContext;
 
 pub use btreemap_kv_backend::MutBTreeMap;
 
-pub use lock_data_manager::{LockDataRef, IntentMap};
+pub use lock_data_manager::{IntentMap, LockDataRef};
 pub use mvcc_metadata::{WriteIntent, WriteIntentStatus};
 
-use std::collections::BTreeMap;
 use std::cell::UnsafeCell;
+use std::collections::BTreeMap;
 use std::sync::MutexGuard;
+use crate::rwtransaction_wrapper::mvcc_manager::mvcc_metadata::{WriteIntentError, is_repeatable};
 
 pub(super) fn update<'a>(
     ctx: &'a DbContext,
@@ -28,11 +29,18 @@ pub(super) fn update<'a>(
     let ret = if check_has_value(&ctx.db, key) {
         let (lock, res) = get_latest_mvcc_value(&ctx.db, key);
         let res = res.unwrap();
-        let mut resl = res.lock_for_write(ctx, txn)?;
-        assert_eq!(resl.0.get_write_intents(&ctx.transaction_map).unwrap().1.associated_transaction, txn);
+        let mut resl = res.get_readable()?.lock_for_write(ctx, txn)?;
+        assert_eq!(
+            resl.0.meta
+                .get_write_intents()
+                .unwrap()
+                .associated_transaction,
+            txn
+        );
         std::mem::drop(lock);
         resl.become_newer_version(ctx, txn, new_value);
 
+        std::mem::drop(resl);
         res
     } else {
         // We're inserting a new key here.
@@ -49,7 +57,13 @@ fn check_has_value(db: &MutBTreeMap, key: &ObjectPath) -> bool {
     db.get_mut(key).is_some()
 }
 
-fn get_latest_mvcc_value<'a>(db: &'a MutBTreeMap, key: &ObjectPath) -> (MutexGuard<'a, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>, Option<&'a mut ValueWithMVCC>) {
+fn get_latest_mvcc_value<'a>(
+    db: &'a MutBTreeMap,
+    key: &ObjectPath,
+) -> (
+    MutexGuard<'a, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
+    Option<&'a mut ValueWithMVCC>,
+) {
     // todo! right now, we locking the whole database for each single read/write (not a transaction, which is good).
     // this because there's no atomic way to set an enum (WriteIntent) right now.
     // Also because I haven't thought of a way to do low-level per-value locking
@@ -61,43 +75,92 @@ fn get_latest_mvcc_value<'a>(db: &'a MutBTreeMap, key: &ObjectPath) -> (MutexGua
     res
 }
 
-pub fn read(
-    ctx: &DbContext,
-    key: &ObjectPath,
-    txn: LockDataRef,
-) -> Result<ValueWithMVCC, String> {
-    fn do_read(res: &mut ValueWithMVCC, ctx: &DbContext, txn: LockDataRef) -> Result<ValueWithMVCC, String> {
+
+pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<ValueWithMVCC, WriteIntentError> {
+    enum R<'a> {
+        Result(ValueWithMVCC),
+        Recurse(&'a mut ValueWithMVCC),
+    };
+    fn do_read<'a>(
+        res: &mut ValueWithMVCC,
+        ctx: &'a DbContext,
+        txn: LockDataRef,
+    ) -> Result<R<'a>, WriteIntentError> {
+        let mut res = res.get_readable()?;
         let mut read_latest = res.check_read(&ctx, txn);
 
-        let fixed = if let Err(ref err) = read_latest {
-            res.fix_errors(&ctx, txn, err.clone())
+
+        let fixed = if let Err(WriteIntentError::Aborted(_)) = read_latest {
+            res.fix_errors(ctx, txn)
         } else {
-            Ok(())
+            read_latest.map_err(WriteIntentError::tostring)
         };
 
         let mut error_causes = String::new();
 
         if fixed.is_ok() {
             res.confirm_read(txn);
-            return Ok(res.clone());
-        } else if res.as_inner().0.get_beg_time() > txn.timestamp{
-            error_causes.push_str(&*read_latest.unwrap_err().tostring());
-
-            let mut prevoption = res.as_inner().0.get_prev_mvcc();
-            if let Some(prev) = prevoption {
-                let mut prevval = ctx.old_values_store.get_mut(prev);
-                return do_read(prevval, ctx, txn);
+            let mut cloned = res.clone_value();
+            return if !(is_repeatable(&*cloned.get_readable().unwrap().meta, &*res.meta)) {
+                // Since that read was not repeatable (maybe high contention), we have to repeat the transaction.
+                // Try to avoid aborts?
+                // do_read(res, ctx, txn)
+                Err(WriteIntentError::from("Non repeatable read"))
             } else {
-                return Err(error_causes);
-            }
+                // assert_eq!(cloned.getval(), res.getval());
+                Ok(R::Result(cloned))
+            };
+        } else if res.meta.get_beg_time() >= txn.timestamp {
+            error_causes.push_str(&fixed.unwrap_err());
+
+            return if let Ok(prevval) = res.meta.get_prev_mvcc(ctx) {
+                // no tail call optimization in rust, this might stack overflow when we have a lot of aborts to a single value.
+                Ok(R::Recurse(prevval))
+            } else {
+                Err("No more MVCC".into())
+            };
         } else {
-            Err(fixed.unwrap_err())
+            Err(fixed.unwrap_err().into())
         }
     }
 
     let (_lock, res) = get_latest_mvcc_value(&ctx.db, key);
-    let res = res.unwrap();
-    do_read(res, ctx, txn)
+    std::mem::drop(_lock);
+    let res = res.ok_or("Read value doesn't exist".to_string())?;
+
+    let mut res = do_read(res, ctx, txn)?;
+
+    while let R::Recurse(recurse) = res {
+        res = do_read(recurse, ctx, txn).map_err(|err| match err {
+            WriteIntentError::Other(str) => { WriteIntentError::Other(format!("{} {}", str, key.as_str())) }
+            _ => err
+        })?;
+    }
+
+    if let R::Result(r) = res {
+        Ok(r)
+    } else {
+        unreachable!()
+    }
 }
 
 
+#[cfg(test)]
+mod tests {
+    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::db;
+
+    #[test]
+    fn writes_dont_block_reads() {
+        let db = db!("k" = "v", "k1" = "v1");
+        let mut r = RWTransactionWrapper::new(&db);
+        let mut w = RWTransactionWrapper::new(&db);
+
+        w.write(&"k".into(), "v1".into());
+        assert_eq!(r.read("k".into()).unwrap(), "v".to_string());
+
+        w.commit();
+        let mut r = RWTransactionWrapper::new(&db);
+        assert_eq!(r.read("k".into()).unwrap(), "v1".to_string());
+    }
+}

@@ -1,12 +1,12 @@
-use std::fmt::{Display, Formatter, Write, Debug};
-
+use std::fmt::{Debug, Display, Formatter, Write};
 
 use super::lock_data_manager::{IntentMap, LockDataRef};
 use crate::timestamp::Timestamp;
-use serde::{Serialize, Deserialize};
-use std::sync::atomic::{AtomicBool};
-use std::sync::{LockResult, TryLockResult, Mutex, MutexGuard};
-
+use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::DbContext;
+use crate::rwtransaction_wrapper::ValueWithMVCC;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum WriteIntentError {
@@ -23,6 +23,16 @@ impl Into<String> for WriteIntentError {
         buf
     }
 }
+impl From<String> for WriteIntentError {
+    fn from(a: String) -> Self {
+        Self::Other(a)
+    }
+}
+impl From<&str> for WriteIntentError {
+    fn from(a: &str) -> Self {
+        Self::Other(a.to_string())
+    }
+}
 
 impl WriteIntentError {
     pub fn tostring(self) -> String {
@@ -33,31 +43,28 @@ impl WriteIntentError {
     }
 }
 
-
 impl MVCCMetadata {
-    pub fn aborted_reset_write_intent(&mut self, compare: LockDataRef, new: Option<LockDataRef>) -> Result<(), String> {
-        let mut writer = self.cur_write_intent.write_block();
-        if writer.as_ref().unwrap().associated_transaction == compare {
-            println!("Clearing {:?}", compare);
-            let wi = new.map(|a| WriteIntent {associated_transaction: a});
-            std::mem::replace(&mut *writer, wi);
-            // writer.replace(WriteIntent {associated_transaction: new});
-            Ok(())
-        } else {
-            Err("Compare value not same".to_string())
+    pub fn aborted_reset_write_intent(
+        &mut self,
+        compare: LockDataRef,
+        new: Option<LockDataRef>,
+    ) -> Result<(), String> {
+        let curwi = self.get_write_intents();
+        if curwi.as_ref().map_or(None, |a| Some(a.associated_transaction)) != Some(compare) {
+            return Err("Write intent not equals to compar, can't swap".to_string());
         }
+        let curwi = curwi.unwrap();
+
+        let newwi = new.map(|assoc_txn| WriteIntent {
+            associated_transaction: assoc_txn,
+            was_commited: curwi.was_commited,
+        });
+
+        self.cur_write_intent.compare_swap_none(Some(curwi), newwi)
     }
 
     pub fn atomic_insert_write_intents(&mut self, wi: WriteIntent) -> Result<(), String> {
-        //println!("{} try lock", wi.associated_transaction.id);
-
-        self.cur_write_intent.compare_swap_none(wi)
-
-        // ATOMIC_LOCK_TEMP.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).unwrap();
-
-        // } else {
-        //     Err("Write intent is not none")
-        // }
+        self.cur_write_intent.compare_swap_none(None, Some(wi))
     }
 
     pub fn new(txn: LockDataRef) -> Self {
@@ -65,19 +72,22 @@ impl MVCCMetadata {
             begin_ts: txn.timestamp,
             end_ts: Timestamp::maxtime(),
             last_read: Timestamp::mintime(),
-            cur_write_intent: WriteIntentMutex::new(Some(WriteIntent { associated_transaction: txn })),
+            cur_write_intent: WriteIntentMutex::new(Some(WriteIntent {
+                associated_transaction: txn,
+                was_commited: false,
+            })),
             previous_mvcc_value: None,
+            read_cnt: ReadCounter::new(),
         }
     }
 
-    pub(in super) fn get_write_intents(
+    pub(super) fn get_write_intents(
         &self,
-        txnmap: &IntentMap,
-    ) -> Option<(WriteIntentStatus, WriteIntent)> {
-        self.cur_write_intent.read().map(|wi| (txnmap.get_by_ref(&wi.associated_transaction).unwrap().get_write_intent(), wi.clone()))
+    ) -> Option<WriteIntent> {
+        self.cur_write_intent.read()
     }
 
-    pub(in super) fn check_write_intents(
+    pub(super) fn check_write_intents(
         &mut self,
         txnmap: &IntentMap,
         cur_txn: LockDataRef,
@@ -88,21 +98,18 @@ impl MVCCMetadata {
             Some(wi) if wi.associated_transaction == cur_txn => Ok(()),
             Some(WriteIntent {
                      associated_transaction,
+                     ..
                  }) => {
-                match txnmap.get_by_ref(&associated_transaction).unwrap().get_write_intent()
+                match txnmap
+                    .get_by_ref(&associated_transaction)
+                    .unwrap()
+                    .get_write_intent()
                 {
                     // If the transaction is committed already, then all good.
                     WriteIntentStatus::Committed => {
                         if associated_transaction.timestamp < cur_txn.timestamp {
                             // All good, we write after the txn has committed
-                            self.cur_write_intent.write().map(|mut a| {
-                                match a.as_ref() {
-                                    Some(w) if w.associated_transaction == associated_transaction => {
-                                        a.take();
-                                    }
-                                    _ => {}
-                                }
-                            }).unwrap();
+                            self.cur_write_intent.compare_swap_none(curwriteintent, None).map_err(|a| WriteIntentError::Other(a))?;
                             Ok(())
                         } else {
                             Err(WriteIntentError::WritingInThePast)
@@ -120,20 +127,17 @@ impl MVCCMetadata {
         }
     }
 
-    pub(in super) fn check_write(
+    pub(super) fn check_write(
         &mut self,
-        txnmap: &IntentMap,
         cur_txn: LockDataRef,
     ) -> Result<(), String> {
-        self.check_read(txnmap, cur_txn)?;
-
         if self.end_ts != Timestamp::maxtime() {
             // This record is not the latest, so we can't write to it.
             return Err("Trying to write on a historical MVCC record".to_string());
         }
 
         if cur_txn.timestamp < self.last_read {
-            Err("Timestamp bigger than last read".to_string())
+            Err("Timestamp smaller than last read".to_string())
         } else {
             Ok(())
         }
@@ -147,7 +151,7 @@ impl MVCCMetadata {
         let mut old = self.clone();
 
         // Just to prevent others from reading (e.g. clone), write lock
-        let _guard = self.cur_write_intent.write_block();
+        let mut intent = self.cur_write_intent.write_block();
         self.begin_ts = timestamp;
         old.end_ts = timestamp;
 
@@ -157,14 +161,19 @@ impl MVCCMetadata {
         self.last_read = timestamp;
 
 
+        old.cur_write_intent.compare_swap_none(intent.clone(), None).unwrap();
+
+
+        // Because we're creating a newer value, newer value must be not committed
+        intent.as_mut().unwrap().was_commited = false;
+
         assert!(old.begin_ts <= old.end_ts);
         assert!(self.begin_ts <= self.end_ts);
 
         old
     }
 
-
-    pub(in super) fn check_read(
+    pub(super) fn check_read(
         &mut self,
         txnmap: &IntentMap,
         cur_txn: LockDataRef,
@@ -172,21 +181,23 @@ impl MVCCMetadata {
         if cur_txn.timestamp < self.begin_ts || cur_txn.timestamp > self.end_ts {
             return Err("Timestamp not valid".to_string());
         }
-        self.check_write_intents(txnmap, cur_txn).map_err(WriteIntentError::tostring)?;
+        self.check_write_intents(txnmap, cur_txn)
+            .map_err(WriteIntentError::tostring)?;
         Ok(())
     }
 
-    pub(in super) fn confirm_read(&mut self, cur_txn: LockDataRef) {
+    pub(super) fn confirm_read(&mut self, cur_txn: LockDataRef) {
         self.last_read = self.last_read.max(cur_txn.timestamp);
     }
 
     #[cfg(test)]
     pub fn check_matching_timestamps(&self, other: &Self) -> bool {
-        self.end_ts == other.end_ts &&
-            self.begin_ts == other.begin_ts &&
-            self.last_read == other.last_read
+        self.end_ts == other.end_ts
+            && self.begin_ts == other.begin_ts
+            && self.last_read == other.last_read
     }
 }
+
 
 struct WriteIntentMutex(Mutex<Option<WriteIntent>>);
 
@@ -195,12 +206,16 @@ impl PartialEq for WriteIntentMutex {
         if self.read() == other.read() {
             true
         } else {
-            let _a = self.read();
-            let _b = other.read();
-            let _c = true;
             false
         }
     }
+}
+
+pub fn is_repeatable(a: &MVCCMetadata, b: &MVCCMetadata) -> bool {
+    a.begin_ts == b.begin_ts &&
+        a.end_ts == b.end_ts &&
+        a.cur_write_intent == b.cur_write_intent &&
+        a.previous_mvcc_value == b.previous_mvcc_value
 }
 
 impl Clone for WriteIntentMutex {
@@ -209,24 +224,18 @@ impl Clone for WriteIntentMutex {
     }
 }
 
-
 impl WriteIntentMutex {
-    pub(crate) fn compare_swap_none(&self, wi: WriteIntent) -> Result<(), String> {
+    pub(crate) fn compare_swap_none(&self, compare: Option<WriteIntent>, swap: Option<WriteIntent>) -> Result<(), String> {
         let mut writer = self.write_block();
-        match &*writer {
-            None => {
-                let prev = writer.replace(wi);
-                assert!(prev.is_none());
-                Ok(())
-            }
-            Some(oldwi) if oldwi.associated_transaction == wi.associated_transaction => {
-                Ok(())
-            }
-            _ => {
-                panic!("warning: Write intent atomic error, another thread has replaced value!");
-                writer.replace(wi);
-                Ok(())
-            }
+
+        if &*writer == &compare {
+            let oldvalue = std::mem::replace(&mut *writer, swap);
+            assert_eq!(oldvalue, compare);
+            Ok(())
+        } else if &*writer == &swap {
+            Ok(())
+        } else {
+            Err("Another thread has replaced this value".to_string())
         }
     }
 }
@@ -237,9 +246,6 @@ impl WriteIntentMutex {
     }
     pub(crate) fn try_read(&self) -> TryLockResult<MutexGuard<'_, Option<WriteIntent>>> {
         self.0.try_lock()
-    }
-    pub fn write(&self) -> LockResult<MutexGuard<'_, Option<WriteIntent>>> {
-        self.0.lock()
     }
     pub fn write_block(&self) -> MutexGuard<'_, Option<WriteIntent>> {
         self.0.lock().unwrap()
@@ -255,28 +261,62 @@ impl Default for WriteIntentMutex {
     }
 }
 
-
 impl Debug for WriteIntentMutex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.try_read().map(|a|
-            f.write_fmt(format_args!("{:?}", &*a))
-        );
+        self.try_read()
+            .map(|a| f.write_fmt(format_args!("{:?}", &*a)));
         Ok(())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+static ORD: Ordering = Ordering::SeqCst;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ReadCounter {
+    data: RwLock<()>,
+}
+
+impl ReadCounter {
+    fn new() -> ReadCounter {
+        ReadCounter {
+            data: RwLock::new(()),
+        }
+    }
+}
+
+impl ReadCounter {
+    pub fn read(&self) -> RwLockReadGuard<'_, ()> {
+        self.data.read().unwrap()
+    }
+    pub fn update(&self) -> RwLockWriteGuard<'_, ()> {
+        self.data.write().unwrap()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MVCCMetadata {
     begin_ts: Timestamp,
     end_ts: Timestamp,
     last_read: Timestamp,
     #[serde(skip)]
     cur_write_intent: WriteIntentMutex,
-    #[serde(skip)]
     previous_mvcc_value: Option<usize>,
+    read_cnt: ReadCounter,
 }
 
+impl MVCCMetadata {
+    pub(crate) fn acquire_lock(&self) -> MutexGuard<'_, Option<WriteIntent>> {
+        self.cur_write_intent.write_block()
+    }
+}
 
+impl PartialEq for MVCCMetadata {
+    fn eq(&self, other: &Self) -> bool {
+        self.begin_ts == other.begin_ts &&
+            self.end_ts == other.end_ts &&
+            self.last_read == other.last_read
+    }
+}
 
 impl Clone for MVCCMetadata {
     fn clone(&self) -> Self {
@@ -287,6 +327,7 @@ impl Clone for MVCCMetadata {
             last_read: self.last_read,
             cur_write_intent: WriteIntentMutex::new(guard.clone()),
             previous_mvcc_value: self.previous_mvcc_value,
+            read_cnt: ReadCounter::new(),
         }
     }
 }
@@ -295,20 +336,27 @@ impl MVCCMetadata {
     pub(crate) fn get_beg_time(&self) -> Timestamp {
         self.begin_ts
     }
-    pub(crate) fn get_prev_mvcc(&self) -> Option<usize> {
+    pub(crate) fn get_prev_mvcc<'a>(&self, ctx: &'a DbContext) -> Result<&'a mut ValueWithMVCC, String> {
         // Don't want to return erroneous values when another thread is doing a swap/mutating this value.
         // Because we're just reading previous_mvcc_value and not trusting that the actual String value is correct, we can bypass putting down a write intent.
         // This usually happens for reads.
+
+        // Check that there are no write intents
+        self.previous_mvcc_value.map(|a| {
+            ctx.old_values_store.get_mut(a)
+        }).ok_or("MVCC Value doesn't exist".to_string())
+    }
+
+    pub(crate) fn remove_prev_mvcc(&self, ctx: &DbContext) -> ValueWithMVCC {
         let guard = self.cur_write_intent.write_block();
-        self.previous_mvcc_value
+        ctx.old_values_store.remove(self.previous_mvcc_value.unwrap())
     }
     pub(crate) fn insert_prev_mvcc(&mut self, p0: usize) {
         self.previous_mvcc_value.replace(p0);
     }
 
     pub fn sorta_equal(&self, other: &Self) -> bool {
-        self.begin_ts == other.begin_ts &&
-            self.end_ts == other.end_ts
+        self.begin_ts == other.begin_ts && self.end_ts == other.end_ts
     }
     pub fn get_end_time(&self) -> Timestamp {
         self.end_ts
@@ -316,14 +364,16 @@ impl MVCCMetadata {
     pub fn set_end_time(&mut self, time: Timestamp) {
         self.end_ts = time;
     }
-}
 
+    pub fn read(&self) -> RwLockReadGuard<'_, ()> { self.read_cnt.read() }
+    pub fn write(&self) -> RwLockWriteGuard<'_, ()> { self.read_cnt.update() }
+}
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
     use crate::object_path::ObjectPath;
     use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::*;
 
     use super::*;
 
@@ -374,13 +424,11 @@ mod tests {
         let mut txn1 = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(5));
         let mut txnread = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(10));
 
-
         txnread.read(key.as_cow_str()).unwrap();
 
         assert_matches!(txn1.write(&key, "should fail".into()), Err(..));
     }
 }
-
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum WriteIntentStatus {
@@ -392,6 +440,7 @@ pub enum WriteIntentStatus {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WriteIntent {
     pub associated_transaction: LockDataRef,
+    pub was_commited: bool,
 }
 
 #[cfg(test)]
@@ -414,7 +463,6 @@ impl Display for MVCCMetadata {
             self.begin_ts.to_string(),
             self.end_ts.to_string(),
             self.last_read.to_string(),
-            // self.cur_write_intent.read()
         ))
     }
 }

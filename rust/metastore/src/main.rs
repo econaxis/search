@@ -1,13 +1,13 @@
 #![feature(min_type_alias_impl_trait)]
 #![feature(assert_matches)]
+#![feature(trace_macros)]
 
 use std::cell::{RefCell, UnsafeCell};
 
-use std::sync::{Mutex};
+use std::sync::Mutex;
 
-
-use rwtransaction_wrapper::{IntentMap, MutBTreeMap};
 use rwtransaction_wrapper::ValueWithMVCC;
+use rwtransaction_wrapper::{IntentMap, MutBTreeMap};
 
 use crate::wal_watcher::ByteBufferWAL;
 
@@ -16,21 +16,24 @@ extern crate quickcheck;
 extern crate quickcheck_macros;
 
 // mod hyperserver;
+mod c_interface;
 mod object_path;
 mod parsing;
 mod rwtransaction_wrapper;
-mod timestamp;
-mod c_interface;
-mod wal_watcher;
+
+#[macro_use]
 mod test_transaction_generate;
 mod thread_tests;
-
+mod timestamp;
+mod wal_watcher;
 
 pub struct MutSlab(Mutex<UnsafeCell<slab::Slab<ValueWithMVCC>>>);
 
 impl MutSlab {
     pub fn get_mut(&self, key: usize) -> &mut ValueWithMVCC {
-        unsafe { &mut *self.0.lock().unwrap().get() }.get_mut(key).unwrap()
+        unsafe { &mut *self.0.lock().unwrap().get() }
+            .get_mut(key)
+            .unwrap()
     }
 
     pub fn remove(&self, key: usize) -> ValueWithMVCC {
@@ -49,7 +52,7 @@ pub fn create_empty_context() -> DbContext {
         db: MutBTreeMap::new(),
         transaction_map: IntentMap::new(),
         old_values_store: MutSlab::new(),
-        wallog: RefCell::new(ByteBufferWAL::new())
+        wallog: ByteBufferWAL::new(),
     }
 }
 
@@ -57,14 +60,18 @@ pub struct DbContext {
     pub db: MutBTreeMap,
     pub transaction_map: IntentMap,
     pub old_values_store: MutSlab,
-    pub wallog: RefCell<ByteBufferWAL>
+    pub wallog: ByteBufferWAL,
 }
 
 unsafe impl Send for DbContext {}
+
 unsafe impl Sync for DbContext {}
 
 fn main() {
-    thread_tests::tests::unique_set_insertion_test();
+    for _ in 0..100 {
+        wal_watcher::tests::test1();
+    }
+    // thread_tests::tests::unique_set_insertion_test();
 }
 
 // #[tokio::main]
@@ -97,4 +104,3 @@ fn main() {
 //     let server = hyper::Server::bind(&addr).serve(make_svc);
 //     server
 // }
-

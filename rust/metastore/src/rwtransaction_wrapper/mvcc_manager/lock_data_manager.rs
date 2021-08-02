@@ -20,7 +20,7 @@ pub struct IntentMap(RwLock<HashMap<LockDataRef, TransactionLockData>>);
 
 unsafe impl Send for IntentMap {}
 impl IntentMap {
-    pub fn new() -> Self{
+    pub fn new() -> Self {
         Self(RwLock::new(HashMap::new()))
     }
 

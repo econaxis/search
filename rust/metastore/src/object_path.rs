@@ -1,9 +1,8 @@
+use std::borrow::Cow::Borrowed;
 use std::borrow::{Borrow, Cow};
 use std::collections::Bound;
 use std::fmt::{Display, Formatter};
 use std::iter::FromIterator;
-use std::borrow::Cow::Borrowed;
-
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct ObjectPath(String);
@@ -13,20 +12,28 @@ impl From<String> for ObjectPath {
         Self(a)
     }
 }
-
+impl From<&str> for ObjectPath {
+    fn from(a: &str) -> Self {
+        Self::new(a)
+    }
+}
 
 impl<BS: Borrow<str>> FromIterator<BS> for ObjectPath {
-    fn from_iter<T: IntoIterator<Item=BS>>(iter: T) -> Self {
-        iter.into_iter().fold(ObjectPath::new(""), |one: ObjectPath, two: BS| -> ObjectPath {
-            one.concat(two)
-        })
+    fn from_iter<T: IntoIterator<Item = BS>>(iter: T) -> Self {
+        iter.into_iter().fold(
+            ObjectPath::new(""),
+            |one: ObjectPath, two: BS| -> ObjectPath { one.concat(two) },
+        )
     }
 }
 
 #[test]
 fn test_from_iterator() {
     let v = vec!["user".to_string(), "one".to_string(), "two".to_string()];
-    assert_eq!(ObjectPath::from_iter(v.into_iter()), ObjectPath::new("/user/one/two"))
+    assert_eq!(
+        ObjectPath::from_iter(v.into_iter()),
+        ObjectPath::new("/user/one/two")
+    )
 }
 
 impl Display for ObjectPath {
@@ -80,8 +87,8 @@ impl ObjectPath {
 
         let minlen = min.len();
         let maxlen = max.len();
-        * unsafe { min.as_bytes_mut() }.get_mut(minlen - 1).unwrap() = 1u8;
-        * unsafe { max.as_bytes_mut() }.get_mut(maxlen - 1).unwrap() = 126u8;
+        *unsafe { min.as_bytes_mut() }.get_mut(minlen - 1).unwrap() = 1u8;
+        *unsafe { max.as_bytes_mut() }.get_mut(maxlen - 1).unwrap() = 126u8;
 
         let min: ObjectPath = ObjectPath::from(min);
         let max: ObjectPath = ObjectPath::from(max);
@@ -95,11 +102,5 @@ impl Default for ObjectPath {
         let ret = Self::new("/user");
 
         return ret;
-    }
-}
-
-impl From<&str> for ObjectPath {
-    fn from(s: &str) -> Self {
-        Self::new(s)
     }
 }

@@ -1,12 +1,11 @@
-mod json_processing;
 mod json_data_model_tests;
+mod json_processing;
 
 use serde_json::{Value as JSONValue, Value};
 
-
-use crate::DbContext;
-use crate::rwtransaction_wrapper::RWTransactionWrapper;
 use crate::object_path::ObjectPath;
+use crate::rwtransaction_wrapper::RWTransactionWrapper;
+use crate::DbContext;
 
 pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
     let objpath = if uri.starts_with("/user/") {
@@ -31,7 +30,7 @@ pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
 
     let stripped = match objpath.as_str().strip_suffix('/') {
         Some(x) => x,
-        None => objpath.as_str()
+        None => objpath.as_str(),
     };
     let json = json.pointer_mut(stripped).unwrap().take();
     json
@@ -44,4 +43,3 @@ pub fn write_json(value: Value, txn: &mut RWTransactionWrapper) -> Result<(), St
     }
     Ok(())
 }
-

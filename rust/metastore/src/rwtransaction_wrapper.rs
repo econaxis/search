@@ -1,16 +1,15 @@
-use std::borrow::{Cow};
+use std::borrow::Cow;
 
-mod mvcc_manager;
 pub mod json_request_writers;
+mod mvcc_manager;
 
-use crate::{DbContext};
-use mvcc_manager::WriteIntentStatus;
 use crate::object_path::ObjectPath;
-pub use mvcc_manager::{ValueWithMVCC, UnlockedMVCC, LockDataRef};
-pub use mvcc_manager::MVCCMetadata;
+use crate::DbContext;
 pub use mvcc_manager::IntentMap;
+pub use mvcc_manager::MVCCMetadata;
 pub use mvcc_manager::MutBTreeMap;
-
+use mvcc_manager::WriteIntentStatus;
+pub use mvcc_manager::{LockDataRef, UnlockedWritableMVCC, ValueWithMVCC};
 
 pub struct RWTransactionWrapper<'a> {
     ctx: &'a DbContext,
@@ -20,7 +19,8 @@ pub struct RWTransactionWrapper<'a> {
 }
 
 use crate::timestamp::Timestamp;
-use crate::wal_watcher::{WalTxn};
+use crate::wal_watcher::{WalTxn, WalStorer};
+use serde_json::to_string;
 
 impl<'a> RWTransactionWrapper<'a> {
     pub fn get_txn(&self) -> &LockDataRef {
@@ -39,44 +39,39 @@ impl<'a> RWTransactionWrapper<'a> {
 }
 
 impl<'a> RWTransactionWrapper<'a> {
-    pub fn read_range_owned(&mut self, key: &ObjectPath) -> Result<Vec<(ObjectPath, ValueWithMVCC)>, String> {
+    pub fn read_range_owned(
+        &mut self,
+        key: &ObjectPath,
+    ) -> Result<Vec<(ObjectPath, ValueWithMVCC)>, String> {
         let (lock, mut range) = self.ctx.db.range_with_lock(key.get_prefix_ranges());
         let mut keys: Vec<_> = range.map(|a| (a.0.clone(), a.1.clone())).collect();
         std::mem::drop(lock);
 
-        let mut errors = String::new();
+        let mut keys1 = Vec::new();
 
-        if keys.iter().all(
-            |kv|
-                match self.read_mvcc(kv.0.as_cow_str()) {
-                    Ok(kv2) => {
-                        if kv.1.as_inner().1 == kv2.as_inner().1 {
-                            true
-                        } else {
-                            println!("second read failed {:?} {:?}", kv.1, kv2);
-                            false
-                        }
-                    }
-                    Err(err) => {
-                        errors.push_str(&err);
-                        errors.truncate(500);
-                        false
-                    }
-                }) {
-            Ok(keys)
-        } else {
-            Err(errors)
-        }
+        for key in keys {
+            match self.read_mvcc(key.0.as_cow_str()) {
+                Ok(kv2) => {
+                    keys1.push((key.0, kv2));
+                }
+                Err(a) if &a == "Other(\"No more MVCC\")" => {}
+                Err(err) => {
+                    return Err(err)
+                }
+            }
+        };
+
+        Ok(keys1)
     }
     pub fn read_mvcc(&mut self, key: Cow<str>) -> Result<ValueWithMVCC, String> {
         let key = match key {
             Cow::Borrowed(a) => ObjectPath::from(a),
-            Cow::Owned(a) => ObjectPath::from(a)
+            Cow::Owned(a) => ObjectPath::from(a),
         };
 
-        let ret = mvcc_manager::read(self.ctx, &key, self.txn)?;
+        let ret = mvcc_manager::read(self.ctx, &key, self.txn).map_err(|a| a.tostring())?;
 
-        self.log.log_read(ObjectPath::from(key.to_owned()));
+        self.log.log_read(ObjectPath::from(key.to_owned()), ret.clone());
         Ok(ret)
     }
 
@@ -84,13 +79,16 @@ impl<'a> RWTransactionWrapper<'a> {
         self.read_mvcc(key).map(|a| a.into_inner().1)
     }
 
-    pub fn write(&mut self, key: &ObjectPath, value: Cow<str>) -> Result<&'a ValueWithMVCC, String> {
+    pub fn write(
+        &mut self,
+        key: &ObjectPath,
+        value: Cow<str>,
+    ) -> Result<&'a ValueWithMVCC, String> {
         let ret = mvcc_manager::update(self.ctx, key, value.into_owned(), self.txn)?;
 
         self.log.log_write(key.clone(), ret.clone());
         Ok(ret)
     }
-
 
     pub fn commit(mut self) {
         self.ctx
@@ -100,10 +98,8 @@ impl<'a> RWTransactionWrapper<'a> {
         let mut placeholder = WalTxn::new(self.txn.timestamp);
         std::mem::swap(&mut placeholder, &mut self.log);
 
-        // TODO: fix concurrency errors
-        // self.ctx.wallog.borrow_mut().store(placeholder);
+        self.ctx.wallog.store(placeholder);
         self.committed = true;
-        println!("Txn {} committed by thread {:?}", self.txn.id, std::thread::current().id());
     }
 
     pub fn abort(&self) {
@@ -124,6 +120,31 @@ impl<'a> RWTransactionWrapper<'a> {
     }
 }
 
+
+// Static functions for convenience (auto transaction)
+pub mod auto_commit {
+    use crate::rwtransaction_wrapper::{ValueWithMVCC, RWTransactionWrapper};
+    use std::borrow::Cow;
+    use crate::DbContext;
+    use crate::object_path::ObjectPath;
+
+    pub fn read(db: &DbContext, key: Cow<str>) -> ValueWithMVCC {
+        let mut txn = RWTransactionWrapper::new(db);
+        let ret = txn.read_mvcc(key).unwrap();
+        txn.commit();
+        ret
+    }
+    pub fn read_range(db: &DbContext, key: &ObjectPath) -> Vec<(ObjectPath, ValueWithMVCC)> {
+        let mut txn = RWTransactionWrapper::new(db);
+        txn.read_range_owned(key).unwrap()
+    }
+    pub fn write(db: &DbContext, key: &ObjectPath, value: Cow<str>) {
+        let mut txn = RWTransactionWrapper::new(db);
+        txn.write(key, value).unwrap();
+        txn.commit();
+    }
+}
+
 impl Drop for RWTransactionWrapper<'_> {
     fn drop(&mut self) {
         if !self.committed {
@@ -137,8 +158,8 @@ mod tests {
     use crate::create_empty_context;
 
     use super::*;
-    use std::borrow::Cow::Borrowed;
     use crate::wal_watcher::WalLoader;
+    use std::borrow::Cow::Borrowed;
 
     #[test]
     fn test1() {
@@ -151,13 +172,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test2() {
         let ctx = create_empty_context();
         let ctx = &ctx;
 
-        let (a0, a1, a2, a3): (ObjectPath, ObjectPath, ObjectPath, ObjectPath) = ("key0".into(), "key1".into(), "key2".into(), "key3".into());
-
+        let (a0, a1, a2, a3): (ObjectPath, ObjectPath, ObjectPath, ObjectPath) =
+            ("key0".into(), "key1".into(), "key2".into(), "key3".into());
 
         let mut txn0 = RWTransactionWrapper::new(ctx);
         let mut txn1 = RWTransactionWrapper::new(ctx);
@@ -187,7 +207,7 @@ mod tests {
         txn3.commit();
 
         let blank = create_empty_context();
-        ctx.wallog.borrow().apply(&blank);
+        ctx.wallog.apply(&blank);
 
         assert_eq!(blank.db.printdb(), ctx.db.printdb());
     }
@@ -198,7 +218,6 @@ mod tests {
         let ctx = &ctx;
 
         let (a, b): (ObjectPath, ObjectPath) = ("key0".into(), "key1".into());
-
 
         let mut txn0 = RWTransactionWrapper::new(ctx);
         let mut txn1 = RWTransactionWrapper::new(ctx);

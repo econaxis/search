@@ -1,9 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use serde::{Serialize, Deserialize};
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct Timestamp(pub u64);
-
 
 impl PartialOrd for Timestamp {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -22,7 +21,7 @@ impl Ord for Timestamp {
     }
 }
 
-static MONOTIC_COUNTER: AtomicU64 = AtomicU64::new(1);
+static MONOTIC_COUNTER: AtomicU64 = AtomicU64::new(100);
 
 impl Timestamp {
     pub fn mintime() -> Self {

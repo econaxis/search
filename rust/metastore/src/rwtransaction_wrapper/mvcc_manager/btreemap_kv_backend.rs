@@ -15,6 +15,8 @@ unsafe impl Sync for MutBTreeMap {}
 
 unsafe impl Send for MutBTreeMap {}
 
+pub const TOMBSTONE: &str = "__null";
+
 impl MutBTreeMap {
     pub fn lock_for_write(&self) -> MutexGuard<UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>> {
         self.0.lock().unwrap()
@@ -27,8 +29,8 @@ impl MutBTreeMap {
     }
 
     pub fn range<R>(&self, range: R) -> Range<'_, ObjectPath, ValueWithMVCC>
-    where
-        R: RangeBounds<ObjectPath>,
+        where
+            R: RangeBounds<ObjectPath>,
     {
         unsafe { &*self.0.lock().unwrap().get() }.range(range)
     }
@@ -40,8 +42,8 @@ impl MutBTreeMap {
         MutexGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
         Range<'_, ObjectPath, ValueWithMVCC>,
     )
-    where
-        R: RangeBounds<ObjectPath>,
+        where
+            R: RangeBounds<ObjectPath>,
     {
         let lock = self.0.lock().unwrap();
         let range = unsafe { &*lock.get() }.range(range);
@@ -49,12 +51,22 @@ impl MutBTreeMap {
         (lock, range)
     }
 
+    pub fn is_deleated(a: &str) -> bool {
+        return a == TOMBSTONE;
+    }
+    pub fn null_value_mapper(a: &mut ValueWithMVCC) -> Option<&mut ValueWithMVCC> {
+        if Self::is_deleated(a.as_inner().1) {
+            None
+        } else {
+            Some(a)
+        }
+    }
     pub fn get_mut<T>(&self, key: &T) -> Option<&mut ValueWithMVCC>
-    where
-        ObjectPath: Borrow<T> + Ord,
-        T: Ord + ?Sized,
+        where
+            ObjectPath: Borrow<T> + Ord,
+            T: Ord + ?Sized,
     {
-        unsafe { &mut *self.0.lock().unwrap().get() }.get_mut(key)
+        unsafe { &mut *self.0.lock().unwrap().get() }.get_mut(key).and_then(Self::null_value_mapper)
     }
     pub fn get_mut_with_lock<T>(
         &self,
@@ -63,14 +75,14 @@ impl MutBTreeMap {
         MutexGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
         Option<&mut ValueWithMVCC>,
     )
-    where
-        ObjectPath: Borrow<T> + Ord,
-        T: Ord + ?Sized,
+        where
+            ObjectPath: Borrow<T> + Ord,
+            T: Ord + ?Sized,
     {
         let lock = self.0.lock().unwrap();
         let s = unsafe { &mut *lock.get() };
 
-        (lock, s.get_mut(key))
+        (lock, s.get_mut(key).and_then(Self::null_value_mapper))
     }
 
     pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC) -> Option<ValueWithMVCC> {
@@ -91,13 +103,14 @@ impl MutBTreeMap {
         let mut str: String = String::new();
 
         for (key, value) in self.iter() {
+            let (x, y) = value.as_inner();
             str.write_fmt(format_args!(
                 "{}: ({}) {}\n",
                 key.to_string(),
-                value.as_inner().0,
-                value.as_inner().1
+                x,
+                y
             ))
-            .unwrap();
+                .unwrap();
         }
         str
     }

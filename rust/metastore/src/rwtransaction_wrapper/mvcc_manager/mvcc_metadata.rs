@@ -11,28 +11,13 @@ use crate::rwtransaction_wrapper::ValueWithMVCC;
 #[derive(Debug, PartialEq, Clone)]
 pub enum WriteIntentError {
     Aborted(LockDataRef),
-    WritingInThePast,
     PendingIntent(LockDataRef),
     Other(String),
 }
 
-impl Into<String> for WriteIntentError {
-    fn into(self) -> String {
-        let mut buf = String::new();
-        buf.write_fmt(format_args!("{:?}", self));
-        buf
-    }
-}
-impl From<String> for WriteIntentError {
-    fn from(a: String) -> Self {
-        Self::Other(a)
-    }
-}
-impl From<&str> for WriteIntentError {
-    fn from(a: &str) -> Self {
-        Self::Other(a.to_string())
-    }
-}
+
+crate::custom_error_impl!(WriteIntentError);
+
 
 impl WriteIntentError {
     pub fn tostring(self) -> String {
@@ -47,7 +32,7 @@ impl MVCCMetadata {
     pub fn aborted_reset_write_intent(
         &mut self,
         compare: LockDataRef,
-        new: Option<LockDataRef>,
+        new: Option<WriteIntent>,
     ) -> Result<(), String> {
         let curwi = self.get_write_intents();
         if curwi.as_ref().map_or(None, |a| Some(a.associated_transaction)) != Some(compare) {
@@ -55,12 +40,8 @@ impl MVCCMetadata {
         }
         let curwi = curwi.unwrap();
 
-        let newwi = new.map(|assoc_txn| WriteIntent {
-            associated_transaction: assoc_txn,
-            was_commited: curwi.was_commited,
-        });
 
-        self.cur_write_intent.compare_swap_none(Some(curwi), newwi)
+        self.cur_write_intent.compare_swap_none(Some(curwi), new)
     }
 
     pub fn atomic_insert_write_intents(&mut self, wi: WriteIntent) -> Result<(), String> {
@@ -107,15 +88,12 @@ impl MVCCMetadata {
                 {
                     // If the transaction is committed already, then all good.
                     WriteIntentStatus::Committed => {
-                        if associated_transaction.timestamp < cur_txn.timestamp {
-                            // All good, we write after the txn has committed
-                            self.cur_write_intent.compare_swap_none(curwriteintent, None).map_err(|a| WriteIntentError::Other(a))?;
-                            Ok(())
-                        } else {
-                            Err(WriteIntentError::WritingInThePast)
-                        }
+                        // All good, we write after the txn has committed
+                        self.cur_write_intent.compare_swap_none(curwriteintent, None).map_err(|a| WriteIntentError::Other(a))?;
+                        Ok(())
                     }
                     WriteIntentStatus::Aborted => {
+
                         // Transaction has been aborted, so we are reading an aborted value. Therefore, we should also abort this current transaction.
                         Err(WriteIntentError::Aborted(associated_transaction))
                     }
@@ -138,6 +116,8 @@ impl MVCCMetadata {
 
         if cur_txn.timestamp < self.last_read {
             Err("Timestamp smaller than last read".to_string())
+        } else if cur_txn.timestamp < self.begin_ts {
+            Err("Timestamp smaller than begin time".to_string())
         } else {
             Ok(())
         }
@@ -167,7 +147,10 @@ impl MVCCMetadata {
         // Because we're creating a newer value, newer value must be not committed
         intent.as_mut().unwrap().was_commited = false;
 
-        assert!(old.begin_ts <= old.end_ts);
+        if !(old.begin_ts <= old.end_ts) {
+            println!("{:?} {:?}", old, self);
+            panic!()
+        }
         assert!(self.begin_ts <= self.end_ts);
 
         old
@@ -430,7 +413,7 @@ mod tests {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 pub enum WriteIntentStatus {
     Aborted,
     Pending,
@@ -443,18 +426,6 @@ pub struct WriteIntent {
     pub was_commited: bool,
 }
 
-#[cfg(test)]
-impl Default for MVCCMetadata {
-    fn default() -> Self {
-        Self {
-            begin_ts: Timestamp::mintime(),
-            end_ts: Timestamp::maxtime(),
-            last_read: Timestamp::mintime(),
-            cur_write_intent: WriteIntentMutex::new(None),
-            previous_mvcc_value: None,
-        }
-    }
-}
 
 impl Display for MVCCMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

@@ -8,14 +8,16 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer as SS, Serializer};
 use wal_apply::apply_wal_txn_checked;
 
 use crate::object_path::ObjectPath;
-use crate::rwtransaction_wrapper::MVCCMetadata;
+use crate::rwtransaction_wrapper::{MVCCMetadata, RWTransactionWrapper};
 use crate::rwtransaction_wrapper::ValueWithMVCC;
 use crate::timestamp::Timestamp;
 use crate::DbContext;
 use std::sync::Mutex;
 use std::cell::RefCell;
+use std::time::Duration;
 
 mod wal_apply;
+mod test;
 
 extern crate serde_json;
 
@@ -95,7 +97,7 @@ impl Serialize for CustomSerde<&ValueWithMVCC> {
     {
         let mut stct = s.serialize_struct("ValueWithMVCC", 2)?;
         let inner = self.0.as_inner();
-        stct.serialize_field("MVCC", &*inner.0)?;
+        stct.serialize_field("MVCC", &inner.0)?;
         stct.serialize_field("Value", &*inner.1)?;
         stct.end()
     }
@@ -183,6 +185,12 @@ pub struct ByteBufferWAL {
     json_lock: Mutex<()>,
 }
 
+impl Clone for ByteBufferWAL {
+    fn clone(&self) -> Self {
+        let l = self.json_lock.lock().unwrap();
+        Self { buf: self.buf.clone(), json_lock: Mutex::new(()) }
+    }
+}
 
 impl Display for ByteBufferWAL {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -217,8 +225,11 @@ impl WalStorer for ByteBufferWAL {
     type V = ValueWithMVCC;
     fn store(&self, waltxn: WalTxn) -> Result<(), String> {
         let _guard = self.json_lock.lock().unwrap();
-        serde_json::to_writer_pretty(self, &waltxn).unwrap();
+        serde_json::to_writer(self, &waltxn).unwrap();
         Ok(())
+    }
+    fn raw_data(&self) -> Vec<u8> {
+        self.buf.borrow().clone()
     }
 }
 
@@ -234,6 +245,7 @@ impl WalLoader for ByteBufferWAL {
             let a = a.unwrap();
             a
         }).collect();
+
         vec.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
         vec
     }
@@ -243,6 +255,8 @@ pub trait WalStorer {
     type K;
     type V;
     fn store(&self, waltxn: WalTxn) -> Result<(), String>;
+
+    fn raw_data(&self) -> Vec<u8>;
 }
 
 pub trait WalLoader: WalStorer {
@@ -251,10 +265,14 @@ pub trait WalLoader: WalStorer {
     fn apply(&self, ctx: &DbContext) -> Result<Timestamp, String> {
         let total = self.load();
         let mut max_time = Timestamp::mintime();
-        for elem in total {
-            // println!("Applying {:?} id {}", &elem, elem.timestamp.0);
+        for elem in &total {
             max_time = max_time.max(elem.timestamp);
-            apply_wal_txn_checked(elem, ctx).unwrap();
+            if let Err(e) = apply_wal_txn_checked(elem.clone(), ctx) {
+                println!("WAL Log error! {}", std::str::from_utf8(&*self.raw_data()).unwrap());
+                println!("Current WAL: {:?}", elem);
+                println!("{}", e);
+                panic!()
+            }
         }
         Ok(max_time)
     }
@@ -277,6 +295,47 @@ impl WalTxn {
     }
 }
 
+fn check_func(db: &DbContext) -> Result<bool, String> {
+    println!("Start checking");
+    let db2 = db!();
+    let wallog = db.wallog.clone();
+    let time = wallog.apply(&db2).unwrap() - Timestamp::from(1);
+    println!("Done applied");
+    let mut txn2 = RWTransactionWrapper::new_with_time(&db2, time);
+    let ret2 = txn2.read_range_owned(&"/".into())?;
+    let mut txn = RWTransactionWrapper::new_with_time(&db, time);
+    let mut ret: Result<_, _> = Err("a".into());
+    while !ret.is_ok() {
+        println!("check {}", ret.unwrap_err());
+        std::thread::sleep(Duration::from_millis(1000));
+        ret = txn.read_range_owned(&"/".into());
+    }
+    let ret = ret.unwrap();
+    println!("Done reading ranges");
+
+    ret.iter().zip(ret2.iter()).for_each(|(a, b)| {
+        if !(a.0 == b.0 && a.1.as_inner().1 == b.1.as_inner().1 &&
+            a.1.as_inner().1.parse::<u64>().unwrap() % 10 == 0) {
+
+            // acceptible becasue we can't lock the DB between doing the wallog.apply and the read (no way to do it right now).
+            // Therefore, any new writes between that wallog.apply and the comprehensive "/" read will be logged as error, even though
+            // that's perfectly OK for the purposes of the test.
+            // if a.1.as_inner().0.get_end_time() != Timestamp::maxtime() && b.1.as_inner().0.get_end_time() == Timestamp::maxtime() {
+            //     println!("Conflict acceptible, because of small locking problems");
+            // } else {
+            print!("Time: {}\n", txn.get_txn().id);
+            println!("Non matching {:?}", a);
+            println!("Non matching {:?}", b);
+            wallog.print();
+            panic!("Split brain between WAL log and the main DB. applying WAL log failed");
+        };
+    });
+    println!("End checking");
+
+    Ok(true)
+}
+
+
 pub mod tests {
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
@@ -285,54 +344,7 @@ pub mod tests {
     use crate::rwtransaction_wrapper::{LockDataRef, ValueWithMVCC, RWTransactionWrapper};
 
     use crate::timestamp::Timestamp;
-    use crate::wal_watcher::{WalTxn, ByteBufferWAL, WalStorer, WalLoader};
-
-    impl Arbitrary for ArbWalTxn {
-        fn arbitrary(g: &mut Gen) -> Self {
-            let mut txn = WalTxn::new(Timestamp::now());
-            let writes: Vec<(String, String, u64, u64)> = Arbitrary::arbitrary(g);
-            let writes: Vec<_> = writes
-                .into_iter()
-                .map(|mut elem| {
-                    elem.0.push('/');
-                    (
-                        ObjectPath::from(elem.0),
-                        ValueWithMVCC::new(
-                            LockDataRef {
-                                id: 0,
-                                timestamp: Timestamp::now(),
-                            },
-                            elem.1,
-                        ),
-                    )
-                })
-                .collect();
-
-            writes.into_iter().for_each(|elem| {
-                txn.log_write(elem.0.clone(), elem.1);
-
-                if u8::arbitrary(g) % 10 == 0 {
-                    txn.log_read(elem.0, ValueWithMVCC::new(LockDataRef { id: 0, timestamp: Timestamp(1) }, "fds".to_string()));
-                }
-            });
-            ArbWalTxn(txn)
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    struct ArbWalTxn(WalTxn);
-
-    #[quickcheck]
-    fn wal_serialize_deserialize(ArbWalTxn(txn): ArbWalTxn) {
-        let (mut res, mut res1) = (Vec::<u8>::new(), Vec::<u8>::new());
-
-        serde_json::to_writer(&mut res, &txn);
-
-        let txn1: WalTxn = serde_json::from_reader(&*res).unwrap();
-        serde_json::to_writer(&mut res1, &txn1);
-        assert_eq!(res, res1);
-    }
-
+    use crate::wal_watcher::{WalTxn, ByteBufferWAL, WalStorer, WalLoader, check_func};
     use crate::rwtransaction_wrapper::auto_commit;
     use rand::seq::SliceRandom;
     use rand::{Rng, thread_rng, RngCore};
@@ -340,8 +352,12 @@ pub mod tests {
     use rand::rngs::ThreadRng;
     use crossbeam::scope;
     use std::time::Duration;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering, AtomicU64};
     use crate::DbContext;
+    use std::sync::atomic::Ordering::SeqCst;
+
+    static COM: AtomicU64 = AtomicU64::new(0);
+    static FAIL: AtomicU64 = AtomicU64::new(0);
 
     // #[test]
     pub fn test1() {
@@ -349,8 +365,8 @@ pub mod tests {
         let db = db!();
 
         let process = |mut rng: Box<dyn RngCore>, mut iters: u64| while iters > 0 {
-            if rng.gen_bool(0.001) {
-                print!("rem: {}", iters);
+            if rng.gen_bool(0.01) {
+                println!("rem: {} {}/{}", iters, COM.load(SeqCst), FAIL.load(SeqCst));
             }
 
             let mut txn = RWTransactionWrapper::new(&db);
@@ -377,67 +393,31 @@ pub mod tests {
                 all_good &= res.is_ok();
 
                 if !all_good {
-                    println!("abort error {}", res.unwrap_err());
+                    // println!("abort error {}", res.unwrap_err());
                     break;
                 }
             }
             if all_good {
                 iters -= 1;
                 // println!("commit {}", txn.get_txn().id);
+                COM.fetch_add(1, Ordering::SeqCst);
+
                 txn.commit();
             } else {
+                FAIL.fetch_add(1, Ordering::SeqCst);
                 txn.abort();
             }
         };
 
-        fn check_func(db: &DbContext) -> Result<bool, String> {
-            println!("Start checking");
-            let db2 = db!();
-            let time = db.wallog.apply(&db2).unwrap();
-            println!("Done applied");
-            let mut txn2 = RWTransactionWrapper::new_with_time(&db2, time);
-            let ret2 = txn2.read_range_owned(&"/".into())?;
-            let mut txn = RWTransactionWrapper::new_with_time(&db, time);
-            let mut ret: Result<_, _> = Err("a".into());
-            while !ret.is_ok() {
-                println!("check {}", ret.unwrap_err());
-                std::thread::sleep(Duration::from_millis(1000));
-                ret = txn.read_range_owned(&"/".into());
-            }
-            let ret = ret.unwrap();
-            println!("Done reading ranges");
-
-
-            // let mut non_matchings
-            ret.iter().zip(ret2.iter()).for_each(|(a, b)| {
-                if !(a.0 == b.0 && a.1.as_inner().1 == b.1.as_inner().1 &&
-                    a.1.as_inner().1.parse::<u64>().unwrap() % 10 == 0) {
-                    println!("Non matching {:?}", a);
-                    println!("Non matching {:?}", b);
-
-                    // acceptible becasue we can't lock the DB between doing the wallog.apply and the read (no way to do it right now).
-                    // Therefore, any new writes between that wallog.apply and the comprehensive "/" read will be logged as error, even though
-                    // that's perfectly OK for the purposes of the test.
-                    if a.1.as_inner().0.get_end_time() != Timestamp::maxtime() && b.1.as_inner().0.get_end_time() == Timestamp::maxtime() {
-                        println!("Conflict acceptible, because of small locking problems");
-                    } else {
-                        // panic!("Split brain between WAL log and the main DB. applying WAL log failed");
-                    }
-                };
-            });
-            println!("End checking");
-
-            Ok(true)
-        }
 
         let state = AtomicBool::new(false);
         scope(|s| {
             let threads: Vec<_> = std::iter::repeat_with(|| {
                 s.spawn(|_| {
                     let rng = Box::new(thread_rng());
-                    process(rng, 5000);
+                    process(rng, 1000);
                 })
-            }).take(3).collect();
+            }).take(16).collect();
 
             let checker = s.spawn(|_| while !state.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(3000));

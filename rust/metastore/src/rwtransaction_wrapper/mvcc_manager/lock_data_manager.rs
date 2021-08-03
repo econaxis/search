@@ -24,8 +24,8 @@ impl IntentMap {
         Self(RwLock::new(HashMap::new()))
     }
 
-    pub fn set_txn_status(&self, txn: LockDataRef, status: WriteIntentStatus) {
-        self.0.write().unwrap().get_mut(&txn).unwrap().0 = status;
+    pub fn set_txn_status(&self, txn: LockDataRef, status: WriteIntentStatus) -> Option<WriteIntentStatus> {
+        self.0.write().unwrap().insert(txn, TransactionLockData(status)).map(|a| a.0)
     }
 
     pub fn make_write_txn(&self) -> LockDataRef {

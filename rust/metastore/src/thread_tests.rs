@@ -13,7 +13,6 @@ pub mod tests {
     use std::hash::{Hash, Hasher};
 
     #[test]
-    #[ignore]
     pub fn run() {
         unique_set_insertion_test();
     }

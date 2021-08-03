@@ -7,7 +7,7 @@ use crate::object_path::ObjectPath;
 use crate::DbContext;
 pub use mvcc_manager::IntentMap;
 pub use mvcc_manager::MVCCMetadata;
-pub use mvcc_manager::MutBTreeMap;
+pub use mvcc_manager::btreemap_kv_backend::MutBTreeMap;
 use mvcc_manager::WriteIntentStatus;
 pub use mvcc_manager::{LockDataRef, UnlockedWritableMVCC, ValueWithMVCC};
 
@@ -21,6 +21,7 @@ pub struct RWTransactionWrapper<'a> {
 use crate::timestamp::Timestamp;
 use crate::wal_watcher::{WalTxn, WalStorer};
 use serde_json::to_string;
+use crate::rwtransaction_wrapper::mvcc_manager::ReadError;
 
 impl<'a> RWTransactionWrapper<'a> {
     pub fn get_txn(&self) -> &LockDataRef {
@@ -54,7 +55,7 @@ impl<'a> RWTransactionWrapper<'a> {
                 Ok(kv2) => {
                     keys1.push((key.0, kv2));
                 }
-                Err(a) if &a == "Other(\"No more MVCC\")" => {}
+                Err(a) if &a == "Other(\"Read value doesn't exist\")" => {}
                 Err(err) => {
                     return Err(err)
                 }
@@ -69,7 +70,7 @@ impl<'a> RWTransactionWrapper<'a> {
             Cow::Owned(a) => ObjectPath::from(a),
         };
 
-        let ret = mvcc_manager::read(self.ctx, &key, self.txn).map_err(|a| a.tostring())?;
+        let ret = mvcc_manager::read(self.ctx, &key, self.txn).map_err(|a| <ReadError as Into<String>>::into(a))?;
 
         self.log.log_read(ObjectPath::from(key.to_owned()), ret.clone());
         Ok(ret)
@@ -91,21 +92,22 @@ impl<'a> RWTransactionWrapper<'a> {
     }
 
     pub fn commit(mut self) {
-        self.ctx
+        self.committed = true;
+        let prev = self.ctx
             .transaction_map
             .set_txn_status(self.txn, WriteIntentStatus::Committed);
+        assert_eq!(prev, Some(WriteIntentStatus::Pending));
 
         let mut placeholder = WalTxn::new(self.txn.timestamp);
         std::mem::swap(&mut placeholder, &mut self.log);
 
+
         self.ctx.wallog.store(placeholder);
-        self.committed = true;
     }
 
-    pub fn abort(&self) {
-        self.ctx
-            .transaction_map
-            .set_txn_status(self.txn, WriteIntentStatus::Aborted);
+    pub fn abort(self) {
+        assert_eq!(self.committed, false);
+        std::mem::drop(self)
     }
 
     pub fn new(ctx: &'a DbContext) -> Self {
@@ -128,9 +130,9 @@ pub mod auto_commit {
     use crate::DbContext;
     use crate::object_path::ObjectPath;
 
-    pub fn read(db: &DbContext, key: Cow<str>) -> ValueWithMVCC {
+    pub fn read(db: &DbContext, key: Cow<str>) -> Result<ValueWithMVCC, String> {
         let mut txn = RWTransactionWrapper::new(db);
-        let ret = txn.read_mvcc(key).unwrap();
+        let ret = txn.read_mvcc(key);
         txn.commit();
         ret
     }
@@ -148,7 +150,10 @@ pub mod auto_commit {
 impl Drop for RWTransactionWrapper<'_> {
     fn drop(&mut self) {
         if !self.committed {
-            self.abort();
+            let prev = self.ctx
+                .transaction_map
+                .set_txn_status(self.txn, WriteIntentStatus::Aborted);
+            assert_eq!(prev, Some(WriteIntentStatus::Pending));
         }
     }
 }

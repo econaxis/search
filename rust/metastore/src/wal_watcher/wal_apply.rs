@@ -16,9 +16,9 @@ pub fn apply_wal_txn_checked(waltxn: WalTxn, ctx: &DbContext) -> Result<(), Stri
 
                 assert_eq!(string, v.1);
             }
-            Operation::Read(k, v) => {
-                let v1 = txn.read_mvcc(k.as_cow_str()).map_err(|err| format!("{} {}", err, k.as_str()))?;
-                // assert_eq!(v1.getval(), v.getval())
+            Operation::Read(k, mut v) => {
+                let mut v1 = txn.read_mvcc(k.as_cow_str()).map_err(|err| format!("{} {}", err, k.as_str()))?;
+                assert_eq!(v1.get_readable().unwrap().val, v.get_readable().unwrap().val);
             }
         }
     }

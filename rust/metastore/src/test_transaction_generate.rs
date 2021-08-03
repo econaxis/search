@@ -21,9 +21,6 @@ macro_rules! db {
 }
 
 
-macro_rules! test {
-    ($k: ident) => {stringify!($k)};
-}
 mod tests {
     use crate::rwtransaction_wrapper::RWTransactionWrapper;
 

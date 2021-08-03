@@ -1,4 +1,4 @@
-mod btreemap_kv_backend;
+pub mod btreemap_kv_backend;
 mod kv_backend;
 mod lock_data_manager;
 mod mvcc_metadata;
@@ -10,8 +10,6 @@ pub use value_with_mvcc::{UnlockedWritableMVCC, ValueWithMVCC};
 use crate::object_path::ObjectPath;
 use crate::DbContext;
 
-pub use btreemap_kv_backend::MutBTreeMap;
-
 pub use lock_data_manager::{IntentMap, LockDataRef};
 pub use mvcc_metadata::{WriteIntent, WriteIntentStatus};
 
@@ -19,6 +17,19 @@ use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
 use std::sync::MutexGuard;
 use crate::rwtransaction_wrapper::mvcc_manager::mvcc_metadata::{WriteIntentError, is_repeatable};
+use crate::rwtransaction_wrapper::MutBTreeMap;
+
+use crate::custom_error_impl;
+
+#[derive(Debug)]
+pub enum ReadError {
+    ValueNotFound,
+    PendingIntentErr(LockDataRef),
+    Other(String),
+}
+custom_error_impl!(ReadError);
+
+
 
 pub(super) fn update<'a>(
     ctx: &'a DbContext,
@@ -28,7 +39,7 @@ pub(super) fn update<'a>(
 ) -> Result<&'a ValueWithMVCC, String> {
     let ret = if check_has_value(&ctx.db, key) {
         let (lock, res) = get_latest_mvcc_value(&ctx.db, key);
-        let res = res.unwrap();
+        let res = res.ok_or("Key not found".to_string())?;
         let mut resl = res.get_readable()?.lock_for_write(ctx, txn)?;
         assert_eq!(
             resl.0.meta
@@ -37,6 +48,9 @@ pub(super) fn update<'a>(
                 .associated_transaction,
             txn
         );
+        assert!(resl.0.meta.get_beg_time() <= txn.timestamp);
+
+        resl.0.meta.check_write(txn).unwrap();
         std::mem::drop(lock);
         resl.become_newer_version(ctx, txn, new_value);
 
@@ -47,7 +61,7 @@ pub(super) fn update<'a>(
         ctx.db
             .insert(key.clone(), ValueWithMVCC::new(txn, new_value));
 
-        get_latest_mvcc_value(&ctx.db, key).1.unwrap()
+        get_latest_mvcc_value(&ctx.db, key).1.ok_or("Value not found")?
     };
 
     Ok(ret)
@@ -72,55 +86,53 @@ fn get_latest_mvcc_value<'a>(
     // changing the String atomically. In these cases, we must lock the value for a brief moment to do operations, then unlock it.
     // Without this, readers might read invalid memory and will segfault.
     let res = db.get_mut_with_lock(key);
+
+
     res
 }
 
-
-pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<ValueWithMVCC, WriteIntentError> {
+pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<ValueWithMVCC, ReadError> {
     enum R<'a> {
         Result(ValueWithMVCC),
         Recurse(&'a mut ValueWithMVCC),
-    };
+    }
+    ;
     fn do_read<'a>(
         res: &mut ValueWithMVCC,
         ctx: &'a DbContext,
         txn: LockDataRef,
-    ) -> Result<R<'a>, WriteIntentError> {
+    ) -> Result<R<'a>, ReadError> {
         let mut res = res.get_readable()?;
-        let mut read_latest = res.check_read(&ctx, txn);
+        let read_latest = res.clean_intents(&ctx, txn).map_err(|err| match err {
+            WriteIntentError::PendingIntent(x) => ReadError::PendingIntentErr(x),
+            WriteIntentError::Other(x) => ReadError::Other(x),
+            _ => unreachable!()
+        });
+        let read_latest = read_latest.and_then(|_| res.check_read(&ctx, txn));
 
 
-        let fixed = if let Err(WriteIntentError::Aborted(_)) = read_latest {
-            res.fix_errors(ctx, txn)
-        } else {
-            read_latest.map_err(WriteIntentError::tostring)
-        };
-
-        let mut error_causes = String::new();
-
-        if fixed.is_ok() {
+        if read_latest.is_ok() {
             res.confirm_read(txn);
             let mut cloned = res.clone_value();
             return if !(is_repeatable(&*cloned.get_readable().unwrap().meta, &*res.meta)) {
                 // Since that read was not repeatable (maybe high contention), we have to repeat the transaction.
                 // Try to avoid aborts?
                 // do_read(res, ctx, txn)
-                Err(WriteIntentError::from("Non repeatable read"))
+                Err(ReadError::from("Non repeatable read"))
             } else {
                 // assert_eq!(cloned.getval(), res.getval());
                 Ok(R::Result(cloned))
             };
         } else if res.meta.get_beg_time() >= txn.timestamp {
-            error_causes.push_str(&fixed.unwrap_err());
-
             return if let Ok(prevval) = res.meta.get_prev_mvcc(ctx) {
+                std::mem::drop(res);
                 // no tail call optimization in rust, this might stack overflow when we have a lot of aborts to a single value.
                 Ok(R::Recurse(prevval))
             } else {
-                Err("No more MVCC".into())
+                Err(ReadError::ValueNotFound)
             };
         } else {
-            Err(fixed.unwrap_err().into())
+            Err(read_latest.unwrap_err().into())
         }
     }
 
@@ -131,10 +143,7 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
     let mut res = do_read(res, ctx, txn)?;
 
     while let R::Recurse(recurse) = res {
-        res = do_read(recurse, ctx, txn).map_err(|err| match err {
-            WriteIntentError::Other(str) => { WriteIntentError::Other(format!("{} {}", str, key.as_str())) }
-            _ => err
-        })?;
+        res = do_read(recurse, ctx, txn)?;
     }
 
     if let R::Result(r) = res {

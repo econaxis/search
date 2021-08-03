@@ -1,7 +1,6 @@
-#![feature(min_type_alias_impl_trait)]
 #![feature(assert_matches)]
 #![feature(trace_macros)]
-
+#![feature(backtrace)]
 use std::cell::{RefCell, UnsafeCell};
 
 use std::sync::Mutex;
@@ -26,6 +25,9 @@ mod test_transaction_generate;
 mod thread_tests;
 mod timestamp;
 mod wal_watcher;
+
+#[macro_use]
+mod error_macro;
 
 pub struct MutSlab(Mutex<UnsafeCell<slab::Slab<ValueWithMVCC>>>);
 
@@ -69,9 +71,9 @@ unsafe impl Sync for DbContext {}
 
 fn main() {
     for _ in 0..100 {
-        wal_watcher::tests::test1();
+        // wal_watcher::tests::test1();
     }
-    // thread_tests::tests::unique_set_insertion_test();
+    thread_tests::tests::unique_set_insertion_test();
 }
 
 // #[tokio::main]

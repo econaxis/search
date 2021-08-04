@@ -33,8 +33,8 @@ mod tests {
         };
 
         let mut txn = RWTransactionWrapper::new(&db);
-        assert_eq!(txn.read("a2".into()).unwrap(), "key2".to_string());
-        assert_eq!(txn.read("a3".into()).unwrap(), "key3".to_string());
-        assert_eq!(txn.read("a4".into()).unwrap(), "key4".to_string());
+        assert_eq!(txn.read(&"a2".into()).unwrap(), "key2".to_string());
+        assert_eq!(txn.read(&"a3".into()).unwrap(), "key3".to_string());
+        assert_eq!(txn.read(&"a4".into()).unwrap(), "key4".to_string());
     }
 }

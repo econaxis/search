@@ -13,8 +13,34 @@ pub mod tests {
     use std::hash::{Hash, Hasher};
 
     #[test]
+    #[ignore]
     pub fn run() {
         unique_set_insertion_test();
+    }
+
+    #[test]
+    pub fn independent_writes_dont_block() {
+        use crate::wal_watcher::check_func;
+        // tests that locks only acquired for individual key/value operations, not for the whole transaction
+        let db = db!("k" = "v");
+        let mut t1 = RWTransactionWrapper::new(&db);
+        let mut t2 = RWTransactionWrapper::new(&db);
+        t1.write(&"k".into(), "v2".into());
+        match t2.write(&"k".into(), "v3".into()) {
+            Err(x) => println!("(good) expected error: {}", x),
+            _ => panic!("should've errored")
+        }
+        match t2.read(&"k".into()) {
+            Err(x) => println!("(good) expected error: {}", x),
+            _ => panic!("should've errored")
+        }
+        match t2.write(&"k1".into(), "v3".into()) {
+            Ok(x) => println!("(good) expected value: {:?}", x),
+            _ => panic!("should've been ok")
+        }
+        t1.commit();
+        t2.commit();
+        check_func(&db);
     }
 
     pub fn unique_set_insertion_test() {
@@ -32,12 +58,11 @@ pub mod tests {
             let mut rng = thread_rng();
 
             let mut i = 0;
-            let time = Instant::now();
             std::thread::sleep(Duration::from_millis(rng.gen::<u64>() % 500));
 
             while i < 500 {
-                if rng.gen_bool(0.0005) {
-                    println!("{} {:?}", ctx.db.printdb(), std::thread::current().id());
+                if rng.gen_bool(0.0002) {
+                    println!("{}", ctx.db.printdb());
                 }
 
                 let mut txn = RWTransactionWrapper::new(&ctx);
@@ -55,7 +80,7 @@ pub mod tests {
                             txn.get_txn().id.to_string()
                         )),
                     );
-                    std::thread::sleep(Duration::from_millis(10 + rng.gen::<u64>() % 10));
+                    std::thread::sleep(Duration::from_micros(10 + rng.gen::<u64>() % 10000));
 
                     let first = first.and(txn.write(
                         &ObjectPath::from(format!("/test/{}", maxnumstr)),
@@ -65,7 +90,7 @@ pub mod tests {
                             txn.get_txn().id.to_string()
                         )),
                     ));
-                    std::thread::sleep(Duration::from_millis(10 + rng.gen::<u64>() % 10));
+                    std::thread::sleep(Duration::from_micros(10 + rng.gen::<u64>() % 10));
 
                     let second = txn.write(
                         &ObjectPath::from(format!("/test/{}", maxnumstr)),
@@ -73,7 +98,7 @@ pub mod tests {
                     );
 
                     let total = first.and(second);
-                    if total.is_ok() && rng.gen_bool(0.9) {
+                    if total.is_ok() && rng.gen_bool(0.8) {
                         // println!("committed {:?}", txn.get_txn().timestamp);
                         txn.commit();
                         i += 1;
@@ -90,7 +115,7 @@ pub mod tests {
 
         let mut joins = Vec::new();
 
-        for _ in 0..20 {
+        for _ in 0..8 {
             let ctx1 = ctx1.clone();
             let t1 = std::thread::spawn(move || {
                 clos(ctx1);

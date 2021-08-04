@@ -1,25 +1,25 @@
+use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
+use std::sync::Mutex;
+use std::time::Duration;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer as SS, Serializer};
 use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeStruct, SerializeStructVariant, SerializeTuple};
-use serde::{Deserialize, Deserializer, Serialize, Serializer as SS, Serializer};
 
+use serialize_deserialize::CustomSerde;
 use wal_apply::apply_wal_txn_checked;
 
+use crate::DbContext;
 use crate::object_path::ObjectPath;
 use crate::rwtransaction_wrapper::{MVCCMetadata, RWTransactionWrapper};
 use crate::rwtransaction_wrapper::ValueWithMVCC;
 use crate::timestamp::Timestamp;
-use crate::DbContext;
-use std::sync::Mutex;
-use std::cell::RefCell;
-use std::time::Duration;
 
 mod wal_apply;
 mod test;
-
-extern crate serde_json;
+mod serialize_deserialize;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 enum Operation<K, V> {
@@ -36,133 +36,6 @@ impl PartialEq for Operation<ObjectPath, ValueWithMVCC> {
     }
 }
 
-impl Serialize for Operation<ObjectPath, ValueWithMVCC> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-    {
-        let converted = match self {
-            Operation::Write(k, v) => Operation::Write(CustomSerde(k), CustomSerde(v)),
-            Operation::Read(k, v) => Operation::Read(CustomSerde(k), CustomSerde(v)),
-        };
-
-        converted.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Operation<ObjectPath, ValueWithMVCC> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-    {
-        // deserializer.deserialize_struct()
-        let converted =
-            Operation::<CustomSerde<ObjectPath>, CustomSerde<ValueWithMVCC>>::deserialize(
-                deserializer,
-            )?;
-        Ok(match converted {
-            Operation::Write(k, v) => Operation::Write(k.into(), v.into()),
-            Operation::Read(k, v) => Operation::Read(k.into(), v.into()),
-        })
-    }
-}
-
-struct CustomSerde<K>(K);
-
-impl Into<ObjectPath> for CustomSerde<ObjectPath> {
-    fn into(self) -> ObjectPath {
-        self.0
-    }
-}
-
-impl Into<ValueWithMVCC> for CustomSerde<ValueWithMVCC> {
-    fn into(self) -> ValueWithMVCC {
-        self.0
-    }
-}
-
-impl Serialize for CustomSerde<&ObjectPath> {
-    fn serialize<SS>(&self, s: SS) -> Result<SS::Ok, SS::Error>
-        where
-            SS: Serializer,
-    {
-        s.serialize_newtype_struct("ObjectPath", self.0.as_str())
-    }
-}
-
-impl Serialize for CustomSerde<&ValueWithMVCC> {
-    fn serialize<SS>(&self, s: SS) -> Result<SS::Ok, SS::Error>
-        where
-            SS: Serializer,
-    {
-        let mut stct = s.serialize_struct("ValueWithMVCC", 2)?;
-        let inner = self.0.as_inner();
-        stct.serialize_field("MVCC", &inner.0)?;
-        stct.serialize_field("Value", &*inner.1)?;
-        stct.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for CustomSerde<ObjectPath> {
-    fn deserialize<D>(deser: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-    {
-        struct ObjPathVisitor;
-        impl<'de> Visitor<'de> for ObjPathVisitor {
-            type Value = ObjectPath;
-
-            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                formatter.write_str("CustomSerde ObjectPath")
-            }
-
-            fn visit_newtype_struct<D>(self, d: D) -> Result<Self::Value, D::Error>
-                where
-                    D: Deserializer<'de>,
-            {
-                Ok(ObjectPath::from(String::deserialize(d)?))
-            }
-        }
-
-        Ok(CustomSerde(deser.deserialize_newtype_struct(
-            "ObjectPath",
-            ObjPathVisitor,
-        )?))
-    }
-}
-
-impl<'de> Deserialize<'de> for CustomSerde<ValueWithMVCC> {
-    fn deserialize<D>(deser: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-    {
-        struct ValueVisitor;
-        impl<'de> Visitor<'de> for ValueVisitor {
-            type Value = ValueWithMVCC;
-
-            fn expecting(&self, _formatter: &mut Formatter) -> std::fmt::Result {
-                _formatter.write_str("ValueWithMVCC")
-            }
-
-            fn visit_map<A>(self, mut v: A) -> Result<Self::Value, A::Error>
-                where
-                    A: MapAccess<'de>,
-            {
-                let (mvcccheck, mvccvalue) = v.next_entry::<String, MVCCMetadata>()?.unwrap();
-                assert!(&mvcccheck == "MVCC");
-                let (valuecheck, value) = v.next_entry::<String, String>()?.unwrap();
-                assert!(&valuecheck == "Value");
-                Ok(ValueWithMVCC::from_tuple(mvccvalue, value))
-            }
-        }
-
-        Ok(CustomSerde(deser.deserialize_struct(
-            "ValueWithMVCC",
-            &["MVCC", "Value"],
-            ValueVisitor,
-        )?))
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WalTxn {
@@ -183,12 +56,15 @@ impl PartialEq for WalTxn {
 pub struct ByteBufferWAL {
     buf: RefCell<Vec<u8>>,
     json_lock: Mutex<()>,
+    frozen: Mutex<bool>,
 }
+
+
 
 impl Clone for ByteBufferWAL {
     fn clone(&self) -> Self {
         let l = self.json_lock.lock().unwrap();
-        Self { buf: self.buf.clone(), json_lock: Mutex::new(()) }
+        Self { buf: self.buf.clone(), json_lock: Mutex::new(()), frozen: Mutex::new(false) }
     }
 }
 
@@ -200,11 +76,19 @@ impl Display for ByteBufferWAL {
 
 impl ByteBufferWAL {
     pub fn new() -> Self {
-        Self { buf: RefCell::new(Vec::new()), json_lock: Mutex::new(()) }
+        Self { buf: RefCell::new(Vec::new()), json_lock: Mutex::new(()), frozen: Mutex::new(false) }
     }
     pub fn print(&self) -> Vec<u8> {
         println!("{}", std::str::from_utf8(&self.buf.borrow()).unwrap());
         self.buf.borrow().clone()
+    }
+    pub fn freeze(&self) {
+        let mut b = self.frozen.lock().unwrap();
+        *b = true;
+    }
+    pub fn unfreeze(&self) {
+        let mut b = self.frozen.lock().unwrap();
+        *b = false;
     }
 }
 
@@ -224,6 +108,8 @@ impl WalStorer for ByteBufferWAL {
     type K = ObjectPath;
     type V = ValueWithMVCC;
     fn store(&self, waltxn: WalTxn) -> Result<(), String> {
+        if *self.frozen.lock().unwrap() { return Err("Wal log is currently frozen".to_string()); }
+
         let _guard = self.json_lock.lock().unwrap();
         serde_json::to_writer(self, &waltxn).unwrap();
         Ok(())
@@ -295,9 +181,10 @@ impl WalTxn {
     }
 }
 
-fn check_func(db: &DbContext) -> Result<bool, String> {
+pub fn check_func(db: &DbContext) -> Result<bool, String> {
     println!("Start checking");
     let db2 = db!();
+    db.wallog.freeze();
     let wallog = db.wallog.clone();
     let time = wallog.apply(&db2).unwrap() - Timestamp::from(1);
     println!("Done applied");
@@ -311,6 +198,8 @@ fn check_func(db: &DbContext) -> Result<bool, String> {
         ret = txn.read_range_owned(&"/".into());
     }
     let ret = ret.unwrap();
+    db.wallog.unfreeze();
+
     println!("Done reading ranges");
 
     ret.iter().zip(ret2.iter()).for_each(|(a, b)| {
@@ -337,45 +226,44 @@ fn check_func(db: &DbContext) -> Result<bool, String> {
 
 
 pub mod tests {
-    use quickcheck::{Arbitrary, Gen};
-    use quickcheck_macros::quickcheck;
-
-    use crate::object_path::ObjectPath;
-    use crate::rwtransaction_wrapper::{LockDataRef, ValueWithMVCC, RWTransactionWrapper};
-
-    use crate::timestamp::Timestamp;
-    use crate::wal_watcher::{WalTxn, ByteBufferWAL, WalStorer, WalLoader, check_func};
-    use crate::rwtransaction_wrapper::auto_commit;
-    use rand::seq::SliceRandom;
-    use rand::{Rng, thread_rng, RngCore};
     use std::borrow::Cow;
-    use rand::rngs::ThreadRng;
-    use crossbeam::scope;
-    use std::time::Duration;
-    use std::sync::atomic::{AtomicBool, Ordering, AtomicU64};
-    use crate::DbContext;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::atomic::Ordering::SeqCst;
+    use std::time::Duration;
+
+    use crossbeam::scope;
+    use rand::{Rng, RngCore, thread_rng};
+    use rand::rngs::ThreadRng;
+    use rand::seq::SliceRandom;
+
+    use crate::DbContext;
+    use crate::object_path::ObjectPath;
+    use crate::rwtransaction_wrapper::{LockDataRef, RWTransactionWrapper, ValueWithMVCC};
+    use crate::rwtransaction_wrapper::auto_commit;
+    use crate::timestamp::Timestamp;
+    use crate::wal_watcher::{ByteBufferWAL, check_func, WalLoader, WalStorer, WalTxn};
 
     static COM: AtomicU64 = AtomicU64::new(0);
     static FAIL: AtomicU64 = AtomicU64::new(0);
 
     // #[test]
     pub fn test1() {
-        let keys: Vec<_> = (0..5).map(|a| a.to_string()).collect();
+        let keys: Vec<_> = (0..10).map(|a| a.to_string()).collect();
         let db = db!();
 
         let process = |mut rng: Box<dyn RngCore>, mut iters: u64| while iters > 0 {
-            if rng.gen_bool(0.01) {
+            if rng.gen_bool(0.0001) {
                 println!("rem: {} {}/{}", iters, COM.load(SeqCst), FAIL.load(SeqCst));
             }
 
             let mut txn = RWTransactionWrapper::new(&db);
 
             let key = keys.choose(&mut *rng).unwrap();
+            let key = ObjectPath::new(&key);
             let mut all_good = true;
             for _ in 0..10 {
-                std::thread::sleep(Duration::from_millis(10));
-                let res = txn.read(key.into()).and_then(|str| {
+                std::thread::sleep(Duration::from_millis(2));
+                let res = txn.read(&key).and_then(|str| {
                     let val = str.parse::<u64>().unwrap() + 1;
                     txn.write(&key.as_str().into(), Cow::from(val.to_string()))
                 });
@@ -415,7 +303,7 @@ pub mod tests {
             let threads: Vec<_> = std::iter::repeat_with(|| {
                 s.spawn(|_| {
                     let rng = Box::new(thread_rng());
-                    process(rng, 1000);
+                    process(rng, 20000);
                 })
             }).take(16).collect();
 

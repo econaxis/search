@@ -51,10 +51,11 @@ impl<'a> RWTransactionWrapper<'a> {
         let mut keys1 = Vec::new();
 
         for key in keys {
-            match self.read_mvcc(key.0.as_cow_str()) {
+            match self.read_mvcc(&key.0) {
                 Ok(kv2) => {
                     keys1.push((key.0, kv2));
                 }
+                Err(a) if &a == "ValueNotFound" => {}
                 Err(a) if &a == "Other(\"Read value doesn't exist\")" => {}
                 Err(err) => {
                     return Err(err)
@@ -64,19 +65,14 @@ impl<'a> RWTransactionWrapper<'a> {
 
         Ok(keys1)
     }
-    pub fn read_mvcc(&mut self, key: Cow<str>) -> Result<ValueWithMVCC, String> {
-        let key = match key {
-            Cow::Borrowed(a) => ObjectPath::from(a),
-            Cow::Owned(a) => ObjectPath::from(a),
-        };
-
+    pub fn read_mvcc(&mut self, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
         let ret = mvcc_manager::read(self.ctx, &key, self.txn).map_err(|a| <ReadError as Into<String>>::into(a))?;
 
         self.log.log_read(ObjectPath::from(key.to_owned()), ret.clone());
         Ok(ret)
     }
 
-    pub fn read(&mut self, key: Cow<str>) -> Result<String, String> {
+    pub fn read(&mut self, key: &ObjectPath) -> Result<String, String> {
         self.read_mvcc(key).map(|a| a.into_inner().1)
     }
 
@@ -84,25 +80,24 @@ impl<'a> RWTransactionWrapper<'a> {
         &mut self,
         key: &ObjectPath,
         value: Cow<str>,
-    ) -> Result<&'a ValueWithMVCC, String> {
+    ) -> Result<ValueWithMVCC, String> {
         let ret = mvcc_manager::update(self.ctx, key, value.into_owned(), self.txn)?;
 
         self.log.log_write(key.clone(), ret.clone());
         Ok(ret)
     }
 
-    pub fn commit(mut self) {
+    pub fn commit(mut self) -> Result<(), String>{
+        let mut placeholder = WalTxn::new(self.txn.timestamp);
+        std::mem::swap(&mut placeholder, &mut self.log);
+        self.ctx.wallog.store(placeholder)?;
         self.committed = true;
         let prev = self.ctx
             .transaction_map
             .set_txn_status(self.txn, WriteIntentStatus::Committed);
         assert_eq!(prev, Some(WriteIntentStatus::Pending));
 
-        let mut placeholder = WalTxn::new(self.txn.timestamp);
-        std::mem::swap(&mut placeholder, &mut self.log);
-
-
-        self.ctx.wallog.store(placeholder);
+        Ok(())
     }
 
     pub fn abort(self) {
@@ -130,7 +125,7 @@ pub mod auto_commit {
     use crate::DbContext;
     use crate::object_path::ObjectPath;
 
-    pub fn read(db: &DbContext, key: Cow<str>) -> Result<ValueWithMVCC, String> {
+    pub fn read(db: &DbContext, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
         let mut txn = RWTransactionWrapper::new(db);
         let ret = txn.read_mvcc(key);
         txn.commit();
@@ -172,7 +167,7 @@ mod tests {
         let mut txn = RWTransactionWrapper::new(&ctx);
         let key = "test".into();
         txn.write(&key, "fdsvc".into());
-        txn.read(key.as_str().into());
+        txn.read(&key);
         txn.commit();
     }
 
@@ -196,18 +191,18 @@ mod tests {
         txn2.write(&a2, Cow::from("key2value"));
         txn3.write(&a3, Cow::from("key3value"));
 
-        assert_eq!(txn1.read(a0.as_str().into()).unwrap().as_str(), "key0value");
+        assert_eq!(txn1.read(&a0).unwrap().as_str(), "key0value");
         txn1.commit();
-        assert_eq!(txn2.read(a0.as_str().into()).unwrap().as_str(), "key0value");
-        assert_eq!(txn2.read(a1.as_str().into()).unwrap().as_str(), "key1value");
-        assert_matches!(txn2.read(a3.as_cow_str()), Err(..));
-        assert_matches!(txn3.read(a1.as_cow_str()).unwrap().as_str(), "key1value");
-        assert_matches!(txn3.read(a2.as_cow_str()), Err(..));
+        assert_eq!(txn2.read(&a0).unwrap().as_str(), "key0value");
+        assert_eq!(txn2.read(&a1).unwrap().as_str(), "key1value");
+        assert_matches!(txn2.read(&a3), Err(..));
+        assert_matches!(txn3.read(&a1).unwrap().as_str(), "key1value");
+        assert_matches!(txn3.read(&a2), Err(..));
 
         txn2.commit();
-        assert_eq!(txn3.read(a0.as_str().into()), Ok("key0value".to_string()));
-        assert_eq!(txn3.read(a1.as_str().into()), Ok("key1value".to_string()));
-        assert_eq!(txn3.read(a2.as_str().into()), Ok("key2value".to_string()));
+        assert_eq!(txn3.read(&a0), Ok("key0value".to_string()));
+        assert_eq!(txn3.read(&a1), Ok("key1value".to_string()));
+        assert_eq!(txn3.read(&a2), Ok("key2value".to_string()));
 
         txn3.commit();
 
@@ -230,7 +225,7 @@ mod tests {
         txn0.write(&a, "key0value".into()).unwrap();
 
         txn1.write(&b, Cow::from("key1value")).unwrap();
-        assert_matches!(txn1.read(Borrowed(a.as_str())), Err(_err));
+        assert_matches!(txn1.read(&a), Err(_err));
 
         txn0.commit();
         txn1.commit();

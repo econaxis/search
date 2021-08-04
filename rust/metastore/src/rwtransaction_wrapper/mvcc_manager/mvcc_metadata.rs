@@ -304,11 +304,12 @@ impl PartialEq for MVCCMetadata {
 impl Clone for MVCCMetadata {
     fn clone(&self) -> Self {
         let guard = self.cur_write_intent.write_block();
+        let data = guard.clone();
         Self {
             begin_ts: self.begin_ts,
             end_ts: self.end_ts,
             last_read: self.last_read,
-            cur_write_intent: WriteIntentMutex::new(guard.clone()),
+            cur_write_intent: WriteIntentMutex::new(data),
             previous_mvcc_value: self.previous_mvcc_value,
             read_cnt: ReadCounter::new(),
         }
@@ -331,8 +332,10 @@ impl MVCCMetadata {
     }
 
     pub(crate) fn remove_prev_mvcc(&self, ctx: &DbContext) -> ValueWithMVCC {
-        let guard = self.cur_write_intent.write_block();
-        ctx.old_values_store.remove(self.previous_mvcc_value.unwrap())
+        let lock_removed_value = ctx.old_values_store.get_mut(self.previous_mvcc_value.unwrap());
+        let _lock = lock_removed_value.get_readable().unwrap();
+
+        ctx.old_values_store.get_mut(self.previous_mvcc_value.unwrap()).clone()
     }
     pub(crate) fn insert_prev_mvcc(&mut self, p0: usize) {
         self.previous_mvcc_value.replace(p0);
@@ -387,10 +390,10 @@ mod tests {
         let mut txnread = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(10));
         let key1 = ObjectPath::new("key1");
         txn1.write(&key1, "value1".into()).unwrap();
-        assert_matches!(txnread.read(ObjectPath::from("key1").as_cow_str()), Err(..));
+        assert_matches!(txnread.read(&ObjectPath::from("key1")), Err(..));
 
         txn1.commit();
-        assert_eq!(txnread.read("key1".into()), Ok("value1".to_string()));
+        assert_eq!(txnread.read(&"key1".into()), Ok("value1".to_string()));
     }
 
     #[test]
@@ -407,7 +410,7 @@ mod tests {
         let mut txn1 = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(5));
         let mut txnread = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(10));
 
-        txnread.read(key.as_cow_str()).unwrap();
+        txnread.read(&key).unwrap();
 
         assert_matches!(txn1.write(&key, "should fail".into()), Err(..));
     }

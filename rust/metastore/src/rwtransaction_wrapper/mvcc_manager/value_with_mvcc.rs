@@ -11,77 +11,46 @@ use std::thread::ThreadId;
 use std::cell::{RefCell, UnsafeCell};
 use std::backtrace::Backtrace;
 use std::io::Read;
+use parking_lot::{ReentrantMutex, ReentrantMutexGuard};
+use std::borrow::BorrowMut;
+use std::ops::Deref;
 
-#[derive(Debug)]
-struct MyMutex<T>(Mutex<T>, UnsafeCell<Option<(ThreadId, Backtrace)>>);
+// #[derive(Debug)]
+// struct MyMutex<T>(Mutex<T>, UnsafeCell<Option<(ThreadId, Backtrace)>>);
 
-impl<T> MyMutex<T> {
-    fn get(&self) -> &mut Option<(ThreadId, Backtrace)> {
-        unsafe { &mut *self.1.get() }
-    }
-
-    fn lock(&self) -> MutexGuard<'_, T> {
-        // println!("{:?} try ", std::thread::current().id());
-        //
-        // match &*self.get() {
-        //     Some((id, bt)) if id == &std::thread::current().id() => {
-        //         if self.0.try_lock().is_err() {
-        //             // println!("{:?}", bt);
-        //             // panic!("Circular mutex dependency")
-        //         }
-        //     },
-        //     _ => {}
-        // }
-
-        let lock = self.0.lock().unwrap();
-        // let prevowner = self.get().replace((std::thread::current().id(), Backtrace::force_capture()));
-
-        // println!("{:?} success ", std::thread::current().id());
-        lock
-    }
-
-    fn try_lock(&self) -> TryLockResult<MutexGuard<'_, T>> {
-        self.0.try_lock()
-    }
-
-    fn new(t: T) -> Self {
-        MyMutex(Mutex::new(t), UnsafeCell::new(None))
-    }
-
-    fn into_inner(self) -> LockResult<T> {
-        self.0.into_inner()
-    }
-}
+type MyMutex<T> = parking_lot::ReentrantMutex<T>;
+type Guard<'a, T> = parking_lot::ReentrantMutexGuard<'a, T>;
 
 #[derive(Debug)]
 pub struct ValueWithMVCC {
-    meta: MyMutex<MVCCMetadata>,
+    meta: MVCCMetadata,
     val: String,
+    lock: MyMutex<()>,
+}
+
+impl ValueWithMVCC {
+    // Get the underlying value without going through the lock first
+    // If the caller already has a database-wide lock, then this function is safe
+    pub fn get_val(&self) -> &str {
+        let l = self.lock.lock();
+        &self.val
+    }
 }
 
 impl ValueWithMVCC {
     pub(crate) fn into_inner(self) -> (MVCCMetadata, String) {
-        (self.meta.into_inner().unwrap(), self.val)
+        (self.meta, self.val)
     }
 }
 
 
 impl Clone for ValueWithMVCC {
     fn clone(&self) -> Self {
-        let mut iters = 0;
-        let l = loop {
-            iters += 1;
-            let l = self.meta.try_lock();
-            if l.is_ok() { break l.unwrap(); };
-            if iters > 50 {panic!("Too many lock attempts")}
-            println!("Retrying failed lock {}", iters);
-            std::thread::sleep(Duration::from_millis(20))
-        };
-        let meta = l.clone();
-        std::mem::drop(l);
+        let _l = self.lock.lock();
         Self {
-            meta: MyMutex::new(meta),
+            meta: self.meta.clone(),
             val: self.val.clone(),
+            lock: MyMutex::new(()),
         }
     }
 }
@@ -90,8 +59,9 @@ pub struct UnlockedWritableMVCC<'a>(pub UnlockedReadableMVCC<'a>);
 
 
 pub struct UnlockedReadableMVCC<'a> {
-    pub meta: MutexGuard<'a, MVCCMetadata>,
+    pub meta: &'a mut MVCCMetadata,
     pub val: &'a mut String,
+    lock: Guard<'a, ()>,
 }
 
 impl<'a> UnlockedReadableMVCC<'a> {
@@ -104,7 +74,7 @@ impl<'a> UnlockedReadableMVCC<'a> {
     fn rescue_previous_value(&mut self, ctx: &DbContext) {
         let cur_end_ts = self.meta.get_end_time();
 
-        if let Ok(prev) = self.meta.get_prev_mvcc(ctx) {
+        if let Ok(_) = self.meta.get_prev_mvcc(ctx) {
             let (mut oldmeta, oldstr) = self.meta.remove_prev_mvcc(ctx).into_inner();
 
             assert_eq!(oldmeta.get_write_intents(), None);
@@ -142,39 +112,29 @@ impl<'a> UnlockedReadableMVCC<'a> {
             }
         } else {
             Ok(())
-        }
+        };
         // self.check_read(&ctx, txn).unwrap();
     }
 
-    pub fn clone_value(&self) -> ValueWithMVCC {
-        ValueWithMVCC {
-            meta: MyMutex::new(self.meta.clone()),
-            val: self.val.clone(),
-        }
-    }
     pub(crate) fn confirm_read(&mut self, p0: LockDataRef) {
         self.meta.confirm_read(p0);
     }
 
     // Locks the current (latest) mvcc value for write
     pub fn lock_for_write(
-        self,
+        mut self,
         ctx: &'a DbContext,
         txn: LockDataRef,
     ) -> Result<UnlockedWritableMVCC<'a>, String> {
-        let mut writable = UnlockedWritableMVCC(UnlockedReadableMVCC {
-            meta: self.meta,
-            val: self.val,
-        });
-        assert_eq!(writable.0.meta.get_end_time(), Timestamp::maxtime());
-
-        writable.0.clean_intents(ctx, txn).map_err(|a| a.tostring())?;
-        writable.0.meta.check_write(txn)?;
-        match writable.0.meta.get_write_intents() {
+        assert_eq!(self.meta.get_end_time(), Timestamp::maxtime());
+        self.clean_intents(ctx, txn).map_err(|a| a.tostring())?;
+        let previntent = self.meta.get_write_intents();
+        self.meta.check_write(txn)?;
+        match self.meta.get_write_intents() {
             Some(wi) if wi.associated_transaction == txn => {}
             None => {
                 // We haven't inserted a write intent, therefore this value must have been committed before us.
-                writable.0.meta.atomic_insert_write_intents(WriteIntent {
+                self.meta.atomic_insert_write_intents(WriteIntent {
                     associated_transaction: txn,
                     was_commited: true,
                 })?;
@@ -183,6 +143,15 @@ impl<'a> UnlockedReadableMVCC<'a> {
                 panic!("Write intent still exists, unreachable code")
             }
         };
+        let mut writable = UnlockedWritableMVCC(self);
+
+        let int = writable.0.meta.get_write_intents();
+        assert_eq!(int.clone().unwrap().associated_transaction, txn);
+
+        if previntent != int.clone() && previntent.is_some() {
+            println!("{:?} trying to access {:?}", int, previntent);
+        }
+
         Ok(writable)
     }
 
@@ -219,14 +188,6 @@ impl<'a> UnlockedWritableMVCC<'a> {
         self.0
     }
 
-
-    pub fn clone_value(&self) -> ValueWithMVCC {
-        ValueWithMVCC {
-            meta: MyMutex::new(self.0.meta.clone()),
-            val: self.0.val.clone(),
-        }
-    }
-
     pub fn release_lock(mut self, txn: LockDataRef) {
         assert_eq!(self.0.meta.get_write_intents().unwrap().associated_transaction, txn);
         self.0.meta.aborted_reset_write_intent(txn, None);
@@ -249,9 +210,24 @@ impl<'a> UnlockedWritableMVCC<'a> {
         let was_committed = self.0.meta.get_write_intents().as_ref().unwrap().was_commited;
 
         assert!(self.0.meta.get_beg_time() <= txn.timestamp);
-        let reference = self.0.meta.clone();
         let oldmvcc = self.0.meta.into_newer(txn.timestamp);
+        assert_eq!(
+            self.0.meta
+                .get_write_intents()
+                .unwrap()
+                .associated_transaction,
+            txn
+        );
+
         let oldvalue = std::mem::replace(self.0.val, newvalue);
+        assert_eq!(
+            self.0.meta
+                .get_write_intents()
+                .unwrap()
+                .associated_transaction,
+            txn
+        );
+
 
         assert!(oldmvcc.get_write_intents().is_none());
         assert_eq!(
@@ -263,12 +239,12 @@ impl<'a> UnlockedWritableMVCC<'a> {
         );
 
 
-        let archived = ValueWithMVCC {
-            meta: MyMutex::new(oldmvcc),
-            val: oldvalue,
-        };
-
         if was_committed {
+            let archived = ValueWithMVCC {
+                meta: oldmvcc,
+                val: oldvalue,
+                lock: MyMutex::new(()),
+            };
             let oldmetadata_key = ctx.old_values_store.insert(archived);
 
             self.0.meta.insert_prev_mvcc(oldmetadata_key);
@@ -282,11 +258,11 @@ impl ValueWithMVCC {
     pub fn new(txn: LockDataRef, value: String) -> Self {
         let meta = MVCCMetadata::new(txn);
 
-        Self { meta: MyMutex::new(meta), val: value }
+        Self { meta: meta, val: value, lock: MyMutex::new(()) }
     }
 
     pub fn from_tuple(a: MVCCMetadata, v: String) -> Self {
-        Self { meta: MyMutex::new(a), val: v }
+        Self { meta: a, val: v, lock: MyMutex::new(()) }
     }
 }
 
@@ -294,15 +270,17 @@ impl ValueWithMVCC {
     pub fn get_readable(
         &mut self,
     ) -> Result<UnlockedReadableMVCC<'_>, String> {
-        let lock = self.meta.try_lock().map_err(|a| "Couldn't get locks".to_string())?;
+        let lock = self.lock.lock();
         Ok(UnlockedReadableMVCC {
-            meta: lock,
+            meta: &mut self.meta,
             val: &mut self.val,
+            lock,
         })
     }
 
     pub fn as_inner(&self) -> (MVCCMetadata, &String) {
-        (self.meta.lock().clone(), &self.val)
+        let _l = self.lock.lock();
+        (self.meta.clone(), &self.val)
     }
 }
 
@@ -320,7 +298,7 @@ mod tests {
         write.abort();
 
         let mut read = RWTransactionWrapper::new(&db);
-        assert_eq!(read.read("adfs".into()).unwrap(), "value".to_string());
+        assert_eq!(read.read(&"adfs".into()).unwrap(), "value".to_string());
     }
 
     #[test]
@@ -335,7 +313,7 @@ mod tests {
         write.commit();
 
         let mut read = RWTransactionWrapper::new(&db);
-        assert_eq!(read.read("adfs".into()).unwrap(), "value2".to_string());
+        assert_eq!(read.read(&"adfs".into()).unwrap(), "value2".to_string());
     }
 
     #[test]
@@ -350,14 +328,14 @@ mod tests {
 
 
         let mut read = RWTransactionWrapper::new(&db);
-        assert_eq!(read.read("adfs".into()).unwrap(), "value".to_string());
+        assert_eq!(read.read(&"adfs".into()).unwrap(), "value".to_string());
 
         let mut write = RWTransactionWrapper::new(&db);
         write.write(&"adfs".into(), "value2".into());
         write.commit();
 
         let mut read = RWTransactionWrapper::new(&db);
-        assert_eq!(read.read("adfs".into()).unwrap(), "value2".to_string());
+        assert_eq!(read.read(&"adfs".into()).unwrap(), "value2".to_string());
     }
 
     #[test]
@@ -373,7 +351,7 @@ mod tests {
 
         for i in begin_time..begin_time + 10 {
             let mut read = RWTransactionWrapper::new_with_time(&db, Timestamp::from(i));
-            assert_eq!(read.read("k".into()).unwrap(), i.to_string());
+            assert_eq!(read.read(&"k".into()).unwrap(), i.to_string());
             read.commit();
         }
 

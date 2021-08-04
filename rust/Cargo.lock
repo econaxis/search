@@ -487,6 +487,7 @@ name = "metastore"
 version = "0.1.0"
 dependencies = [
  "crossbeam",
+ "parking_lot",
  "quickcheck",
  "quickcheck_macros",
  "rand",

@@ -42,7 +42,7 @@ impl MutSlab {
         unsafe { &mut *self.0.lock().unwrap().get() }.remove(key)
     }
     pub fn new() -> Self {
-        Self(Mutex::new(UnsafeCell::new(slab::Slab::new())))
+        Self(Mutex::new(UnsafeCell::new(slab::Slab::with_capacity(10000))))
     }
     pub fn insert(&self, v: ValueWithMVCC) -> usize {
         unsafe { &mut *self.0.lock().unwrap().get() }.insert(v)
@@ -70,10 +70,10 @@ unsafe impl Send for DbContext {}
 unsafe impl Sync for DbContext {}
 
 fn main() {
-    for _ in 0..100 {
-        // wal_watcher::tests::test1();
+    for _ in 0..500 {
+        wal_watcher::tests::test1();
     }
-    thread_tests::tests::unique_set_insertion_test();
+    // thread_tests::tests::unique_set_insertion_test();
 }
 
 // #[tokio::main]

@@ -51,10 +51,6 @@ impl ObjectPath {
         std::str::from_utf8(self.0.as_bytes()).unwrap()
     }
 
-    pub fn as_cow_str(&self) -> Cow<str> {
-        Borrowed(self.as_str())
-    }
-
     pub fn concat<T: Borrow<str>>(&self, other: T) -> Self {
         let mut newone = self.0.clone();
         newone.push('/');

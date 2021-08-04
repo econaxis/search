@@ -216,7 +216,7 @@ mod tests {
         let mut txn2 = RWTransactionWrapper::new(ctx);
         test_json().into_iter().for_each(|(path, value)| {
             assert_eq!(
-                txn2.read(Borrowed(path.as_str())).unwrap(),
+                txn2.read(&path).unwrap(),
                 value.to_string()
             );
         });

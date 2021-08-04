@@ -44,7 +44,7 @@ impl<'a> RWTransactionWrapper<'a> {
         &mut self,
         key: &ObjectPath,
     ) -> Result<Vec<(ObjectPath, ValueWithMVCC)>, String> {
-        let (lock, mut range) = self.ctx.db.range_with_lock(key.get_prefix_ranges());
+        let (lock, mut range) = self.ctx.db.range_with_lock(key.get_prefix_ranges(), self.txn.timestamp);
         let mut keys: Vec<_> = range.map(|a| (a.0.clone(), a.1.clone())).collect();
         std::mem::drop(lock);
 
@@ -55,8 +55,9 @@ impl<'a> RWTransactionWrapper<'a> {
                 Ok(kv2) => {
                     keys1.push((key.0, kv2));
                 }
-                Err(a) if &a == "ValueNotFound" => {}
-                Err(a) if &a == "Other(\"Read value doesn't exist\")" => {}
+                // These are the acceptable errors
+                Err(a) if &a == "ValueNotFound" => {println!("range err (ignore) {} txn {}", a, self.txn.id)}
+                Err(a) if &a == "Other(\"Read value doesn't exist\")" => {println!("range err (ignore) {} txn {}", a, self.txn.id)}
                 Err(err) => {
                     return Err(err)
                 }

@@ -8,7 +8,7 @@ pub mod tests {
     use std::borrow::Cow;
     use std::collections::HashSet;
     use std::sync::Arc;
-    use std::time::{Duration, Instant};
+    use std::time::{Duration, Instant, SystemTime};
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
@@ -138,9 +138,79 @@ pub mod tests {
                 assert!(val < BADVALUE);
                 uniq.insert(val)
             }));
-
     }
 
 
+    // inspired from jepsen
+    // `add` event: finds max of rows currently in the table and adds one
+    // `read` event: reads the whole table.
+    // #[test]
+    pub fn monotonic() {
+        use crossbeam::scope;
+        fn now() -> String {
+            std::time::SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_micros().to_string()
+        }
 
+        fn add(ctx: &DbContext) {
+            let retry = || {
+                let mut txn = RWTransactionWrapper::new(ctx);
+                let range = txn.read_range_owned(&ObjectPath::new("/test/"))?;
+                let max = range.into_iter().map(|x| x.1.into_inner().1.parse::<u64>().unwrap()).max().unwrap_or(0) + 1;
+                let max = max.to_string();
+
+                let key = format!("/test/{}", now());
+
+                txn.write(&ObjectPath::from(key), max.into())?;
+                txn.commit()
+            };
+
+            while retry().is_err() {}
+        }
+
+        fn check(a: &mut dyn Iterator<Item=(ObjectPath, String)>) {
+            let mut prev_time = String::new();
+            let mut prevvalue = String::from("0");
+            let mut values_tested = 0;
+            for elem in a {
+                values_tested += 1;
+                assert!(elem.0.as_str() > &prev_time);
+                assert!(elem.1.parse::<u64>().unwrap() > prevvalue.parse::<u64>().unwrap());
+                prevvalue = elem.1;
+                prev_time = elem.0.to_string();
+            }
+
+            if rand::thread_rng().gen_bool(0.1) { println!("passed, tested {} values", values_tested) }
+        }
+
+        fn read(ctx: &DbContext) {
+            let retry = || -> Result<(), String> {
+                let mut txn = RWTransactionWrapper::new(ctx);
+                let range = txn.read_range_owned(&ObjectPath::new("/test/"))?;
+
+                let mut range = range.into_iter().map(|a| (a.0, a.1.into_inner().1));
+                check(&mut range.clone());
+
+                txn.commit()?;
+                Ok(())
+            };
+
+            while retry().is_err() {}
+        }
+
+        let ctx = db!();
+        scope(|s| {
+            s.spawn(|_| loop {
+                std::thread::sleep(Duration::from_millis(10));
+                read(&ctx)
+            });
+            s.spawn(|_| loop {
+                std::thread::sleep(Duration::from_millis(10));
+                add(&ctx)
+            });
+            s.spawn(|_| loop {
+                std::thread::sleep(Duration::from_millis(10));
+                add(&ctx)
+            });
+        });
+    }
 }

@@ -9,6 +9,7 @@ use rwtransaction_wrapper::ValueWithMVCC;
 use rwtransaction_wrapper::{IntentMap, MutBTreeMap};
 
 use crate::wal_watcher::ByteBufferWAL;
+use thread_tests::tests::monotonic;
 
 // mod hyper_error_converter;
 extern crate quickcheck;
@@ -71,8 +72,9 @@ unsafe impl Sync for DbContext {}
 
 fn main() {
     for _ in 0..500 {
-        wal_watcher::tests::test1();
+        // wal_watcher::tests::test1();
     }
+    monotonic();
     // thread_tests::tests::unique_set_insertion_test();
 }
 

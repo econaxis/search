@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::cell::UnsafeCell;
+use std::cell::{UnsafeCell, Cell};
 use std::collections::btree_map::{BTreeMap, Range};
 use std::ops::RangeBounds;
 
@@ -8,8 +8,12 @@ use crate::rwtransaction_wrapper::mvcc_manager::value_with_mvcc::ValueWithMVCC;
 use std::collections::Bound;
 use std::fmt::Write;
 use std::sync::{Mutex, MutexGuard, RwLockReadGuard, RwLock, RwLockWriteGuard};
+use crate::timestamp::Timestamp;
 
-pub struct MutBTreeMap(RwLock<UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>);
+pub struct MutBTreeMap {
+    btree: RwLock<UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
+    time: Cell<Timestamp>,
+}
 
 unsafe impl Sync for MutBTreeMap {}
 
@@ -21,19 +25,20 @@ impl MutBTreeMap {
     pub fn remove_key(&self, _key: &ObjectPath) {}
 
     pub fn new() -> Self {
-        Self(RwLock::new(UnsafeCell::new(BTreeMap::new())))
+        Self { btree: RwLock::new(UnsafeCell::new(BTreeMap::new())), time: Cell::new(Timestamp::mintime()) }
     }
 
     pub fn range<R>(&self, range: R) -> Range<'_, ObjectPath, ValueWithMVCC>
         where
             R: RangeBounds<ObjectPath>,
     {
-        unsafe { &*self.0.read().unwrap().get() }.range(range)
+        unsafe { &*self.btree.read().unwrap().get() }.range(range)
     }
 
     pub fn range_with_lock<R>(
         &self,
         range: R,
+        time: Timestamp
     ) -> (
         RwLockReadGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
         Range<'_, ObjectPath, ValueWithMVCC>,
@@ -41,8 +46,14 @@ impl MutBTreeMap {
         where
             R: RangeBounds<ObjectPath>,
     {
-        let lock = self.0.read().unwrap();
+        let lock = self.btree.read().unwrap();
         let range = unsafe { &*lock.get() }.range(range);
+
+        let prevtime = self.time.get();
+
+        if time > prevtime {
+            self.time.set(time);
+        }
 
         (lock, range)
     }
@@ -51,7 +62,7 @@ impl MutBTreeMap {
         return a == TOMBSTONE;
     }
     pub fn null_value_mapper(a: &mut ValueWithMVCC) -> Option<&mut ValueWithMVCC> {
-        if Self::is_deleated(unsafe {a.get_val()}) {
+        if Self::is_deleated(unsafe { a.get_val() }) {
             None
         } else {
             Some(a)
@@ -62,7 +73,7 @@ impl MutBTreeMap {
             ObjectPath: Borrow<T> + Ord,
             T: Ord + ?Sized,
     {
-        unsafe { &mut *self.0.read().unwrap().get() }.get_mut(key).and_then(Self::null_value_mapper)
+        unsafe { &mut *self.btree.read().unwrap().get() }.get_mut(key).and_then(Self::null_value_mapper)
     }
     pub fn get_mut_with_lock<T>(
         &self,
@@ -75,16 +86,19 @@ impl MutBTreeMap {
             ObjectPath: Borrow<T> + Ord,
             T: Ord + ?Sized,
     {
-        let lock = self.0.read().unwrap();
+        let lock = self.btree.read().unwrap();
         let s = unsafe { &mut *lock.get() };
 
         (lock, s.get_mut(key).and_then(Self::null_value_mapper))
     }
 
-    pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC) -> Option<ValueWithMVCC> {
-        let lock = self.0.write().unwrap();
+    pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC, time: Timestamp) -> Result<Option<ValueWithMVCC>, String> {
+        let lock = self.btree.write().unwrap();
+        if self.time.get() > time {
+            return Err("Timestamp cache invalidated this txn, would lead to write anomalies".to_string())
+        }
 
-        unsafe { &mut *lock.get() }.insert(key, value)
+        Ok(unsafe { &mut *lock.get() }.insert(key, value))
     }
 
     pub fn iter(&self) -> Range<ObjectPath, ValueWithMVCC> {
@@ -96,7 +110,7 @@ impl MutBTreeMap {
 
     // Prints the database to stdout
     pub fn printdb(&self) -> String {
-        let lock = self.0.read().unwrap();
+        let lock = self.btree.read().unwrap();
         let mut str: String = String::new();
 
         for (key, value) in self.iter() {

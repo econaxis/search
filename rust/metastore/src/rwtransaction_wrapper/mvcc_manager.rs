@@ -59,7 +59,7 @@ pub(super) fn update(
     } else {
         // We're inserting a new key here.
         ctx.db
-            .insert(key.clone(), ValueWithMVCC::new(txn, new_value));
+            .insert(key.clone(), ValueWithMVCC::new(txn, new_value), txn.timestamp)?;
 
         get_latest_mvcc_value(&ctx.db, key).1.ok_or("Value not found")?.clone()
     };
@@ -106,7 +106,6 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
             _ => unreachable!()
         });
         let read_latest = read_latest.and_then(|_| resl.check_read(&ctx, txn));
-
 
         if read_latest.is_ok() {
             resl.confirm_read(txn);

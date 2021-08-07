@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::cell::{RefCell, UnsafeCell};
 use crate::timestamp::Timestamp;
 use std::sync::{Mutex, MutexGuard};
+use parking_lot::RawMutex;
 
 mod rpc_handler;
 
@@ -29,12 +30,17 @@ impl ReplicatedDatabase {
             // inserting a new transaction causes reallocation which invalidates previous references
             // obviously we don't want to lock the whole thing up while running transactions, but also don't want to reallocate
             // possible fixes: use Slab allocator, use non reallocating data structures
-            transactions: Mutex::new(UnsafeCell::new(HashMap::with_capacity(10000))),
+            // forgot about rehash!!!!
+            transactions: Mutex::new(UnsafeCell::new(HashMap::with_capacity(100000))),
         }
     }
 
     pub fn dump(&self) -> String {
         self.db.db.printdb()
+    }
+
+    pub fn begin_atomic_commit(&self) -> parking_lot::lock_api::MutexGuard<'_, RawMutex, ()> {
+        self.db.transaction_map.begin_atomic()
     }
 
     pub fn new_with_time(&self, txn: &LockDataRef) {
@@ -45,19 +51,13 @@ impl ReplicatedDatabase {
         let lock = self.transactions.lock().unwrap();
         let mut txnmap = unsafe { &mut *lock.get().as_mut().unwrap() };
 
+        if txnmap.len() as f32 > txnmap.capacity() as f32 * 0.6 {
+            todo!("hashmap would reallocate and cause segfault, todo! until we implement replication for networked")
+        }
         let rwtxn = txnmap.entry(*txn).or_insert_with(|| {
             Mutex::new(Transaction::new_with_time(&self.db, txn.timestamp))
         });
         rwtxn.lock().unwrap()
-    }
-    fn take_txn(&self, txn: LockDataRef) -> Option<Transaction> {
-
-        let _l = self.get_txn(&txn);
-        let lock = self.transactions.lock().unwrap();
-        let mut txnmap = unsafe { &mut *lock.get().as_mut().unwrap() };
-        let res = txnmap.remove(&txn);
-        std::mem::drop(_l);
-        res.map(|a| a.into_inner().unwrap())
     }
     pub fn serve_read(&self, txn: LockDataRef, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
         let mut rwtxn = self.get_txn(&txn);
@@ -73,9 +73,9 @@ impl ReplicatedDatabase {
         let mut rwtxn = self.get_txn(&txn);
         rwtxn.write(&self.db, key, value)
     }
-    pub fn commit(&self, txn: LockDataRef) -> Result<(), String> {
+    pub fn commit(&self, txn: LockDataRef) {
         let mut rwtxn = self.get_txn(&txn);
-        rwtxn.commit(&self.db)
+        rwtxn.commit(&self.db);
     }
     pub fn abort(&self, p0: LockDataRef) {
         let mut rwtxn = self.get_txn(&p0);

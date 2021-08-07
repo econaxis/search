@@ -58,7 +58,7 @@ impl Transaction {
                     keys1.push((key.0, kv2));
                 }
                 // These are the acceptable errors
-                Err(a) if a.starts_with("ValueNotFound") => { }
+                Err(a) if a.starts_with("ValueNotFound") => {}
                 Err(a) if &a == "Other(\"Read value doesn't exist\")" => { println!("range err (ignore) {} txn {}", a, self.txn.id) }
                 Err(err) => {
                     return Err(err);
@@ -87,17 +87,15 @@ impl Transaction {
         Ok(())
     }
 
-    pub fn commit(&mut self, ctx: &DbContext) -> Result<(), String> {
+    pub fn commit(&mut self, ctx: &DbContext) {
         let mut placeholder = WalTxn::new(self.txn.timestamp);
         std::mem::swap(&mut placeholder, &mut self.log);
-        ctx.wallog.store(placeholder)?;
+        ctx.wallog.store(placeholder).unwrap();
         self.committed = true;
         let prev = ctx
             .transaction_map
             .set_txn_status(self.txn, WriteIntentStatus::Committed);
-        assert_eq!(prev, Some(WriteIntentStatus::Pending));
-
-        Ok(())
+        // assert_eq!(prev, Some(WriteIntentStatus::Pending));
     }
 }
 
@@ -114,7 +112,7 @@ impl<'a> DBTransaction<'a> {
         let ret = Self {
             main: Transaction::new_with_time(ctx, time),
             ctx,
-        }         ;
+        };
         ctx.replicator().new_with_time(&ret.get_txn());
         ret
     }
@@ -138,12 +136,6 @@ impl<'a> DBTransaction<'a> {
             assert_eq!(a.1.as_inner().1, b.1.as_inner().1);
         });
 
-        // println!("{:?}\n{:?}", res, res1);
-        // res1.iter().zip(res.iter()).for_each(|(a, b)| {
-        //     assert_eq!(a.0, b.0);
-        // });
-
-        // assert_eq!(self.ctx.db.printdb(), repl.dump());
         Ok(res1)
     }
     pub fn read_mvcc(&mut self, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
@@ -162,23 +154,20 @@ impl<'a> DBTransaction<'a> {
         key: &ObjectPath,
         value: Cow<str>,
     ) -> Result<(), String> {
-        let res = self.ctx.replicator().serve_write(*self.get_txn(), key, value.clone()).map_err(|a| format!("replicator error {}", a))?;
-        let res1 = self.main.write(self.ctx, key, value)?;
-        Ok(())
-    }
-    pub fn commit(mut self) -> Result<(), String> {
-        let _l = self.ctx.transaction_map.begin_atomic();
-        let t = *self.get_txn();
-        let one = self.ctx.replicator().commit(t);
-        let two = self.main.commit(self.ctx);
+        let res = self.ctx.replicator().serve_write(*self.get_txn(), key, value.clone()).map_err(|a| format!("replicator error {}", a));
+        let res1 = self.main.write(self.ctx, key, value);
 
-        if one.as_ref().and(two.as_ref()).is_ok() {} else {
-            println!("{:?} {:?}", one, two);
-            self.ctx.replicator().abort(t);
-            self.main.abort(self.ctx);
-            return Err("aborted".to_string())
+        if res.is_ok() != res1.is_ok() {
+            println!("nonmatching write results: {:?} {:?}", res, res1);
         }
-        Ok(())
+        return res.and(res1);
+    }
+    pub fn commit(mut self) {
+        let _l = self.ctx.transaction_map.begin_atomic();
+        let _l1 = self.ctx.replicator().begin_atomic_commit();
+        let t = *self.get_txn();
+        let two = self.main.commit(self.ctx);
+        let one = self.ctx.replicator().commit(t);
     }
     pub fn abort(&mut self) {
         let _l = self.ctx.transaction_map.begin_atomic();
@@ -221,7 +210,7 @@ pub mod auto_commit {
 
 #[cfg(test)]
 mod tests {
-    use crate::create_empty_context;
+    use crate::{create_replicated_context};
 
     use super::*;
     use crate::wal_watcher::WalLoader;
@@ -229,7 +218,7 @@ mod tests {
 
     #[test]
     fn test1() {
-        let ctx = create_empty_context();
+        let ctx = create_replicated_context();
         let mut txn = DBTransaction::new(&ctx);
         let key = "test".into();
         txn.write(&key, "fdsvc".into());
@@ -239,7 +228,7 @@ mod tests {
 
     #[test]
     fn test2() {
-        let ctx = create_empty_context();
+        let ctx = create_replicated_context();
         let ctx = &ctx;
 
         let (a0, a1, a2, a3): (ObjectPath, ObjectPath, ObjectPath, ObjectPath) =
@@ -272,7 +261,7 @@ mod tests {
 
         txn3.commit();
 
-        let blank = create_empty_context();
+        let blank = create_replicated_context();
         ctx.wallog.apply(&blank);
 
         assert_eq!(blank.db.printdb(), ctx.db.printdb());
@@ -280,7 +269,7 @@ mod tests {
 
     #[test]
     fn test3() {
-        let ctx = create_empty_context();
+        let ctx = create_replicated_context();
         let ctx = &ctx;
 
         let (a, b): (ObjectPath, ObjectPath) = ("key0".into(), "key1".into());

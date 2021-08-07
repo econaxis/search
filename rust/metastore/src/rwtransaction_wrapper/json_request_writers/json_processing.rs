@@ -146,7 +146,7 @@ pub fn create_materialized_path<RawValue: ToString>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::create_empty_context;
+    use crate::{create_empty_context, create_replicated_context};
     use crate::rwtransaction_wrapper::DBTransaction;
     use std::borrow::Cow;
 
@@ -194,7 +194,7 @@ mod tests {
     }
     #[test]
     fn testbig() {
-        let ctx = create_empty_context();
+        let ctx = create_replicated_context();
         let ctx = &ctx;
         let mut txn0 = DBTransaction::new(ctx);
         let mut txn1 = DBTransaction::new(ctx);

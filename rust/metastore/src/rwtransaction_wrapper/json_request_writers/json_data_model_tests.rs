@@ -8,7 +8,7 @@ mod tests {
     use super::super::json_processing::{
         check_valid_json, json_to_map, map_to_json, PrimitiveValue,
     };
-    use crate::create_empty_context;
+    use crate::create_replicated_context;
     use crate::object_path::ObjectPath;
     use crate::rwtransaction_wrapper::DBTransaction;
 
@@ -86,7 +86,7 @@ mod tests {
     impl Arbitrary for ArbJson2 {
         fn arbitrary(g: &mut Gen) -> Self {
             fn inner(g: &mut Gen, rem: usize) -> Value {
-                if rem < 5 && (u8::arbitrary(g) % 2 == 0 || rem == 0) {
+                if rem < 8 && (u8::arbitrary(g) % 2 == 0 || rem == 0) {
                     Value::String(String::arbitrary(g))
                 } else {
                     let mut ret = serde_json::Map::new();
@@ -116,7 +116,7 @@ mod tests {
         }
     }
 
-    #[quickcheck]
+    // #[quickcheck]
     fn test_arbjson1(ArbJson(v): ArbJson) -> TestResult {
         test_json(v)
     }
@@ -131,7 +131,7 @@ mod tests {
             return TestResult::discard();
         }
 
-        let ctx = create_empty_context();
+        let ctx = create_replicated_context();
         let mut txn = DBTransaction::new(&ctx);
         super::super::write_json(v.clone(), &mut txn);
         txn.commit();

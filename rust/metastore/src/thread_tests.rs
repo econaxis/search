@@ -1,7 +1,7 @@
 // #[cfg(test)]
 pub mod tests {
     use crate::rwtransaction_wrapper::DBTransaction;
-    use crate::{create_empty_context, DbContext};
+    use crate::{create_empty_context, DbContext, create_replicated_context};
 
     use crate::object_path::ObjectPath;
     use rand::prelude::*;
@@ -12,8 +12,8 @@ pub mod tests {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
-    #[test]
-    #[ignore]
+    // #[test]
+    // #[ignore]
     pub fn run() {
         unique_set_insertion_test();
     }
@@ -46,7 +46,7 @@ pub mod tests {
     pub fn unique_set_insertion_test() {
         static BADVALUE: u64 = 99999999999;
 
-        let ctx1 = Arc::new(create_empty_context());
+        let ctx1 = Arc::new(create_replicated_context());
 
         let mut txn = DBTransaction::new(&*ctx1);
         txn.write(&ObjectPath::from(format!("/test/{}", "1")), "1".into())
@@ -164,7 +164,8 @@ pub mod tests {
 
 
                 txn.write(&ObjectPath::from(key), max.into())?;
-                txn.commit()
+                txn.commit();
+                Ok::<(), String>(())
             };
 
             let mut retries = 0;
@@ -201,7 +202,7 @@ pub mod tests {
                 let mut r1 = range.into_iter().map(|a| (a.0, a.1.into_inner().1));
                 check(&mut r1);
 
-                txn.commit()?;
+                txn.commit();
                 Ok(())
             };
 

@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn check_read_with_active_txn() {
-        let ctx = create_empty_context();
+        let ctx = create_replicated_context();
         let mut txn1 = DBTransaction::new_with_time(&ctx, Timestamp::from(5));
         let mut txnread = DBTransaction::new_with_time(&ctx, Timestamp::from(10));
         let key1 = ObjectPath::new("key1");
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn check_later_read_means_failed_write() {
-        let ctx = create_empty_context();
+        let ctx = create_replicated_context();
         let key = ObjectPath::from("key1");
 
         {

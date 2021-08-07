@@ -147,7 +147,7 @@ pub fn create_materialized_path<RawValue: ToString>(
 mod tests {
     use super::*;
     use crate::create_empty_context;
-    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::rwtransaction_wrapper::DBTransaction;
     use std::borrow::Cow;
 
     use std::borrow::Cow::Borrowed;
@@ -196,8 +196,8 @@ mod tests {
     fn testbig() {
         let ctx = create_empty_context();
         let ctx = &ctx;
-        let mut txn0 = RWTransactionWrapper::new(ctx);
-        let mut txn1 = RWTransactionWrapper::new(ctx);
+        let mut txn0 = DBTransaction::new(ctx);
+        let mut txn1 = DBTransaction::new(ctx);
 
         test_json()
             .into_iter()
@@ -213,7 +213,7 @@ mod tests {
         txn0.commit();
         txn1.commit();
 
-        let mut txn2 = RWTransactionWrapper::new(ctx);
+        let mut txn2 = DBTransaction::new(ctx);
         test_json().into_iter().for_each(|(path, value)| {
             assert_eq!(
                 txn2.read(&path).unwrap(),

@@ -3,7 +3,7 @@ pub mod tests {
     use crate::wal_watcher::{ByteBufferWAL, WalLoader};
     use std::cell::RefCell;
     use std::sync::Mutex;
-    use crate::rwtransaction_wrapper::{auto_commit, RWTransactionWrapper};
+    use crate::rwtransaction_wrapper::{auto_commit, DBTransaction};
 
 
     #[test]
@@ -12,7 +12,7 @@ pub mod tests {
         assert_matches!(auto_commit::read(&db, &"a".into()), Err(..));
 
 
-        let mut aborter = RWTransactionWrapper::new(&db);
+        let mut aborter = DBTransaction::new(&db);
         aborter.write(&"a".into(), "v".into());
         aborter.abort();
         assert_matches!(auto_commit::read(&db, &"a".into()), Err(..));

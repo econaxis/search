@@ -21,7 +21,7 @@ use crate::rwtransaction_wrapper::MutBTreeMap;
 
 use crate::custom_error_impl;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ReadError {
     ValueNotFound,
     PendingIntentErr(LockDataRef),
@@ -40,7 +40,7 @@ pub(super) fn update(
     let ret = if check_has_value(&ctx.db, key) {
         let (lock, res) = get_latest_mvcc_value(&ctx.db, key);
         let res = res.ok_or("Key not found".to_string())?;
-        let mut resl = res.get_readable()?.lock_for_write(ctx, txn)?;
+        let mut resl = res.get_readable().lock_for_write(ctx, txn)?;
 
         assert_eq!(
             resl.0.meta
@@ -61,7 +61,7 @@ pub(super) fn update(
         ctx.db
             .insert(key.clone(), ValueWithMVCC::new(txn, new_value), txn.timestamp)?;
 
-        get_latest_mvcc_value(&ctx.db, key).1.ok_or("Value not found")?.clone()
+        get_latest_mvcc_value(&ctx.db, key).1.unwrap().clone()
     };
 
     Ok(ret)
@@ -93,13 +93,12 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
         Result(ValueWithMVCC),
         Recurse(&'a mut ValueWithMVCC),
     }
-    ;
     fn do_read<'a>(
         res: &mut ValueWithMVCC,
         ctx: &'a DbContext,
         txn: LockDataRef,
     ) -> Result<R<'a>, ReadError> {
-        let mut resl = res.get_readable()?;
+        let mut resl = res.get_readable();
         let read_latest = resl.clean_intents(&ctx, txn).map_err(|err| match err {
             WriteIntentError::PendingIntent(x) => ReadError::PendingIntentErr(x),
             WriteIntentError::Other(x) => ReadError::Other(x),
@@ -118,8 +117,6 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
                 Ok(R::Recurse(prevval))
             } else {
                 // We've reached beginning of version chain, and yet the timestamp is smaller than the begin timestamp.
-
-                // Means t
                 Err(ReadError::ValueNotFound)
             };
         } else {
@@ -146,20 +143,20 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
 
 #[cfg(test)]
 mod tests {
-    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::rwtransaction_wrapper::DBTransaction;
     use crate::db;
 
     #[test]
     fn writes_dont_block_reads() {
         let db = db!("k" = "v", "k1" = "v1");
-        let mut r = RWTransactionWrapper::new(&db);
-        let mut w = RWTransactionWrapper::new(&db);
+        let mut r = DBTransaction::new(&db);
+        let mut w = DBTransaction::new(&db);
 
         w.write(&"k".into(), "v1".into());
         assert_eq!(r.read(&"k".into()).unwrap(), "v".to_string());
 
         w.commit();
-        let mut r = RWTransactionWrapper::new(&db);
+        let mut r = DBTransaction::new(&db);
         assert_eq!(r.read(&"k".into()).unwrap(), "v1".to_string());
     }
 }

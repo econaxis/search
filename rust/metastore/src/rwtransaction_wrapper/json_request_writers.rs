@@ -4,7 +4,7 @@ mod json_processing;
 use serde_json::{Value as JSONValue, Value};
 
 use crate::object_path::ObjectPath;
-use crate::rwtransaction_wrapper::RWTransactionWrapper;
+use crate::rwtransaction_wrapper::DBTransaction;
 use crate::DbContext;
 
 pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
@@ -17,7 +17,7 @@ pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
             format!("/user/{}", uri).into()
         }
     };
-    let mut txn = RWTransactionWrapper::new(&ctx);
+    let mut txn = DBTransaction::new(&ctx);
     let ret = txn.read_range_owned(&objpath).unwrap();
 
     let mut json = JSONValue::Null;
@@ -36,7 +36,7 @@ pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
     json
 }
 
-pub fn write_json(value: Value, txn: &mut RWTransactionWrapper) -> Result<(), String> {
+pub fn write_json(value: Value, txn: &mut DBTransaction) -> Result<(), String> {
     let map = json_processing::json_to_map(value);
     for (key, value) in map {
         txn.write(&key, value.to_string().into())?;

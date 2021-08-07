@@ -10,7 +10,7 @@ mod tests {
     };
     use crate::create_empty_context;
     use crate::object_path::ObjectPath;
-    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::rwtransaction_wrapper::DBTransaction;
 
     #[derive(Clone, Debug)]
     struct ArbJson(pub Value);
@@ -132,7 +132,7 @@ mod tests {
         }
 
         let ctx = create_empty_context();
-        let mut txn = RWTransactionWrapper::new(&ctx);
+        let mut txn = DBTransaction::new(&ctx);
         super::super::write_json(v.clone(), &mut txn);
         txn.commit();
 

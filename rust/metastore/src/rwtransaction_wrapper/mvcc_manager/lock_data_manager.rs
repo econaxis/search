@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use super::mvcc_metadata::WriteIntentStatus;
 use crate::timestamp::Timestamp;
-use std::sync::RwLock;
+use std::sync::{RwLock, RwLockWriteGuard};
+use std::collections::hash_map::RandomState;
+use parking_lot::{Mutex, RawMutex};
+use parking_lot::lock_api::MutexGuard;
 
 #[derive(Eq, PartialEq, Hash, Debug, Copy, Clone)]
 pub struct LockDataRef {
@@ -16,14 +19,18 @@ impl TransactionLockData {
     }
 }
 
-pub struct IntentMap(RwLock<HashMap<LockDataRef, TransactionLockData>>);
+pub struct IntentMap(RwLock<HashMap<LockDataRef, TransactionLockData>>, Mutex<()>);
 
 unsafe impl Send for IntentMap {}
+
 impl IntentMap {
     pub fn new() -> Self {
-        Self(RwLock::new(HashMap::new()))
+        Self(RwLock::new(HashMap::new()), Mutex::new(()))
     }
 
+    pub fn begin_atomic(&self) -> MutexGuard<'_, RawMutex, ()> {
+        self.1.lock()
+    }
     pub fn set_txn_status(&self, txn: LockDataRef, status: WriteIntentStatus) -> Option<WriteIntentStatus> {
         self.0.write().unwrap().insert(txn, TransactionLockData(status)).map(|a| a.0)
     }
@@ -47,6 +54,7 @@ impl IntentMap {
     }
 
     pub fn get_by_ref(&self, l: &LockDataRef) -> Option<TransactionLockData> {
+        let _l = self.begin_atomic();
         self.0.read().unwrap().get(l).map(|a| a.clone())
     }
 }
@@ -62,6 +70,7 @@ impl IntentMap {
         txnref
     }
 }
+
 // Contains only write intent status for now, but may contain more in the future.
 #[derive(Clone)]
 pub struct TransactionLockData(pub WriteIntentStatus);

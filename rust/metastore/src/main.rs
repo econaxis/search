@@ -10,6 +10,8 @@ use rwtransaction_wrapper::{IntentMap, MutBTreeMap};
 
 use crate::wal_watcher::ByteBufferWAL;
 use thread_tests::tests::monotonic;
+use crate::replicated_slave::ReplicatedDatabase;
+use std::rc::Rc;
 
 // mod hyper_error_converter;
 extern crate quickcheck;
@@ -27,8 +29,13 @@ mod thread_tests;
 mod timestamp;
 mod wal_watcher;
 
+mod secondary_indexing;
+
 #[macro_use]
 mod error_macro;
+mod hermitage_tests;
+mod replicated_slave;
+mod extensions_interface;
 
 pub struct MutSlab(Mutex<UnsafeCell<slab::Slab<ValueWithMVCC>>>);
 
@@ -56,6 +63,17 @@ pub fn create_empty_context() -> DbContext {
         transaction_map: IntentMap::new(),
         old_values_store: MutSlab::new(),
         wallog: ByteBufferWAL::new(),
+        replicators: None
+    }
+}
+
+pub fn create_replicated_context() -> DbContext {
+    DbContext {
+        db: MutBTreeMap::new(),
+        transaction_map: IntentMap::new(),
+        old_values_store: MutSlab::new(),
+        wallog: ByteBufferWAL::new(),
+        replicators: Some(Box::new(ReplicatedDatabase::new()))
     }
 }
 
@@ -64,6 +82,13 @@ pub struct DbContext {
     pub transaction_map: IntentMap,
     pub old_values_store: MutSlab,
     pub wallog: ByteBufferWAL,
+    pub replicators: Option<Box<ReplicatedDatabase>>
+}
+
+impl DbContext {
+    pub fn replicator(&self) -> &ReplicatedDatabase {
+        self.replicators.as_ref().unwrap()
+    }
 }
 
 unsafe impl Send for DbContext {}
@@ -72,9 +97,9 @@ unsafe impl Sync for DbContext {}
 
 fn main() {
     for _ in 0..500 {
-        // wal_watcher::tests::test1();
+        wal_watcher::tests::test1();
     }
-    monotonic();
+    // monotonic();
     // thread_tests::tests::unique_set_insertion_test();
 }
 

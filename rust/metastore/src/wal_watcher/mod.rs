@@ -13,7 +13,7 @@ use wal_apply::apply_wal_txn_checked;
 
 use crate::DbContext;
 use crate::object_path::ObjectPath;
-use crate::rwtransaction_wrapper::{MVCCMetadata, RWTransactionWrapper};
+use crate::rwtransaction_wrapper::{MVCCMetadata, DBTransaction};
 use crate::rwtransaction_wrapper::ValueWithMVCC;
 use crate::timestamp::Timestamp;
 
@@ -166,6 +166,7 @@ pub trait WalLoader: WalStorer {
 
 impl WalTxn {
     pub fn log_read(&mut self, k: ObjectPath, v: ValueWithMVCC) {
+        // println!("{:?}", self.ops);
         self.ops.push(Operation::Read(k, v));
     }
 
@@ -184,13 +185,13 @@ impl WalTxn {
 pub fn check_func(db: &DbContext) -> Result<bool, String> {
     println!("Start checking");
     let db2 = db!();
-    db.wallog.freeze();
+    // db.wallog.freeze();
     let wallog = db.wallog.clone();
     let time = wallog.apply(&db2).unwrap() - Timestamp::from(1);
     println!("Done applied");
-    let mut txn2 = RWTransactionWrapper::new_with_time(&db2, time);
+    let mut txn2 = DBTransaction::new_with_time(&db2, time);
     let ret2 = txn2.read_range_owned(&"/".into())?;
-    let mut txn = RWTransactionWrapper::new_with_time(&db, time);
+    let mut txn = DBTransaction::new_with_time(&db, time);
     let mut ret: Result<_, _> = Err("a".into());
     while !ret.is_ok() {
         println!("check {}", ret.unwrap_err());
@@ -198,13 +199,17 @@ pub fn check_func(db: &DbContext) -> Result<bool, String> {
         ret = txn.read_range_owned(&"/".into());
     }
     let ret = ret.unwrap();
-    db.wallog.unfreeze();
+    // db.wallog.unfreeze();
 
     println!("Done reading ranges");
 
     ret.iter().zip(ret2.iter()).for_each(|(a, b)| {
-        if !(a.0 == b.0 && a.1.as_inner().1 == b.1.as_inner().1 &&
-            a.1.as_inner().1.parse::<u64>().unwrap() % 10 == 0) {
+        if a.0 != b.0 {
+            // skip, because without wallog freezing, not guaranteed to get the same reuslts (e.g. new transactions might commit)
+            return;
+        }
+
+        if !(a.0 == b.0 && a.1.as_inner().1 == b.1.as_inner().1) {
 
             // acceptible becasue we can't lock the DB between doing the wallog.apply and the read (no way to do it right now).
             // Therefore, any new writes between that wallog.apply and the comprehensive "/" read will be logged as error, even though
@@ -215,11 +220,11 @@ pub fn check_func(db: &DbContext) -> Result<bool, String> {
             print!("Time: {}\n", txn.get_txn().id);
             println!("Non matching {:?}", a);
             println!("Non matching {:?}", b);
-            wallog.print();
+            // wallog.print();
             panic!("Split brain between WAL log and the main DB. applying WAL log failed");
         };
     });
-    println!("End checking");
+    println!("End checking {}", ret.len());
 
     Ok(true)
 }
@@ -238,7 +243,7 @@ pub mod tests {
 
     use crate::DbContext;
     use crate::object_path::ObjectPath;
-    use crate::rwtransaction_wrapper::{LockDataRef, RWTransactionWrapper, ValueWithMVCC};
+    use crate::rwtransaction_wrapper::{LockDataRef, DBTransaction, ValueWithMVCC};
     use crate::rwtransaction_wrapper::auto_commit;
     use crate::timestamp::Timestamp;
     use crate::wal_watcher::{ByteBufferWAL, check_func, WalLoader, WalStorer, WalTxn};
@@ -248,7 +253,7 @@ pub mod tests {
 
     // #[test]
     pub fn test1() {
-        let keys: Vec<_> = (0..10).map(|a| a.to_string()).collect();
+        let keys: Vec<_> = (0..10000).map(|a| a.to_string()).collect();
         let db = db!();
 
         let process = |mut rng: Box<dyn RngCore>, mut iters: u64| while iters > 0 {
@@ -256,13 +261,13 @@ pub mod tests {
                 println!("rem: {} {}/{}", iters, COM.load(SeqCst), FAIL.load(SeqCst));
             }
 
-            let mut txn = RWTransactionWrapper::new(&db);
+            let mut txn = DBTransaction::new(&db);
 
             let key = keys.choose(&mut *rng).unwrap();
             let key = ObjectPath::new(&key);
             let mut all_good = true;
             for _ in 0..10 {
-                std::thread::sleep(Duration::from_millis(2));
+                // std::thread::sleep(Duration::from_micros(20));
                 let res = txn.read(&key).and_then(|str| {
                     let val = str.parse::<u64>().unwrap() + 1;
                     txn.write(&key.as_str().into(), Cow::from(val.to_string()))

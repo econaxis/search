@@ -1,6 +1,6 @@
 // #[cfg(test)]
 pub mod tests {
-    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::rwtransaction_wrapper::DBTransaction;
     use crate::{create_empty_context, DbContext};
 
     use crate::object_path::ObjectPath;
@@ -23,8 +23,8 @@ pub mod tests {
         use crate::wal_watcher::check_func;
         // tests that locks only acquired for individual key/value operations, not for the whole transaction
         let db = db!("k" = "v");
-        let mut t1 = RWTransactionWrapper::new(&db);
-        let mut t2 = RWTransactionWrapper::new(&db);
+        let mut t1 = DBTransaction::new(&db);
+        let mut t2 = DBTransaction::new(&db);
         t1.write(&"k".into(), "v2".into());
         match t2.write(&"k".into(), "v3".into()) {
             Err(x) => println!("(good) expected error: {}", x),
@@ -48,7 +48,7 @@ pub mod tests {
 
         let ctx1 = Arc::new(create_empty_context());
 
-        let mut txn = RWTransactionWrapper::new(&*ctx1);
+        let mut txn = DBTransaction::new(&*ctx1);
         txn.write(&ObjectPath::from(format!("/test/{}", "1")), "1".into())
             .unwrap();
         txn.commit();
@@ -65,7 +65,7 @@ pub mod tests {
                     println!("{}", ctx.db.printdb());
                 }
 
-                let mut txn = RWTransactionWrapper::new(&ctx);
+                let mut txn = DBTransaction::new(&ctx);
                 let range = txn.read_range_owned(&ObjectPath::new("/test/"));
 
                 if let Ok(range) = range {
@@ -127,7 +127,7 @@ pub mod tests {
             x.join().unwrap();
         }
 
-        let mut txn = RWTransactionWrapper::new(&ctx1);
+        let mut txn = DBTransaction::new(&ctx1);
         let mut uniq = HashSet::new();
         assert!(txn
             .read_range_owned(&ObjectPath::new("/test/"))
@@ -153,18 +153,28 @@ pub mod tests {
 
         fn add(ctx: &DbContext) {
             let retry = || {
-                let mut txn = RWTransactionWrapper::new(ctx);
+                let mut txn = DBTransaction::new(ctx);
                 let range = txn.read_range_owned(&ObjectPath::new("/test/"))?;
                 let max = range.into_iter().map(|x| x.1.into_inner().1.parse::<u64>().unwrap()).max().unwrap_or(0) + 1;
+                let key = format!("/test/{}", now());
+                txn.write(&ObjectPath::from(key.clone()), "invalid value".into())?;
+
+                std::thread::sleep(Duration::from_micros(10));
                 let max = max.to_string();
 
-                let key = format!("/test/{}", now());
 
                 txn.write(&ObjectPath::from(key), max.into())?;
                 txn.commit()
             };
 
-            while retry().is_err() {}
+            let mut retries = 0;
+            while let Err(err) = retry() {
+                std::thread::sleep(Duration::from_millis(random::<u64>() % 100 * retries));
+                retries += 1;
+                if retries % 10 == 0 {
+                    println!("retry loop {} {}", retries, err);
+                }
+            }
         }
 
         fn check(a: &mut dyn Iterator<Item=(ObjectPath, String)>) {
@@ -179,35 +189,51 @@ pub mod tests {
                 prev_time = elem.0.to_string();
             }
 
-            if rand::thread_rng().gen_bool(0.1) { println!("passed, tested {} values", values_tested) }
+            if rand::thread_rng().gen_bool(0.2) { println!("passed, tested {} values", values_tested) }
         }
 
         fn read(ctx: &DbContext) {
             let retry = || -> Result<(), String> {
-                let mut txn = RWTransactionWrapper::new(ctx);
+                let mut txn = DBTransaction::new(ctx);
                 let range = txn.read_range_owned(&ObjectPath::new("/test/"))?;
 
-                let mut range = range.into_iter().map(|a| (a.0, a.1.into_inner().1));
-                check(&mut range.clone());
+                let rdeb = range.clone();
+                let mut r1 = range.into_iter().map(|a| (a.0, a.1.into_inner().1));
+                check(&mut r1);
 
                 txn.commit()?;
                 Ok(())
             };
 
-            while retry().is_err() {}
+            let mut retries = 1;
+            while let Err(err) = retry() {
+                retries += 1;
+                std::thread::sleep(Duration::from_millis(retries * 10));
+                if retries % 10 == 0 {
+                    println!("retry loop {} err: {}", retries, err);
+                }
+            }
         }
 
         let ctx = db!();
         scope(|s| {
-            s.spawn(|_| loop {
+            s.spawn(|_| for _ in 0..2000 {
                 std::thread::sleep(Duration::from_millis(10));
                 read(&ctx)
             });
-            s.spawn(|_| loop {
+            s.spawn(|_| for _ in 0..2000 {
                 std::thread::sleep(Duration::from_millis(10));
                 add(&ctx)
             });
-            s.spawn(|_| loop {
+            s.spawn(|_| for _ in 0..2000 {
+                std::thread::sleep(Duration::from_millis(10));
+                add(&ctx)
+            });
+            s.spawn(|_| for _ in 0..2000 {
+                std::thread::sleep(Duration::from_millis(10));
+                add(&ctx)
+            });
+            s.spawn(|_| for _ in 0..2000 {
                 std::thread::sleep(Duration::from_millis(10));
                 add(&ctx)
             });

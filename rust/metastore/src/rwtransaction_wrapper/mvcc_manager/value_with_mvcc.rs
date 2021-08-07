@@ -169,6 +169,7 @@ impl<'a> UnlockedReadableMVCC<'a> {
             // On the second restart, they will be blocked by the MutBtreemap from reading this value.
             // Special case here because after we "fixed the abort/commit intents," this ValueWithMVCC doesn't
             // go through the MutBtreemap code path again to be checked.
+            println!("deleated");
             Err(ReadError::ValueNotFound)
         } else {
             Ok(())
@@ -269,13 +270,13 @@ impl ValueWithMVCC {
 impl ValueWithMVCC {
     pub fn get_readable(
         &mut self,
-    ) -> Result<UnlockedReadableMVCC<'_>, String> {
+    ) -> UnlockedReadableMVCC<'_> {
         let lock = self.lock.lock();
-        Ok(UnlockedReadableMVCC {
+        UnlockedReadableMVCC {
             meta: &mut self.meta,
             val: &mut self.val,
             lock,
-        })
+        }
     }
 
     pub fn as_inner(&self) -> (MVCCMetadata, &String) {
@@ -287,32 +288,32 @@ impl ValueWithMVCC {
 #[cfg(test)]
 mod tests {
     use crate::db;
-    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::rwtransaction_wrapper::DBTransaction;
     use crate::timestamp::Timestamp;
 
     #[test]
     fn test_fix() {
         let db = db!("adfs" = "value");
-        let mut write = RWTransactionWrapper::new(&db);
+        let mut write = DBTransaction::new(&db);
         write.write(&"adfs".into(), "fdsvcx".into());
         write.abort();
 
-        let mut read = RWTransactionWrapper::new(&db);
+        let mut read = DBTransaction::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value".to_string());
     }
 
     #[test]
     fn test_abort_2() {
         let db = db!("adfs" = "value");
-        let mut write = RWTransactionWrapper::new(&db);
+        let mut write = DBTransaction::new(&db);
         write.write(&"adfs".into(), "fdsvcx".into());
         write.abort();
 
-        let mut write = RWTransactionWrapper::new(&db);
+        let mut write = DBTransaction::new(&db);
         write.write(&"adfs".into(), "value2".into());
         write.commit();
 
-        let mut read = RWTransactionWrapper::new(&db);
+        let mut read = DBTransaction::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value2".to_string());
     }
 
@@ -321,20 +322,20 @@ mod tests {
         let db = db!("adfs" = "value");
 
         for _ in 0..20 {
-            let mut write = RWTransactionWrapper::new(&db);
+            let mut write = DBTransaction::new(&db);
             write.write(&"adfs".into(), "fdsvcx".into());
             write.abort();
         }
 
 
-        let mut read = RWTransactionWrapper::new(&db);
+        let mut read = DBTransaction::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value".to_string());
 
-        let mut write = RWTransactionWrapper::new(&db);
+        let mut write = DBTransaction::new(&db);
         write.write(&"adfs".into(), "value2".into());
         write.commit();
 
-        let mut read = RWTransactionWrapper::new(&db);
+        let mut read = DBTransaction::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value2".to_string());
     }
 
@@ -344,13 +345,13 @@ mod tests {
 
         let begin_time = 300000;
         for i in begin_time..begin_time + 10 {
-            let mut write = RWTransactionWrapper::new_with_time(&db, Timestamp::from(i));
+            let mut write = DBTransaction::new_with_time(&db, Timestamp::from(i));
             write.write(&"k".into(), i.to_string().into()).unwrap();
             write.commit();
         }
 
         for i in begin_time..begin_time + 10 {
-            let mut read = RWTransactionWrapper::new_with_time(&db, Timestamp::from(i));
+            let mut read = DBTransaction::new_with_time(&db, Timestamp::from(i));
             assert_eq!(read.read(&"k".into()).unwrap(), i.to_string());
             read.commit();
         }

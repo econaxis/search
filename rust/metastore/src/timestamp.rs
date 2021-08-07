@@ -13,7 +13,13 @@ impl Sub for Timestamp {
         Timestamp(self.0  - rhs.0)
     }
 }
+impl Add for Timestamp {
+    type Output = Timestamp;
 
+    fn add(self, rhs: Self) -> Self::Output {
+        Timestamp(self.0  + rhs.0)
+    }
+}
 impl PartialOrd for Timestamp {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(match (self.0, other.0) {

@@ -9,10 +9,12 @@ use std::collections::Bound;
 use std::fmt::Write;
 use std::sync::{Mutex, MutexGuard, RwLockReadGuard, RwLock, RwLockWriteGuard};
 use crate::timestamp::Timestamp;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering::SeqCst;
 
 pub struct MutBTreeMap {
     btree: RwLock<UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
-    time: Cell<Timestamp>,
+    time: AtomicU64,
 }
 
 unsafe impl Sync for MutBTreeMap {}
@@ -25,7 +27,7 @@ impl MutBTreeMap {
     pub fn remove_key(&self, _key: &ObjectPath) {}
 
     pub fn new() -> Self {
-        Self { btree: RwLock::new(UnsafeCell::new(BTreeMap::new())), time: Cell::new(Timestamp::mintime()) }
+        Self { btree: RwLock::new(UnsafeCell::new(BTreeMap::new())), time: AtomicU64::new(Timestamp::mintime().0) }
     }
 
     pub fn range<R>(&self, range: R) -> Range<'_, ObjectPath, ValueWithMVCC>
@@ -49,10 +51,10 @@ impl MutBTreeMap {
         let lock = self.btree.read().unwrap();
         let range = unsafe { &*lock.get() }.range(range);
 
-        let prevtime = self.time.get();
+        let prevtime = self.time.load(SeqCst);
 
-        if time > prevtime {
-            self.time.set(time);
+        if time.0 > prevtime {
+            self.time.store(time.0, SeqCst);
         }
 
         (lock, range)
@@ -94,7 +96,7 @@ impl MutBTreeMap {
 
     pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC, time: Timestamp) -> Result<Option<ValueWithMVCC>, String> {
         let lock = self.btree.write().unwrap();
-        if self.time.get() > time {
+        if self.time.load(SeqCst) > time.0 {
             return Err("Timestamp cache invalidated this txn, would lead to write anomalies".to_string())
         }
 
@@ -116,7 +118,7 @@ impl MutBTreeMap {
         for (key, value) in self.iter() {
             let (x, y) = value.as_inner();
             str.write_fmt(format_args!(
-                "{}: ({}) {}\n",
+                "{}: ({:?}) {}\n",
                 key.to_string(),
                 x,
                 y

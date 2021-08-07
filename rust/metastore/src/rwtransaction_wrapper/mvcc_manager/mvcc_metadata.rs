@@ -332,9 +332,6 @@ impl MVCCMetadata {
     }
 
     pub(crate) fn remove_prev_mvcc(&self, ctx: &DbContext) -> ValueWithMVCC {
-        let lock_removed_value = ctx.old_values_store.get_mut(self.previous_mvcc_value.unwrap());
-        let _lock = lock_removed_value.get_readable().unwrap();
-
         ctx.old_values_store.get_mut(self.previous_mvcc_value.unwrap()).clone()
     }
     pub(crate) fn insert_prev_mvcc(&mut self, p0: usize) {
@@ -358,7 +355,7 @@ impl MVCCMetadata {
 #[cfg(test)]
 mod tests {
     use crate::object_path::ObjectPath;
-    use crate::rwtransaction_wrapper::RWTransactionWrapper;
+    use crate::rwtransaction_wrapper::DBTransaction;
     use crate::*;
 
     use super::*;
@@ -386,8 +383,8 @@ mod tests {
     #[test]
     fn check_read_with_active_txn() {
         let ctx = create_empty_context();
-        let mut txn1 = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(5));
-        let mut txnread = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(10));
+        let mut txn1 = DBTransaction::new_with_time(&ctx, Timestamp::from(5));
+        let mut txnread = DBTransaction::new_with_time(&ctx, Timestamp::from(10));
         let key1 = ObjectPath::new("key1");
         txn1.write(&key1, "value1".into()).unwrap();
         assert_matches!(txnread.read(&ObjectPath::from("key1")), Err(..));
@@ -402,13 +399,13 @@ mod tests {
         let key = ObjectPath::from("key1");
 
         {
-            let mut txninit = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(1));
+            let mut txninit = DBTransaction::new_with_time(&ctx, Timestamp::from(1));
             txninit.write(&key, "whatever".into()).unwrap();
             txninit.commit();
         }
 
-        let mut txn1 = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(5));
-        let mut txnread = RWTransactionWrapper::new_with_time(&ctx, Timestamp::from(10));
+        let mut txn1 = DBTransaction::new_with_time(&ctx, Timestamp::from(5));
+        let mut txnread = DBTransaction::new_with_time(&ctx, Timestamp::from(10));
 
         txnread.read(&key).unwrap();
 

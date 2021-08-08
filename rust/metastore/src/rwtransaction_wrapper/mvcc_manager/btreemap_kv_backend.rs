@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::cell::{UnsafeCell, Cell};
+use std::cell::{UnsafeCell};
 use std::collections::btree_map::{BTreeMap, Range};
 use std::ops::RangeBounds;
 
@@ -7,7 +7,7 @@ use crate::object_path::ObjectPath;
 use crate::rwtransaction_wrapper::mvcc_manager::value_with_mvcc::ValueWithMVCC;
 use std::collections::Bound;
 use std::fmt::Write;
-use std::sync::{Mutex, MutexGuard, RwLockReadGuard, RwLock, RwLockWriteGuard};
+use std::sync::{RwLockReadGuard, RwLock};
 use crate::timestamp::Timestamp;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::SeqCst;
@@ -112,15 +112,15 @@ impl MutBTreeMap {
 
     // Prints the database to stdout
     pub fn printdb(&self) -> String {
-        let lock = self.btree.read().unwrap();
+        let _lock = self.btree.read().unwrap();
         let mut str: String = String::new();
 
         for (key, value) in self.iter() {
             let (x, y) = value.as_inner();
             str.write_fmt(format_args!(
-                "{}: ({:?}) {}\n",
+                "{} {:?} {}\n",
                 key.to_string(),
-                x,
+                x.get_write_intents(),
                 y
             ))
                 .unwrap();

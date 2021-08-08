@@ -15,8 +15,8 @@ pub use mvcc_metadata::{WriteIntent, WriteIntentStatus};
 
 use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
-use std::sync::{MutexGuard, RwLockReadGuard};
-use crate::rwtransaction_wrapper::mvcc_manager::mvcc_metadata::{WriteIntentError, is_repeatable};
+use std::sync::{RwLockReadGuard};
+use crate::rwtransaction_wrapper::mvcc_manager::mvcc_metadata::{WriteIntentError};
 use crate::rwtransaction_wrapper::MutBTreeMap;
 
 use crate::custom_error_impl;
@@ -38,7 +38,7 @@ pub(super) fn update(
     txn: LockDataRef,
 ) -> Result<ValueWithMVCC, String> {
     let ret = if check_has_value(&ctx.db, key) {
-        let (lock, res) = get_latest_mvcc_value(&ctx.db, key);
+        let (_lock, res) = get_latest_mvcc_value(&ctx.db, key);
         let res = res.ok_or("Key not found".to_string())?;
         let mut resl = res.get_readable().lock_for_write(ctx, txn)?;
 
@@ -108,7 +108,7 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
 
         if read_latest.is_ok() {
             resl.confirm_read(txn);
-            let mut cloned = ValueWithMVCC::from_tuple(resl.meta.clone(), resl.val.clone());
+            let cloned = ValueWithMVCC::from_tuple(resl.meta.clone(), resl.val.clone());
             Ok(R::Result(cloned))
         } else if resl.meta.get_beg_time() >= txn.timestamp {
             return if let Ok(prevval) = resl.meta.get_prev_mvcc(ctx) {

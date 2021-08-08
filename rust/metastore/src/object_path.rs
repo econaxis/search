@@ -1,5 +1,5 @@
-use std::borrow::Cow::Borrowed;
-use std::borrow::{Borrow, Cow};
+
+use std::borrow::{Borrow};
 use std::collections::Bound;
 use std::fmt::{Display, Formatter};
 use std::iter::FromIterator;

@@ -46,8 +46,8 @@ impl Transaction {
         &mut self, ctx: &DbContext,
         key: &ObjectPath,
     ) -> Result<Vec<(ObjectPath, ValueWithMVCC)>, String> {
-        let (lock, mut range) = ctx.db.range_with_lock(key.get_prefix_ranges(), self.txn.timestamp);
-        let mut keys: Vec<_> = range.map(|a| (a.0.clone(), a.1.clone())).collect();
+        let (lock, range) = ctx.db.range_with_lock(key.get_prefix_ranges(), self.txn.timestamp);
+        let keys: Vec<_> = range.map(|a| (a.0.clone(), a.1.clone())).collect();
         std::mem::drop(lock);
 
         let mut keys1 = Vec::new();
@@ -91,7 +91,7 @@ impl Transaction {
         std::mem::swap(&mut placeholder, &mut self.log);
         ctx.wallog.store(placeholder).unwrap();
         self.committed = true;
-        let prev = ctx
+        let _prev = ctx
             .transaction_map
             .set_txn_status(self.txn, WriteIntentStatus::Committed);
         // assert_eq!(prev, Some(WriteIntentStatus::Pending));
@@ -100,7 +100,7 @@ impl Transaction {
 
 use crate::timestamp::Timestamp;
 use crate::wal_watcher::{WalTxn, WalStorer};
-use serde_json::to_string;
+
 use crate::rwtransaction_wrapper::mvcc_manager::ReadError;
 
 impl<'a> DBTransaction<'a> {
@@ -117,9 +117,9 @@ impl<'a> DBTransaction<'a> {
     }
 }
 
-use lazy_static::lazy_static;
-use crate::replicated_slave::ReplicatedDatabase;
-use std::time::Duration;
+
+
+
 
 impl<'a> DBTransaction<'a> {
     pub fn read_range_owned(
@@ -165,8 +165,8 @@ impl<'a> DBTransaction<'a> {
         let _l = self.ctx.transaction_map.begin_atomic();
         let _l1 = self.ctx.replicator().begin_atomic_commit();
         let t = *self.get_txn();
-        let two = self.main.commit(self.ctx);
-        let one = self.ctx.replicator().commit(t);
+        let _two = self.main.commit(self.ctx);
+        let _one = self.ctx.replicator().commit(t);
     }
     pub fn abort(mut self) {
         let _l = self.ctx.transaction_map.begin_atomic();

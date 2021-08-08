@@ -4,16 +4,16 @@ use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer as SS, Serializer};
-use serde::de::{MapAccess, Visitor};
-use serde::ser::{SerializeStruct, SerializeStructVariant, SerializeTuple};
+use serde::{Deserialize, Serialize};
 
-use serialize_deserialize::CustomSerde;
+
+
+
 use wal_apply::apply_wal_txn_checked;
 
 use crate::DbContext;
 use crate::object_path::ObjectPath;
-use crate::rwtransaction_wrapper::{MVCCMetadata, DBTransaction};
+use crate::rwtransaction_wrapper::{DBTransaction};
 use crate::rwtransaction_wrapper::ValueWithMVCC;
 use crate::timestamp::Timestamp;
 
@@ -63,7 +63,7 @@ pub struct ByteBufferWAL {
 
 impl Clone for ByteBufferWAL {
     fn clone(&self) -> Self {
-        let l = self.json_lock.lock().unwrap();
+        let _l = self.json_lock.lock().unwrap();
         Self { buf: self.buf.clone(), json_lock: Mutex::new(()), frozen: Mutex::new(false) }
     }
 }
@@ -230,102 +230,3 @@ pub fn check_func(db: &DbContext) -> Result<bool, String> {
 }
 
 
-pub mod tests {
-    use std::borrow::Cow;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-    use std::sync::atomic::Ordering::SeqCst;
-    use std::time::Duration;
-
-    use crossbeam::scope;
-    use rand::{Rng, RngCore, thread_rng};
-    use rand::rngs::ThreadRng;
-    use rand::seq::SliceRandom;
-
-    use crate::DbContext;
-    use crate::object_path::ObjectPath;
-    use crate::rwtransaction_wrapper::{LockDataRef, DBTransaction, ValueWithMVCC};
-    use crate::rwtransaction_wrapper::auto_commit;
-    use crate::timestamp::Timestamp;
-    use crate::wal_watcher::{ByteBufferWAL, check_func, WalLoader, WalStorer, WalTxn};
-
-    static COM: AtomicU64 = AtomicU64::new(0);
-    static FAIL: AtomicU64 = AtomicU64::new(0);
-
-    // #[test]
-    pub fn test1() {
-        let keys: Vec<_> = (0..10000).map(|a| a.to_string()).collect();
-        let db = db!();
-
-        let process = |mut rng: Box<dyn RngCore>, mut iters: u64| while iters > 0 {
-            if rng.gen_bool(0.0001) {
-                println!("rem: {} {}/{}", iters, COM.load(SeqCst), FAIL.load(SeqCst));
-            }
-
-            let mut txn = DBTransaction::new(&db);
-
-            let key = keys.choose(&mut *rng).unwrap();
-            let key = ObjectPath::new(&key);
-            let mut all_good = true;
-            for _ in 0..10 {
-                // std::thread::sleep(Duration::from_micros(20));
-                let res = txn.read(&key).and_then(|str| {
-                    let val = str.parse::<u64>().unwrap() + 1;
-                    txn.write(&key.as_str().into(), Cow::from(val.to_string()))
-                });
-
-                let res = match res {
-                    Err(err) => {
-                        if err == "Other(\"Read value doesn't exist\")".to_string() {
-                            txn.write(&key.as_str().into(), Cow::from("1")).map(|_| ())
-                        } else {
-                            Err(format!("Txn error {}", err))
-                        }
-                    }
-                    _ => Ok(())
-                };
-                all_good &= res.is_ok();
-
-                if !all_good {
-                    // println!("abort error {}", res.unwrap_err());
-                    break;
-                }
-            }
-            if all_good {
-                iters -= 1;
-                // println!("commit {}", txn.get_txn().id);
-                COM.fetch_add(1, Ordering::SeqCst);
-
-                txn.commit();
-            } else {
-                FAIL.fetch_add(1, Ordering::SeqCst);
-                txn.abort();
-            }
-        };
-
-
-        let state = AtomicBool::new(false);
-        scope(|s| {
-            let threads: Vec<_> = std::iter::repeat_with(|| {
-                s.spawn(|_| {
-                    let rng = Box::new(thread_rng());
-                    process(rng, 20000);
-                })
-            }).take(16).collect();
-
-            let checker = s.spawn(|_| while !state.load(Ordering::SeqCst) {
-                std::thread::sleep(Duration::from_millis(3000));
-                check_func(&db).map_err(|err| println!("Check error: {}", err));
-            });
-            println!("created threads");
-
-            for x in threads {
-                x.join().unwrap();
-            }
-
-            state.store(true, Ordering::SeqCst);
-            checker.join().unwrap();
-        }).unwrap();
-
-        // println!("final state: {}", db.db.printdb());
-    }
-}

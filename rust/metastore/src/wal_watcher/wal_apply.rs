@@ -14,8 +14,8 @@ pub fn apply_wal_txn_checked(waltxn: WalTxn, ctx: &DbContext) -> Result<(), Stri
                 let v = v.as_inner();
                 txn.write(&k, v.1.clone().into()).unwrap();
             }
-            Operation::Read(k, mut v) => {
-                let mut v1 = txn.read_mvcc(&k).map_err(|err| format!("{} {}", err, k.as_str()))?;
+            Operation::Read(k, v) => {
+                let v1 = txn.read_mvcc(&k).map_err(|err| format!("{} {}", err, k.as_str()))?;
                 let value1 = v1.into_inner();
                 let value =  v.into_inner();
                 if !(value1.1 == value.1) {

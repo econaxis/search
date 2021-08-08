@@ -1,15 +1,15 @@
 use crate::{DbContext, create_empty_context};
 use crate::object_path::ObjectPath;
-use crate::rwtransaction_wrapper::{ValueWithMVCC, DBTransaction, LockDataRef, Transaction};
+use crate::rwtransaction_wrapper::{ValueWithMVCC, LockDataRef, Transaction};
 use std::borrow::Cow;
-use std::pin::Pin;
-use crate::wal_watcher::WalTxn;
+
+
 use std::collections::HashMap;
-use std::cell::{RefCell, UnsafeCell};
-use crate::timestamp::Timestamp;
+use std::cell::{UnsafeCell};
+
 use std::sync::{Mutex, MutexGuard};
 use parking_lot::RawMutex;
-use std::ops::{Deref, DerefMut};
+use std::ops::{DerefMut};
 
 mod rpc_handler;
 
@@ -51,9 +51,9 @@ impl ReplicatedDatabase {
 
     fn get_txn(&self, txn: &LockDataRef) -> MutexGuard<'_, Transaction> {
         let lock = self.transactions.lock().unwrap();
-        let mut txnmap = unsafe { &mut *lock.get().as_mut().unwrap() };
+        let txnmap = unsafe { &mut *lock.get().as_mut().unwrap() };
 
-        if txnmap.len() as f32 > txnmap.capacity() as f32 * 0.6 {
+        if txnmap.len() as f32 > txnmap.capacity() as f32 * 0.8 {
             todo!("hashmap would reallocate and cause segfault, todo! until we implement replication for networked")
         }
         let rwtxn = txnmap.entry(*txn).or_insert_with(|| {
@@ -62,10 +62,14 @@ impl ReplicatedDatabase {
         rwtxn.lock().unwrap()
     }
 
-    fn remove_txn(&self, _a: MutexGuard<Transaction>, b: &LockDataRef) {
+    fn remove_txn(&self, mut a: MutexGuard<Transaction>, b: &LockDataRef) {
+        // todo: temporary solution
+        // todo: must find a way to remove transactions, or else everything erorrs out.
+        let replacement = Transaction::new_with_time(&self.db, b.timestamp);
+        std::mem::replace(a.deref_mut(), replacement);
         let lock = self.transactions.lock().unwrap();
-        let mut txnmap = unsafe { &mut *lock.get().as_mut().unwrap() };
-        txnmap.remove(b).unwrap();
+        let _txnmap = unsafe { &mut *lock.get().as_mut().unwrap() };
+        // txnmap.remove(b).unwrap();
     }
     pub fn serve_read(&self, txn: LockDataRef, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
         let mut rwtxn = self.get_txn(&txn);
@@ -84,9 +88,11 @@ impl ReplicatedDatabase {
     pub fn commit(&self, txn: LockDataRef) {
         let mut rwtxn = self.get_txn(&txn);
         rwtxn.commit(&self.db);
+        self.remove_txn(rwtxn, &txn);
     }
     pub fn abort(&self, p0: LockDataRef) {
         let mut rwtxn = self.get_txn(&p0);
         rwtxn.abort(&self.db);
+        self.remove_txn(rwtxn, &p0);
     }
 }

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use super::mvcc_metadata::WriteIntentStatus;
 use crate::timestamp::Timestamp;
-use std::sync::{RwLock, RwLockWriteGuard};
-use std::collections::hash_map::RandomState;
+use std::sync::{RwLock};
+
 use parking_lot::{Mutex, RawMutex};
 use parking_lot::lock_api::MutexGuard;
 
@@ -62,8 +62,9 @@ impl IntentMap {
 impl IntentMap {
     pub fn make_write_txn_with_time(&self, timestamp: Timestamp) -> LockDataRef {
         let txn = TransactionLockData(WriteIntentStatus::Pending);
+
         let txnref = LockDataRef {
-            id: timestamp.0,
+            id: Timestamp::now().0,
             timestamp,
         };
         self.0.write().unwrap().insert(txnref, txn);

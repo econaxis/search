@@ -3,8 +3,8 @@ use std::fmt::{Debug, Display, Formatter, Write};
 use super::lock_data_manager::{IntentMap, LockDataRef};
 use crate::timestamp::Timestamp;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::atomic::{Ordering};
+use std::sync::{Mutex, MutexGuard, TryLockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use crate::DbContext;
 use crate::rwtransaction_wrapper::ValueWithMVCC;
 

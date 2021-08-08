@@ -1,7 +1,8 @@
 #![feature(assert_matches)]
 #![feature(trace_macros)]
 #![feature(backtrace)]
-use std::cell::{RefCell, UnsafeCell};
+
+use std::cell::{UnsafeCell};
 
 use std::sync::Mutex;
 
@@ -9,9 +10,9 @@ use rwtransaction_wrapper::ValueWithMVCC;
 use rwtransaction_wrapper::{IntentMap, MutBTreeMap};
 
 use crate::wal_watcher::ByteBufferWAL;
-use thread_tests::tests::monotonic;
+
 use crate::replicated_slave::ReplicatedDatabase;
-use std::rc::Rc;
+
 
 // mod hyper_error_converter;
 extern crate quickcheck;
@@ -63,7 +64,7 @@ pub fn create_empty_context() -> DbContext {
         transaction_map: IntentMap::new(),
         old_values_store: MutSlab::new(),
         wallog: ByteBufferWAL::new(),
-        replicators: None
+        replicators: None,
     }
 }
 
@@ -73,7 +74,7 @@ pub fn create_replicated_context() -> DbContext {
         transaction_map: IntentMap::new(),
         old_values_store: MutSlab::new(),
         wallog: ByteBufferWAL::new(),
-        replicators: Some(Box::new(ReplicatedDatabase::new()))
+        replicators: Some(Box::new(ReplicatedDatabase::new())),
     }
 }
 
@@ -82,7 +83,22 @@ pub struct DbContext {
     pub transaction_map: IntentMap,
     pub old_values_store: MutSlab,
     pub wallog: ByteBufferWAL,
-    pub replicators: Option<Box<ReplicatedDatabase>>
+    pub replicators: Option<Box<ReplicatedDatabase>>,
+}
+
+impl Drop for DbContext {
+    fn drop(&mut self) {
+        if let Some(repl) = &self.replicators {
+            println!("drop db checking");
+            let my = self.db.printdb();
+            let theirs = repl.dump();
+
+            if my != theirs {
+                println!("{}\n{}", my, theirs);
+                eprintln!("error: nonmatching");
+            }
+        }
+    }
 }
 
 impl DbContext {
@@ -97,7 +113,7 @@ unsafe impl Sync for DbContext {}
 
 fn main() {
     for _ in 0..500 {
-        wal_watcher::tests::test1();
+        thread_tests::tests_walwatcher::test1();
     }
     // monotonic();
     // thread_tests::tests::unique_set_insertion_test();

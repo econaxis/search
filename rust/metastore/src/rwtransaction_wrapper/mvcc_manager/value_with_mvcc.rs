@@ -1,19 +1,19 @@
 use crate::rwtransaction_wrapper::mvcc_manager::mvcc_metadata::WriteIntentError;
-use crate::rwtransaction_wrapper::mvcc_manager::{LockDataRef, WriteIntent, WriteIntentStatus, ReadError};
+use crate::rwtransaction_wrapper::mvcc_manager::{LockDataRef, WriteIntent, ReadError};
 use crate::rwtransaction_wrapper::{MVCCMetadata, MutBTreeMap};
 use crate::DbContext;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::timestamp::Timestamp;
-use std::sync::{RwLockWriteGuard, Mutex, MutexGuard, TryLockResult, LockResult};
-use std::time::Duration;
-use std::thread::ThreadId;
-use std::cell::{RefCell, UnsafeCell};
-use std::backtrace::Backtrace;
-use std::io::Read;
-use parking_lot::{ReentrantMutex, ReentrantMutexGuard};
-use std::borrow::BorrowMut;
-use std::ops::Deref;
+
+
+
+
+
+
+
+
+
 
 // #[derive(Debug)]
 // struct MyMutex<T>(Mutex<T>, UnsafeCell<Option<(ThreadId, Backtrace)>>);
@@ -32,7 +32,7 @@ impl ValueWithMVCC {
     // Get the underlying value without going through the lock first
     // If the caller already has a database-wide lock, then this function is safe
     pub fn get_val(&self) -> &str {
-        let l = self.lock.lock();
+        let _l = self.lock.lock();
         &self.val
     }
 }
@@ -143,7 +143,7 @@ impl<'a> UnlockedReadableMVCC<'a> {
                 panic!("Write intent still exists, unreachable code")
             }
         };
-        let mut writable = UnlockedWritableMVCC(self);
+        let writable = UnlockedWritableMVCC(self);
 
         let int = writable.0.meta.get_write_intents();
         assert_eq!(int.clone().unwrap().associated_transaction, txn);
@@ -189,7 +189,7 @@ impl<'a> UnlockedWritableMVCC<'a> {
         self.0
     }
 
-    pub fn release_lock(mut self, txn: LockDataRef) {
+    pub fn release_lock(self, txn: LockDataRef) {
         assert_eq!(self.0.meta.get_write_intents().unwrap().associated_transaction, txn);
         self.0.meta.aborted_reset_write_intent(txn, None);
     }

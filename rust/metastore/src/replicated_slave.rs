@@ -9,6 +9,7 @@ use std::cell::{RefCell, UnsafeCell};
 use crate::timestamp::Timestamp;
 use std::sync::{Mutex, MutexGuard};
 use parking_lot::RawMutex;
+use std::ops::{Deref, DerefMut};
 
 mod rpc_handler;
 
@@ -18,8 +19,9 @@ pub struct ReplicatedDatabase {
     transactions: Mutex<UnsafeCell<HashMap<LockDataRef, Mutex<Transaction>>>>,
 }
 
-unsafe impl Sync for ReplicatedDatabase{}
-unsafe impl Send for ReplicatedDatabase{}
+unsafe impl Sync for ReplicatedDatabase {}
+
+unsafe impl Send for ReplicatedDatabase {}
 
 // Right now the slave database does nothing special except repeat requests from the master.
 impl ReplicatedDatabase {
@@ -58,6 +60,12 @@ impl ReplicatedDatabase {
             Mutex::new(Transaction::new_with_time(&self.db, txn.timestamp))
         });
         rwtxn.lock().unwrap()
+    }
+
+    fn remove_txn(&self, _a: MutexGuard<Transaction>, b: &LockDataRef) {
+        let lock = self.transactions.lock().unwrap();
+        let mut txnmap = unsafe { &mut *lock.get().as_mut().unwrap() };
+        txnmap.remove(b).unwrap();
     }
     pub fn serve_read(&self, txn: LockDataRef, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
         let mut rwtxn = self.get_txn(&txn);

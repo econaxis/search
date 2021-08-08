@@ -75,7 +75,6 @@ impl Transaction {
         Ok(ret)
     }
 
-
     pub fn write(
         &mut self, ctx: &DbContext,
         key: &ObjectPath,
@@ -169,7 +168,7 @@ impl<'a> DBTransaction<'a> {
         let two = self.main.commit(self.ctx);
         let one = self.ctx.replicator().commit(t);
     }
-    pub fn abort(&mut self) {
+    pub fn abort(mut self) {
         let _l = self.ctx.transaction_map.begin_atomic();
         self.ctx.replicator().abort(*self.get_txn());
         self.main.abort(self.ctx)

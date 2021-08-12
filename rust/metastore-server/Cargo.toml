@@ -1,0 +1,19 @@
+[package]
+name = "metastore-server"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+metastore = {path = "../metastore"}
+futures = "*"
+tokio = { version = "^1", features = ["full"] }
+hyper = { version = "*", features = ["full"] }
+serde_json = "*"
+quickcheck = "*"
+quickcheck_macros = "1.0.0"
+
+[[bin]]
+name = "metastore-server"
+path="src/hyperserver.rs"

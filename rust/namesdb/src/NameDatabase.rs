@@ -174,7 +174,7 @@ pub fn generate_metadata_for_dir<P: AsRef<Path>>(path: P, processed_already: &Ha
             elem.filemap_path = Some(path.clone());
 
 
-            if let Some(oldpath) = dup_finder.get(&elem) {
+            if let Some(oldpath) = dup_finder.get(elem.borrow()) {
                 if errored { continue; } else { errored = true; }
                 if oldpath == &path { continue; };
                 eprintln!("Duplicate filename found {} {}", path.display(), oldpath.display());

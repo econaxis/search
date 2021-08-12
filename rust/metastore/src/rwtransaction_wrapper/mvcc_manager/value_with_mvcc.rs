@@ -38,7 +38,7 @@ impl ValueWithMVCC {
 }
 
 impl ValueWithMVCC {
-    pub(crate) fn into_inner(self) -> (MVCCMetadata, String) {
+    pub fn into_inner(self) -> (MVCCMetadata, String) {
         (self.meta, self.val)
     }
 }
@@ -116,8 +116,8 @@ impl<'a> UnlockedReadableMVCC<'a> {
         // self.check_read(&ctx, txn).unwrap();
     }
 
-    pub(crate) fn confirm_read(&mut self, p0: LockDataRef) {
-        self.meta.confirm_read(p0);
+    pub(crate) fn confirm_read(&mut self,timestamp: Timestamp) {
+        self.meta.confirm_read(timestamp);
     }
 
     // Locks the current (latest) mvcc value for write
@@ -169,7 +169,6 @@ impl<'a> UnlockedReadableMVCC<'a> {
             // On the second restart, they will be blocked by the MutBtreemap from reading this value.
             // Special case here because after we "fixed the abort/commit intents," this ValueWithMVCC doesn't
             // go through the MutBtreemap code path again to be checked.
-            println!("deleated");
             Err(ReadError::ValueNotFound)
         } else {
             Ok(())
@@ -194,7 +193,7 @@ impl<'a> UnlockedWritableMVCC<'a> {
         self.0.meta.aborted_reset_write_intent(txn, None);
     }
 
-    pub(super) fn become_newer_version(
+    pub(super) fn inplace_update(
         &mut self,
         ctx: &DbContext,
         txn: LockDataRef,
@@ -256,14 +255,15 @@ impl<'a> UnlockedWritableMVCC<'a> {
 
 
 impl ValueWithMVCC {
-    pub fn new(txn: LockDataRef, value: String) -> Self {
+    pub fn new(txn: LockDataRef, val: String) -> Self {
         let meta = MVCCMetadata::new(txn);
 
-        Self { meta: meta, val: value, lock: MyMutex::new(()) }
+        Self { meta, val, lock: MyMutex::new(()) }
     }
 
-    pub fn from_tuple(a: MVCCMetadata, v: String) -> Self {
-        Self { meta: a, val: v, lock: MyMutex::new(()) }
+
+    pub fn from_tuple(meta: MVCCMetadata, val: String) -> Self {
+        Self { meta, val, lock: MyMutex::new(()) }
     }
 }
 
@@ -288,32 +288,32 @@ impl ValueWithMVCC {
 #[cfg(test)]
 mod tests {
     use crate::db;
-    use crate::rwtransaction_wrapper::DBTransaction;
+    use crate::rwtransaction_wrapper::ReplicatedTxn;
     use crate::timestamp::Timestamp;
 
     #[test]
     fn test_fix() {
         let db = db!("adfs" = "value");
-        let mut write = DBTransaction::new(&db);
+        let mut write = ReplicatedTxn::new(&db);
         write.write(&"adfs".into(), "fdsvcx".into());
         write.abort();
 
-        let mut read = DBTransaction::new(&db);
+        let mut read = ReplicatedTxn::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value".to_string());
     }
 
     #[test]
     fn test_abort_2() {
         let db = db!("adfs" = "value");
-        let mut write = DBTransaction::new(&db);
+        let mut write = ReplicatedTxn::new(&db);
         write.write(&"adfs".into(), "fdsvcx".into());
         write.abort();
 
-        let mut write = DBTransaction::new(&db);
+        let mut write = ReplicatedTxn::new(&db);
         write.write(&"adfs".into(), "value2".into());
         write.commit();
 
-        let mut read = DBTransaction::new(&db);
+        let mut read = ReplicatedTxn::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value2".to_string());
     }
 
@@ -322,20 +322,20 @@ mod tests {
         let db = db!("adfs" = "value");
 
         for _ in 0..20 {
-            let mut write = DBTransaction::new(&db);
+            let mut write = ReplicatedTxn::new(&db);
             write.write(&"adfs".into(), "fdsvcx".into());
             write.abort();
         }
 
 
-        let mut read = DBTransaction::new(&db);
+        let mut read = ReplicatedTxn::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value".to_string());
 
-        let mut write = DBTransaction::new(&db);
+        let mut write = ReplicatedTxn::new(&db);
         write.write(&"adfs".into(), "value2".into());
         write.commit();
 
-        let mut read = DBTransaction::new(&db);
+        let mut read = ReplicatedTxn::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value2".to_string());
     }
 
@@ -345,13 +345,13 @@ mod tests {
 
         let begin_time = 300000;
         for i in begin_time..begin_time + 10 {
-            let mut write = DBTransaction::new_with_time(&db, Timestamp::from(i));
+            let mut write = ReplicatedTxn::new_with_time(&db, Timestamp::from(i));
             write.write(&"k".into(), i.to_string().into()).unwrap();
             write.commit();
         }
 
         for i in begin_time..begin_time + 10 {
-            let mut read = DBTransaction::new_with_time(&db, Timestamp::from(i));
+            let mut read = ReplicatedTxn::new_with_time(&db, Timestamp::from(i));
             assert_eq!(read.read(&"k".into()).unwrap(), i.to_string());
             read.commit();
         }

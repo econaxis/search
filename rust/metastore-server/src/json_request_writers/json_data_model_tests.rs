@@ -8,9 +8,8 @@ mod tests {
     use super::super::json_processing::{
         check_valid_json, json_to_map, map_to_json, PrimitiveValue,
     };
-    use crate::create_replicated_context;
-    use crate::object_path::ObjectPath;
-    use crate::rwtransaction_wrapper::DBTransaction;
+    use metastore::{ObjectPath, ReplicatedTxn};
+    use crate::json_request_writers::read_json_request;
 
     #[derive(Clone, Debug)]
     struct ArbJson(pub Value);
@@ -18,7 +17,9 @@ mod tests {
     #[derive(Clone, Debug)]
     struct ArbJson2(pub Value);
 
-    impl ObjectPath {
+    struct MyObjPath(pub ObjectPath);
+
+    impl MyObjPath {
         fn arbitrary(g: &mut Gen, range: &[u8]) -> Self {
             let numelems = u8::arbitrary(g) / 10;
 
@@ -32,7 +33,7 @@ mod tests {
             let mut v: String = v.join("/");
             v.push('/');
 
-            ObjectPath::from(v)
+            MyObjPath(ObjectPath::from(v))
         }
     }
 
@@ -60,7 +61,8 @@ mod tests {
             let mut map = Vec::with_capacity(allpaths.len());
             for p in allpaths {
                 let mut str = String::arbitrary(g);
-                map.push((ObjectPath::arbitrary(g, &p), PrimitiveValue::String(str)));
+                let obj = MyObjPath::arbitrary(g, &p);
+                map.push((obj.0, PrimitiveValue::String(str)));
             }
 
             let mut value = map_to_json(&map);
@@ -116,15 +118,19 @@ mod tests {
         }
     }
 
-    // #[quickcheck]
+    #[quickcheck]
+    #[ignore]
     fn test_arbjson1(ArbJson(v): ArbJson) -> TestResult {
         test_json(v)
     }
 
     #[quickcheck]
     fn test_arbjson2(ArbJson2(v): ArbJson2) -> TestResult {
+
         test_json(v)
     }
+
+    use metastore::db_context::create_replicated_context;
 
     fn test_json(v: Value) -> TestResult {
         if !check_valid_json(&v) {
@@ -132,19 +138,18 @@ mod tests {
         }
 
         let ctx = create_replicated_context();
-        let mut txn = DBTransaction::new(&ctx);
+        let mut txn = ReplicatedTxn::new(&ctx);
         super::super::write_json(v.clone(), &mut txn);
         txn.commit();
 
-        let value =
-            crate::rwtransaction_wrapper::json_request_writers::read_json_request("/", &ctx);
+        let value = read_json_request("/", &ctx);
 
         let map = json_to_map(v.clone());
 
         map.iter().for_each(|(path, _value)| {
             let new = path.as_str().strip_prefix("/user").unwrap();
             let _a =
-                crate::rwtransaction_wrapper::json_request_writers::read_json_request(new, &ctx);
+                read_json_request(new, &ctx);
             let stripped = match new.strip_suffix('/') {
                 Some(x) => x,
                 None => new,
@@ -152,15 +157,11 @@ mod tests {
             let _b = v.pointer(stripped).unwrap();
             assert_eq!(
                 *v.pointer(stripped).unwrap(),
-                crate::rwtransaction_wrapper::json_request_writers::read_json_request(new, &ctx)
+                read_json_request(new, &ctx)
             );
         });
 
         assert_eq!(value, v);
-        let finaldb = serde_json::to_string_pretty(&value).unwrap();
-
-        println!("Final db: {}", truncate_string(&finaldb, 500));
-
         TestResult::passed()
     }
 }

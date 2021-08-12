@@ -1,3 +1,3 @@
 
-pub const data_file_dir: &str = env!("DATA_FILES_DIR");
-pub const indice_file_dir: &str = &*concat!(env!("DATA_FILES_DIR"), "/indices/");
+pub const DATA_FILE_DIR: &str = env!("DATA_FILES_DIR");
+pub const INDICE_FILE_DIR: &str = &*concat!(env!("DATA_FILES_DIR"), "/indices/");

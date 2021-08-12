@@ -90,9 +90,9 @@ impl<'de> Deserialize<'de> for CustomSerde<ValueWithMVCC> {
                     A: MapAccess<'de>,
             {
                 let (mvcccheck, mvccvalue) = v.next_entry::<String, MVCCMetadata>()?.unwrap();
-                assert!(&mvcccheck == "MVCC");
+                assert_eq!(&mvcccheck, "MVCC");
                 let (valuecheck, value) = v.next_entry::<String, String>()?.unwrap();
-                assert!(&valuecheck == "Value");
+                assert_eq!(&valuecheck, "Value");
                 Ok(ValueWithMVCC::from_tuple(mvccvalue, value))
             }
         }

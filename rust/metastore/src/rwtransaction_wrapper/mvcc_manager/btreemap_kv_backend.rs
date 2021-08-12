@@ -11,6 +11,7 @@ use std::sync::{RwLockReadGuard, RwLock};
 use crate::timestamp::Timestamp;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::SeqCst;
+use crate::rwtransaction_wrapper::LockDataRef;
 
 pub struct MutBTreeMap {
     btree: RwLock<UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
@@ -40,7 +41,7 @@ impl MutBTreeMap {
     pub fn range_with_lock<R>(
         &self,
         range: R,
-        time: Timestamp
+        time: Timestamp,
     ) -> (
         RwLockReadGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
         Range<'_, ObjectPath, ValueWithMVCC>,
@@ -95,12 +96,32 @@ impl MutBTreeMap {
     }
 
     pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC, time: Timestamp) -> Result<Option<ValueWithMVCC>, String> {
+        // todo: bug, if the prev/next are uncommitted versions, we might be checking the wrong versions
+        // we should instead iterate until we find a committed version, then check for phantoms with that version.
+        // Check the read timestamps of the neighbouring nodes for phantoms.
         let lock = self.btree.write().unwrap();
-        if self.time.load(SeqCst) > time.0 {
-            return Err("Timestamp cache invalidated this txn, would lead to write anomalies".to_string())
-        }
+        let btree = unsafe { &mut *lock.get() };
+        assert_eq!(btree.contains_key(&key), false);
+        let mut prev = btree.range_mut(..&key).next_back();
+        let prevbool = prev.map(| mut x| x.1.get_readable().meta.get_last_read_time() <= time);
+        let mut next = btree.range_mut(&key..).next();
+        let nextbool = next.map(| mut x| x.1.get_readable().meta.get_last_read_time() <= time);
 
-        Ok(unsafe { &mut *lock.get() }.insert(key, value))
+        let should_insert = if prevbool.is_none() && nextbool.is_none() {
+            // If there's nowhere that we can lock, this would lead to an error (checked by test `check_phantom3`)
+            // Have to lock the global time instance instead.
+            let ret = self.time.load(SeqCst) <= time.0;
+            self.time.fetch_max(time.0, SeqCst);
+            ret
+        } else {
+            prevbool.unwrap_or(true) && nextbool.unwrap_or(true)
+        };
+
+        if should_insert {
+            Ok(btree.insert(key, value))
+        } else {
+            Err("phantom detected".to_string())
+        }
     }
 
     pub fn iter(&self) -> Range<ObjectPath, ValueWithMVCC> {
@@ -120,7 +141,7 @@ impl MutBTreeMap {
             str.write_fmt(format_args!(
                 "{} {:?} {}\n",
                 key.to_string(),
-                x.get_write_intents(),
+                x.get_write_intents().map(|a| a.associated_transaction.timestamp),
                 y
             ))
                 .unwrap();
@@ -128,3 +149,4 @@ impl MutBTreeMap {
         str
     }
 }
+

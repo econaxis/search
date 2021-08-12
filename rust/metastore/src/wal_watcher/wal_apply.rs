@@ -1,12 +1,12 @@
 use crate::DbContext;
 
-use crate::rwtransaction_wrapper::DBTransaction;
+use crate::rwtransaction_wrapper::ReplicatedTxn;
 use crate::wal_watcher::Operation;
 
 use super::WalTxn;
 
 pub fn apply_wal_txn_checked(waltxn: WalTxn, ctx: &DbContext) -> Result<(), String> {
-    let mut txn = DBTransaction::new_with_time(ctx, waltxn.timestamp);
+    let mut txn = ReplicatedTxn::new_with_time(ctx, waltxn.timestamp);
 
     for op in waltxn.ops {
         match op {

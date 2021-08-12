@@ -174,15 +174,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "error-chain"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
-dependencies = [
- "version_check",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -488,6 +479,7 @@ version = "0.1.0"
 dependencies = [
  "crossbeam",
  "lazy_static",
+ "log",
  "parking_lot",
  "quickcheck",
  "quickcheck_macros",
@@ -495,8 +487,19 @@ dependencies = [
  "serde",
  "serde_json",
  "slab",
- "syslog",
- "tracing-mutex",
+]
+
+[[package]]
+name = "metastore-server"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "hyper",
+ "metastore",
+ "quickcheck",
+ "quickcheck_macros",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -869,18 +872,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "syslog"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a5d8ef1b679c07976f3ee336a436453760c470f54b5e7237556728b8589515d"
-dependencies = [
- "error-chain",
- "libc",
- "log",
- "time",
-]
-
-[[package]]
 name = "termcolor"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -906,16 +897,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8018d24e04c95ac8790716a5987d0fec4f8b27249ffa0f7d33f1369bdfb88cbd"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "time"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -1014,15 +995,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-mutex"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "690dac82fd4828b694c9825c0b8faae2b8277c53528a13cc0710510c1b6693ff"
-dependencies = [
- "lazy_static",
-]
-
-[[package]]
 name = "tracing-serde"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1065,12 +1037,6 @@ name = "unicode-xid"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
-
-[[package]]
-name = "version_check"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fecdca9a5291cc2b8dcf7dc02453fee791a280f3743cb0905f8822ae463b3fe"
 
 [[package]]
 name = "want"

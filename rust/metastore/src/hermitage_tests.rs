@@ -2,13 +2,13 @@
 
 
 
-use crate::rwtransaction_wrapper::DBTransaction;
+use crate::rwtransaction_wrapper::ReplicatedTxn;
 
 #[test]
 pub fn g1ctest() {
     let db = db!("1" = "10", "2" = "20");
-    let mut txn1 = DBTransaction::new(&db);
-    let mut txn2 = DBTransaction::new(&db);
+    let mut txn1 = ReplicatedTxn::new(&db);
+    let mut txn2 = ReplicatedTxn::new(&db);
 
     txn1.write(&"1".into(), "11".into()).unwrap();
     txn2.write(&"2".into(), "21".into()).unwrap();

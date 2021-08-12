@@ -1,5 +1,4 @@
 pub mod btreemap_kv_backend;
-mod kv_backend;
 mod lock_data_manager;
 mod mvcc_metadata;
 pub mod value_with_mvcc;
@@ -29,8 +28,6 @@ pub enum ReadError {
 }
 custom_error_impl!(ReadError);
 
-
-
 pub(super) fn update(
     ctx: &DbContext,
     key: &ObjectPath,
@@ -52,7 +49,9 @@ pub(super) fn update(
         assert!(resl.0.meta.get_beg_time() <= txn.timestamp);
 
         resl.0.meta.check_write(txn).unwrap();
-        resl.become_newer_version(ctx, txn, new_value);
+
+        // Actually update the value with the desired new_value.
+        resl.inplace_update(ctx, txn, new_value);
 
         std::mem::drop(resl);
         res.clone()
@@ -107,7 +106,7 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
         let read_latest = read_latest.and_then(|_| resl.check_read(&ctx, txn));
 
         if read_latest.is_ok() {
-            resl.confirm_read(txn);
+            resl.confirm_read(txn.timestamp);
             let cloned = ValueWithMVCC::from_tuple(resl.meta.clone(), resl.val.clone());
             Ok(R::Result(cloned))
         } else if resl.meta.get_beg_time() >= txn.timestamp {
@@ -143,20 +142,20 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
 
 #[cfg(test)]
 mod tests {
-    use crate::rwtransaction_wrapper::DBTransaction;
+    use crate::rwtransaction_wrapper::ReplicatedTxn;
     use crate::db;
 
     #[test]
     fn writes_dont_block_reads() {
         let db = db!("k" = "v", "k1" = "v1");
-        let mut r = DBTransaction::new(&db);
-        let mut w = DBTransaction::new(&db);
+        let mut r = ReplicatedTxn::new(&db);
+        let mut w = ReplicatedTxn::new(&db);
 
         w.write(&"k".into(), "v1".into());
         assert_eq!(r.read(&"k".into()).unwrap(), "v".to_string());
 
         w.commit();
-        let mut r = DBTransaction::new(&db);
+        let mut r = ReplicatedTxn::new(&db);
         assert_eq!(r.read(&"k".into()).unwrap(), "v1".to_string());
     }
 }

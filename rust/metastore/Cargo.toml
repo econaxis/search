@@ -8,15 +8,11 @@ edition = "2018"
 [dependencies]
 serde_json = "*"
 serde = {version = "*", features = ["derive"]}
-#futures = "*"
-#tokio = { version = "^1", features = ["full"] }
-#hyper = { version = "*", features = ["full"] }
 slab = "*"
 rand = "*"
-syslog = "*"
+lazy_static = "*"
 quickcheck = "1.0.3"
 crossbeam = "*"
-tracing-mutex = "*"
+log = "*"
 parking_lot = "*"
-lazy_static = "1.4.0"
 quickcheck_macros = "1.0.0"

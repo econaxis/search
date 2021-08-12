@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 
-use crate::object_path::ObjectPath;
+use metastore::object_path::ObjectPath;
 use serde_json::Value;
 use std::iter::FromIterator;
 
@@ -145,12 +145,12 @@ pub fn create_materialized_path<RawValue: ToString>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{create_empty_context, create_replicated_context};
-    use crate::rwtransaction_wrapper::DBTransaction;
     use std::borrow::Cow;
-
     use std::borrow::Cow::Borrowed;
+    use serde_json::Value;
+    use crate::json_request_writers::json_processing::{create_materialized_path, PrimitiveValue, json_to_map};
+    use metastore::{ReplicatedTxn, ObjectPath};
+    use metastore::db_context::create_replicated_context;
 
     #[test]
     fn materialized_test() {
@@ -196,8 +196,8 @@ mod tests {
     fn testbig() {
         let ctx = create_replicated_context();
         let ctx = &ctx;
-        let mut txn0 = DBTransaction::new(ctx);
-        let mut txn1 = DBTransaction::new(ctx);
+        let mut txn0 = ReplicatedTxn::new(ctx);
+        let mut txn1 = ReplicatedTxn::new(ctx);
 
         test_json()
             .into_iter()
@@ -213,7 +213,7 @@ mod tests {
         txn0.commit();
         txn1.commit();
 
-        let mut txn2 = DBTransaction::new(ctx);
+        let mut txn2 = ReplicatedTxn::new(ctx);
         test_json().into_iter().for_each(|(path, value)| {
             assert_eq!(
                 txn2.read(&path).unwrap(),

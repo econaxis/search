@@ -21,9 +21,6 @@ crate::custom_error_impl!(WriteIntentError);
 
 impl WriteIntentError {
     pub fn tostring(self) -> String {
-        // if matches!(self, WriteIntentError::Aborted(_)) {
-        //     panic!("aborted error should've been handled");
-        // }
         self.into()
     }
 }
@@ -52,13 +49,12 @@ impl MVCCMetadata {
         Self {
             begin_ts: txn.timestamp,
             end_ts: Timestamp::maxtime(),
-            last_read: Timestamp::mintime(),
+            last_read: txn.timestamp,
             cur_write_intent: WriteIntentMutex::new(Some(WriteIntent {
                 associated_transaction: txn,
                 was_commited: false,
             })),
             previous_mvcc_value: None,
-            read_cnt: ReadCounter::new(),
         }
     }
 
@@ -169,16 +165,10 @@ impl MVCCMetadata {
         Ok(())
     }
 
-    pub(super) fn confirm_read(&mut self, cur_txn: LockDataRef) {
-        self.last_read = self.last_read.max(cur_txn.timestamp);
+    pub(super) fn confirm_read(&mut self, timestamp: Timestamp) {
+        self.last_read = self.last_read.max(timestamp);
     }
 
-    #[cfg(test)]
-    pub fn check_matching_timestamps(&self, other: &Self) -> bool {
-        self.end_ts == other.end_ts
-            && self.begin_ts == other.begin_ts
-            && self.last_read == other.last_read
-    }
 }
 
 
@@ -284,7 +274,6 @@ pub struct MVCCMetadata {
     #[serde(skip)]
     cur_write_intent: WriteIntentMutex,
     previous_mvcc_value: Option<usize>,
-    read_cnt: ReadCounter,
 }
 
 impl MVCCMetadata {
@@ -311,7 +300,6 @@ impl Clone for MVCCMetadata {
             last_read: self.last_read,
             cur_write_intent: WriteIntentMutex::new(data),
             previous_mvcc_value: self.previous_mvcc_value,
-            read_cnt: ReadCounter::new(),
         }
     }
 }
@@ -347,18 +335,19 @@ impl MVCCMetadata {
     pub fn set_end_time(&mut self, time: Timestamp) {
         self.end_ts = time;
     }
-
-    pub fn read(&self) -> RwLockReadGuard<'_, ()> { self.read_cnt.read() }
-    pub fn write(&self) -> RwLockWriteGuard<'_, ()> { self.read_cnt.update() }
+    pub fn get_last_read_time(&self) -> Timestamp {
+        self.last_read
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::object_path::ObjectPath;
-    use crate::rwtransaction_wrapper::DBTransaction;
+    use crate::rwtransaction_wrapper::ReplicatedTxn;
     use crate::*;
 
     use super::*;
+    use crate::db_context::create_replicated_context;
 
     #[test]
     fn check_read() {
@@ -383,8 +372,8 @@ mod tests {
     #[test]
     fn check_read_with_active_txn() {
         let ctx = create_replicated_context();
-        let mut txn1 = DBTransaction::new_with_time(&ctx, Timestamp::from(5));
-        let mut txnread = DBTransaction::new_with_time(&ctx, Timestamp::from(10));
+        let mut txn1 = ReplicatedTxn::new_with_time(&ctx, Timestamp::from(5));
+        let mut txnread = ReplicatedTxn::new_with_time(&ctx, Timestamp::from(10));
         let key1 = ObjectPath::new("key1");
         txn1.write(&key1, "value1".into()).unwrap();
         assert_matches!(txnread.read(&ObjectPath::from("key1")), Err(..));
@@ -399,13 +388,13 @@ mod tests {
         let key = ObjectPath::from("key1");
 
         {
-            let mut txninit = DBTransaction::new_with_time(&ctx, Timestamp::from(1));
+            let mut txninit = ReplicatedTxn::new_with_time(&ctx, Timestamp::from(1));
             txninit.write(&key, "whatever".into()).unwrap();
             txninit.commit();
         }
 
-        let mut txn1 = DBTransaction::new_with_time(&ctx, Timestamp::from(5));
-        let mut txnread = DBTransaction::new_with_time(&ctx, Timestamp::from(10));
+        let mut txn1 = ReplicatedTxn::new_with_time(&ctx, Timestamp::from(5));
+        let mut txnread = ReplicatedTxn::new_with_time(&ctx, Timestamp::from(10));
 
         txnread.read(&key).unwrap();
 

@@ -47,7 +47,7 @@ impl ObjectPath {
         Self(String::from(str))
     }
 
-    pub(crate) fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         std::str::from_utf8(self.0.as_bytes()).unwrap()
     }
 

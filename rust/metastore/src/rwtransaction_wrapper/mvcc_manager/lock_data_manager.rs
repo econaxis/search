@@ -6,6 +6,8 @@ use std::sync::{RwLock};
 
 use parking_lot::{Mutex, RawMutex};
 use parking_lot::lock_api::MutexGuard;
+use std::fmt::{Debug, Formatter};
+use std::ops::Deref;
 
 #[derive(Eq, PartialEq, Hash, Debug, Copy, Clone)]
 pub struct LockDataRef {
@@ -21,6 +23,15 @@ impl TransactionLockData {
 
 pub struct IntentMap(RwLock<HashMap<LockDataRef, TransactionLockData>>, Mutex<()>);
 
+impl Debug for IntentMap {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.read().unwrap().iter().for_each(|(a, b)| {
+            f.write_fmt(format_args!("{}: {:?}, ", a.id, b));
+        });
+        Ok(())
+    }
+}
+
 unsafe impl Send for IntentMap {}
 
 impl IntentMap {
@@ -28,11 +39,13 @@ impl IntentMap {
         Self(RwLock::new(HashMap::new()), Mutex::new(()))
     }
 
-    pub fn begin_atomic(&self) -> MutexGuard<'_, RawMutex, ()> {
-        self.1.lock()
-    }
-    pub fn set_txn_status(&self, txn: LockDataRef, status: WriteIntentStatus) -> Option<WriteIntentStatus> {
-        self.0.write().unwrap().insert(txn, TransactionLockData(status)).map(|a| a.0)
+    pub fn set_txn_status(&self, txn: LockDataRef, status: WriteIntentStatus) -> Result<(), String> {
+        let prev = self.0.write().unwrap().insert(txn, TransactionLockData(status)).map(|a| a.0);
+        if prev == Some(WriteIntentStatus::Pending) {
+            Ok(())
+        } else {
+            Err("Previous wi is not pending".to_string())
+        }
     }
 
     pub fn make_write_txn(&self) -> LockDataRef {
@@ -54,12 +67,8 @@ impl IntentMap {
     }
 
     pub fn get_by_ref(&self, l: &LockDataRef) -> Option<TransactionLockData> {
-        let _l = self.begin_atomic();
         self.0.read().unwrap().get(l).map(|a| a.clone())
     }
-}
-
-impl IntentMap {
     pub fn make_write_txn_with_time(&self, timestamp: Timestamp) -> LockDataRef {
         let txn = TransactionLockData(WriteIntentStatus::Pending);
 
@@ -75,3 +84,9 @@ impl IntentMap {
 // Contains only write intent status for now, but may contain more in the future.
 #[derive(Clone)]
 pub struct TransactionLockData(pub WriteIntentStatus);
+
+impl Debug for TransactionLockData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self.0))
+    }
+}

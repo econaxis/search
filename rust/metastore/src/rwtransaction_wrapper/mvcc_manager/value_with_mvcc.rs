@@ -21,6 +21,7 @@ use crate::timestamp::Timestamp;
 type MyMutex<T> = parking_lot::ReentrantMutex<T>;
 type Guard<'a, T> = parking_lot::ReentrantMutexGuard<'a, T>;
 
+
 #[derive(Debug)]
 pub struct ValueWithMVCC {
     meta: MVCCMetadata,
@@ -32,7 +33,6 @@ impl ValueWithMVCC {
     // Get the underlying value without going through the lock first
     // If the caller already has a database-wide lock, then this function is safe
     pub fn get_val(&self) -> &str {
-        let _l = self.lock.lock();
         &self.val
     }
 }
@@ -77,7 +77,7 @@ impl<'a> UnlockedReadableMVCC<'a> {
         if let Ok(_) = self.meta.get_prev_mvcc(ctx) {
             let (mut oldmeta, oldstr) = self.meta.remove_prev_mvcc(ctx).into_inner();
 
-            assert_eq!(oldmeta.get_write_intents(), None);
+            assert_eq!(oldmeta.get_write_intents().is_none(), true);
 
             oldmeta.set_end_time(cur_end_ts);
             std::mem::replace(&mut *self.meta, oldmeta);
@@ -106,14 +106,17 @@ impl<'a> UnlockedReadableMVCC<'a> {
 
                     self.rescue_previous_value(ctx);
 
-                    self.clean_intents(ctx, txn)
+                    // The value we rescued may also have been aborted, so we continue checking.
+                    // In the common case, this should return Ok.
+
+                    assert_eq!(self.meta.get_write_intents().is_none(), true);
+                    Ok(())
                 }
                 _ => { Err(err) }
             }
         } else {
             Ok(())
         };
-        // self.check_read(&ctx, txn).unwrap();
     }
 
     pub(crate) fn confirm_read(&mut self,timestamp: Timestamp) {
@@ -128,7 +131,6 @@ impl<'a> UnlockedReadableMVCC<'a> {
     ) -> Result<UnlockedWritableMVCC<'a>, String> {
         assert_eq!(self.meta.get_end_time(), Timestamp::maxtime());
         self.clean_intents(ctx, txn).map_err(|a| a.tostring())?;
-        let previntent = self.meta.get_write_intents();
         self.meta.check_write(txn)?;
         match self.meta.get_write_intents() {
             Some(wi) if wi.associated_transaction == txn => {}
@@ -146,11 +148,8 @@ impl<'a> UnlockedReadableMVCC<'a> {
         let writable = UnlockedWritableMVCC(self);
 
         let int = writable.0.meta.get_write_intents();
-        assert_eq!(int.clone().unwrap().associated_transaction, txn);
+        assert_eq!(int.unwrap().associated_transaction, txn);
 
-        if previntent != int.clone() && previntent.is_some() {
-            println!("{:?} trying to access {:?}", int, previntent);
-        }
 
         Ok(writable)
     }
@@ -188,11 +187,6 @@ impl<'a> UnlockedWritableMVCC<'a> {
         self.0
     }
 
-    pub fn release_lock(self, txn: LockDataRef) {
-        assert_eq!(self.0.meta.get_write_intents().unwrap().associated_transaction, txn);
-        self.0.meta.aborted_reset_write_intent(txn, None);
-    }
-
     pub(super) fn inplace_update(
         &mut self,
         ctx: &DbContext,
@@ -200,44 +194,12 @@ impl<'a> UnlockedWritableMVCC<'a> {
         newvalue: String,
     ) -> Result<(), String> {
         // If we're rewriting our former value, then that value never got committed, so it hsouldn't be archived
-        assert_eq!(
-            self.0.meta
-                .get_write_intents()
-                .unwrap()
-                .associated_transaction,
-            txn
-        );
         let was_committed = self.0.meta.get_write_intents().as_ref().unwrap().was_commited;
 
         assert!(self.0.meta.get_beg_time() <= txn.timestamp);
         let oldmvcc = self.0.meta.into_newer(txn.timestamp);
-        assert_eq!(
-            self.0.meta
-                .get_write_intents()
-                .unwrap()
-                .associated_transaction,
-            txn
-        );
 
         let oldvalue = std::mem::replace(self.0.val, newvalue);
-        assert_eq!(
-            self.0.meta
-                .get_write_intents()
-                .unwrap()
-                .associated_transaction,
-            txn
-        );
-
-
-        assert!(oldmvcc.get_write_intents().is_none());
-        assert_eq!(
-            self.0.meta
-                .get_write_intents()
-                .unwrap()
-                .associated_transaction,
-            txn
-        );
-
 
         if was_committed {
             let archived = ValueWithMVCC {

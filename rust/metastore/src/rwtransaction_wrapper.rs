@@ -21,7 +21,7 @@ pub struct ReplicatedTxn<'a> {
 
 // equivalent to RWTransactionWrapper but without the borrowing reference.
 pub struct Transaction {
-    txn: LockDataRef,
+    pub(crate) txn: LockDataRef,
     log: WalTxn,
 }
 
@@ -37,7 +37,7 @@ impl Transaction {
     pub fn abort(&mut self, ctx: &DbContext) {
         let prev = ctx
             .transaction_map
-            .set_txn_status(self.txn, WriteIntentStatus::Aborted).unwrap();
+            .set_txn_status(self.txn, WriteIntentStatus::Aborted);
     }
     pub fn read_range_owned(
         &mut self, ctx: &DbContext,
@@ -235,18 +235,6 @@ mod tests {
         assert_matches!(wtxn.write(&"/test/0".into(), "4".into()), Err(..));
         assert_matches!(wtxn.write(&"/test/4".into(), "4".into()), Err(..));
         assert_matches!(wtxn.write(&"/user/4".into(), "4".into()), Ok(..));
-    }
-    #[test]
-    fn check_phantom2() {
-        let db = db!("/test/1" = "1", "/test/2" = "2", "/test/5" = "5", "/user/0" = "0");
-        let mut txn1 = ReplicatedTxn::new(&db);
-        let mut txn2 = ReplicatedTxn::new(&db);
-
-        let range = txn1.read_range_owned(&"/test/".into()).unwrap();
-        let range = txn2.read_range_owned(&"/test/".into()).unwrap();
-
-        txn1.write(&"/test/3".into(), "3".into()).unwrap();
-        txn2.write(&"/test/4".into(), "3".into()).unwrap();
     }
 
 

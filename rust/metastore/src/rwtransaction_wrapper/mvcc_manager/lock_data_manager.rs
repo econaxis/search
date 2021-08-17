@@ -41,7 +41,7 @@ impl IntentMap {
 
     pub fn set_txn_status(&self, txn: LockDataRef, status: WriteIntentStatus) -> Result<(), String> {
         let prev = self.0.write().unwrap().insert(txn, TransactionLockData(status)).map(|a| a.0);
-        if prev == Some(WriteIntentStatus::Pending) {
+        if prev == Some(WriteIntentStatus::Pending) || status == WriteIntentStatus::Aborted {
             Ok(())
         } else {
             Err("Previous wi is not pending".to_string())

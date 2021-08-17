@@ -54,9 +54,10 @@ pub struct MutSlab(Mutex<UnsafeCell<slab::Slab<ValueWithMVCC>>>);
 
 fn main() {
     for _ in 0..500 {
+        monotonic();
         thread_tests::tests_walwatcher::test2();
         thread_tests::tests_walwatcher::test1();
-        monotonic();
+        print!("one iter\n");
     }
     thread_tests::tests::unique_set_insertion_test();
 }

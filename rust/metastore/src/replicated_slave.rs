@@ -48,6 +48,10 @@ impl ReplicatedDatabase {
         self.db.db.printdb()
     }
 
+    pub fn get_inner(&self) -> &DbContext {
+        &self.db
+    }
+
 
 
     fn get_txn(&self, txn: &LockDataRef) -> MutexGuard<'_, Transaction> {

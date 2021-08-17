@@ -1,25 +1,22 @@
 use std::time::Duration;
 
 use crate::DbContext;
-use crate::rwtransaction_wrapper::ReplicatedTxn;
+use crate::rwtransaction_wrapper::{ReplicatedTxn, Transaction};
 use crate::timestamp::Timestamp;
 use crate::wal_watcher::WalLoader;
 
-pub fn check_func(db: &DbContext) -> Result<bool, String> {
-    println!("Start checking");
-    let db2 = db!();
-    // db.wallog.freeze();
-    let wallog = db.wallog.clone();
-    let time = wallog.apply(&db2).unwrap() - Timestamp::from(1);
-    println!("Done applied");
-    let mut txn2 = ReplicatedTxn::new_with_time(&db2, time);
-    let ret2 = txn2.read_range_owned(&"/".into())?;
-    let mut txn = ReplicatedTxn::new_with_time(&db, time);
-    let mut ret: Result<_, _> = Err("a".into());
+pub fn check_func1(db: &DbContext, db2: &DbContext, time: Timestamp) -> Result<bool, String> {
+    let mut txn2 = Transaction::new_with_time(&db2, time);
+    let ret2 = txn2.read_range_owned(&db2, &"/".into())?;
+    let mut txn = Transaction::new_with_time(&db, time);
+    let mut ret: Result<_, String> = Err("a".into());
     while !ret.is_ok() {
-        println!("check {}", ret.unwrap_err());
+        match ret.unwrap_err().as_str() {
+            "a" => {}
+            err => println!("check {}", err)
+        }
         std::thread::sleep(Duration::from_millis(1000));
-        ret = txn.read_range_owned(&"/".into());
+        ret = txn.read_range_owned(&db, &"/".into());
     }
     let ret = ret.unwrap();
     // db.wallog.unfreeze();
@@ -44,7 +41,6 @@ pub fn check_func(db: &DbContext) -> Result<bool, String> {
             // if a.1.as_inner().0.get_end_time() != Timestamp::maxtime() && b.1.as_inner().0.get_end_time() == Timestamp::maxtime() {
             //     println!("Conflict acceptible, because of small locking problems");
             // } else {
-            print!("Time: {}\n", txn.get_txn().id);
             println!("Non matching {:?}", a);
             println!("Non matching {:?}", b);
             // wallog.print();
@@ -54,4 +50,14 @@ pub fn check_func(db: &DbContext) -> Result<bool, String> {
     println!("End checking {}", ret.len());
 
     Ok(true)
+}
+
+pub fn check_func(db: &DbContext) -> Result<bool, String> {
+    println!("Start checking");
+    let db2 = db!();
+    // db.wallog.freeze();
+    let wallog = db.wallog.clone();
+    let time = wallog.apply(&db2).unwrap() - Timestamp::from(1);
+    println!("Done applied");
+    check_func1(db, &db2, time)
 }

@@ -41,7 +41,7 @@ pub(super) fn update(
 
         assert_eq!(
             resl.0.meta
-                .get_write_intents()
+                .get_write_intents().as_ref()
                 .unwrap()
                 .associated_transaction,
             txn
@@ -82,10 +82,9 @@ fn get_latest_mvcc_value<'a>(
     // changing the String atomically. In these cases, we must lock the value for a brief moment to do operations, then unlock it.
     // Without this, readers might read invalid memory and will segfault.
     let res = db.get_mut_with_lock(key);
-
-
     res
 }
+
 
 pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<ValueWithMVCC, ReadError> {
     enum R<'a> {

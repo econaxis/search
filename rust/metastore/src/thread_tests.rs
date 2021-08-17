@@ -56,7 +56,7 @@ pub mod tests {
                             txn.get_txn().id.to_string()
                         )),
                     );
-                    std::thread::sleep(Duration::from_micros(10 + rng.gen::<u64>() % 10000));
+                    // std::thread::sleep(Duration::from_micros(10 + rng.gen::<u64>() % 10000));
 
                     let first = first.and(txn.write(
                         &ObjectPath::from(format!("/test/{}", maxnumstr)),
@@ -66,7 +66,7 @@ pub mod tests {
                             txn.get_txn().id.to_string()
                         )),
                     ));
-                    std::thread::sleep(Duration::from_micros(10 + rng.gen::<u64>() % 10));
+                    // std::thread::sleep(Duration::from_micros(10 + rng.gen::<u64>() % 10));
 
                     let second = txn.write(
                         &ObjectPath::from(format!("/test/{}", maxnumstr)),
@@ -179,7 +179,7 @@ pub mod tests {
                 prevvalue = elem.1.get_readable().val.clone();
             }
 
-            if rand::thread_rng().gen_bool(0.2) { println!("passed, tested {} values", values_tested) }
+            if rand::thread_rng().gen_bool(0.05) { println!("passed, tested {} values", values_tested) }
         }
 
         fn read(ctx: &DbContext) {
@@ -205,8 +205,8 @@ pub mod tests {
 
         let ctx = db!();
         scope(|s| {
-            s.spawn(|_| for _ in 0..150 {
-                std::thread::sleep(Duration::from_millis(10));
+            s.spawn(|_| for _ in 0..50 {
+                std::thread::sleep(Duration::from_millis(25));
                 read(&ctx)
             });
             s.spawn(|_| for _ in 0..50 {
@@ -263,7 +263,7 @@ pub mod tests_walwatcher {
                 let res: Result<(), String> = try {
                     let value = txn.read(&"k".into())?.parse::<u64>().unwrap() + 1;
                     txn.write(&"k".into(), Cow::from("invalid value".to_string()))?;
-                    std::thread::sleep(Duration::from_millis(10));
+                    // std::thread::sleep(Duration::from_millis(10));
                     txn.write(&"k".into(), value.to_string().into())?;
                 };
                 if res.is_ok() {
@@ -289,11 +289,12 @@ pub mod tests_walwatcher {
     }
 
     pub fn test1() {
-        let keys: Vec<_> = (0..10).map(|a| a.to_string()).collect();
+        let range = rand::random::<u64>() % 100 + 10;
+        let keys: Vec<_> = (0..range).map(|a| a.to_string()).collect();
         let db = db!();
 
         let process = |mut rng: Box<dyn RngCore>, mut iters: u64| while iters > 0 {
-            if rng.gen_bool(0.001) {
+            if rng.gen_bool(0.00001) {
                 println!("rem: {} committed/aborted: {}/{}", iters, COM.load(Relaxed), FAIL.load(Relaxed));
             }
 
@@ -303,7 +304,6 @@ pub mod tests_walwatcher {
             let key = ObjectPath::new(&key);
             let mut all_good = true;
             for _ in 0..10 {
-                // std::thread::sleep(Duration::from_micros(20));
                 let res = txn.read(&key).and_then(|str| {
                     let val = str.parse::<u64>().unwrap() + 1;
                     txn.write(&key.as_str().into(), Cow::from(val.to_string()))
@@ -344,16 +344,15 @@ pub mod tests_walwatcher {
             let threads: Vec<_> = std::iter::repeat_with(|| {
                 s.spawn(|_| {
                     let rng = Box::new(thread_rng());
-                    process(rng, 20000);
+                    process(rng, 2000);
                 })
                 // The less threads we take, the higher the performance, which is expected. :(.
             }).take(5).collect();
 
             let checker = s.spawn(|_| while !state.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(3000));
-                check_func(&db).map_err(|err| println!("Check error: {}", err));
+                check_func(&db).map_err(|err| eprintln!("Check error: {}", err));
             });
-            println!("created threads");
 
             for x in threads {
                 x.join().unwrap();

@@ -101,7 +101,6 @@ impl MutBTreeMap {
         // Check the read timestamps of the neighbouring nodes for phantoms.
         let lock = self.btree.write().unwrap();
         let btree = unsafe { &mut *lock.get() };
-        assert_eq!(btree.contains_key(&key), false);
         let mut prev = btree.range_mut(..&key).next_back();
         let prevbool = prev.map(| mut x| x.1.get_readable().meta.get_last_read_time() <= time);
         let mut next = btree.range_mut(&key..).next();
@@ -141,7 +140,7 @@ impl MutBTreeMap {
             str.write_fmt(format_args!(
                 "{} {:?} {}\n",
                 key.to_string(),
-                x.get_write_intents().map(|a| a.associated_transaction.timestamp),
+                x.get_write_intents().as_ref().map(|a| a.associated_transaction.timestamp),
                 y
             ))
                 .unwrap();

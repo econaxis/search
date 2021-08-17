@@ -1,6 +1,6 @@
 [workspace]
-members = ["namesdb", "webserver", "metastore", "metastore-server"]
-default-members=["namesdb", "webserver", "metastore", "metastore-server"]
+members = ["namesdb", "webserver", "metastore", "metastore-server", "thread-check"]
+default-members=["namesdb", "webserver", "metastore", "metastore-server", "thread-check"]
 
 [profile.dev]
 rpath=true

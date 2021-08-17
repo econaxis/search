@@ -3,6 +3,8 @@ use crate::wal_watcher::ByteBufferWAL;
 
 use crate::history_storage::MutSlab;
 use crate::rwtransaction_wrapper::{MutBTreeMap, IntentMap};
+use crate::wal_watcher::wal_check_consistency::check_func1;
+use crate::timestamp::Timestamp;
 
 pub fn create_empty_context() -> DbContext {
     DbContext {
@@ -40,12 +42,9 @@ impl Drop for DbContext {
             let theirs = repl.dump();
 
             if my != theirs {
-                // println!("drop db checking");
-                // println!("{}\n{}", my, theirs);
-                eprintln!("error: nonmatching");
-
-                println!("{:?}", self.transaction_map);
-                // panic!()
+                if !check_func1(self, repl.get_inner(), Timestamp::now()).unwrap() {
+                    panic!("error: nonmatching");
+                }
             } else {
                 println!("replication matches");
             }

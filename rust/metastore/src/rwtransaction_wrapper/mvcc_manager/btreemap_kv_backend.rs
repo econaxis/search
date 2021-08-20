@@ -11,10 +11,10 @@ use std::sync::{RwLockReadGuard, RwLock};
 use crate::timestamp::Timestamp;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::SeqCst;
-use crate::rwtransaction_wrapper::LockDataRef;
 
+type MapType = UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>;
 pub struct MutBTreeMap {
-    btree: RwLock<UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
+    btree: RwLock<MapType>,
     time: AtomicU64,
 }
 
@@ -24,11 +24,17 @@ unsafe impl Send for MutBTreeMap {}
 
 pub const TOMBSTONE: &str = "__null";
 
+
+impl Default for MutBTreeMap {
+    fn default() -> Self {
+        Self { btree: RwLock::new(UnsafeCell::new(BTreeMap::new())), time: AtomicU64::new(Timestamp::mintime().0) }
+    }
+}
 impl MutBTreeMap {
     pub fn remove_key(&self, _key: &ObjectPath) {}
 
     pub fn new() -> Self {
-        Self { btree: RwLock::new(UnsafeCell::new(BTreeMap::new())), time: AtomicU64::new(Timestamp::mintime().0) }
+        Self::default()
     }
 
     pub fn range<R>(&self, range: R) -> Range<'_, ObjectPath, ValueWithMVCC>
@@ -43,7 +49,7 @@ impl MutBTreeMap {
         range: R,
         time: Timestamp,
     ) -> (
-        RwLockReadGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
+        RwLockReadGuard<'_, MapType>,
         Range<'_, ObjectPath, ValueWithMVCC>,
     )
         where
@@ -62,10 +68,10 @@ impl MutBTreeMap {
     }
 
     pub fn is_deleated(a: &str) -> bool {
-        return a == TOMBSTONE;
+        a == TOMBSTONE
     }
     pub fn null_value_mapper(a: &mut ValueWithMVCC) -> Option<&mut ValueWithMVCC> {
-        if Self::is_deleated(unsafe { a.get_val() }) {
+        if Self::is_deleated( a.get_val()) {
             None
         } else {
             Some(a)
@@ -82,7 +88,7 @@ impl MutBTreeMap {
         &self,
         key: &T,
     ) -> (
-        RwLockReadGuard<'_, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
+        RwLockReadGuard<'_, MapType>,
         Option<&mut ValueWithMVCC>,
     )
         where
@@ -96,15 +102,16 @@ impl MutBTreeMap {
     }
 
     pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC, time: Timestamp) -> Result<Option<ValueWithMVCC>, String> {
-        // todo: bug, if the prev/next are uncommitted versions, we might be checking the wrong versions
-        // we should instead iterate until we find a committed version, then check for phantoms with that version.
-        // Check the read timestamps of the neighbouring nodes for phantoms.
+        // todo: inserts should be handled by mvcc manager
         let lock = self.btree.write().unwrap();
         let btree = unsafe { &mut *lock.get() };
-        let mut prev = btree.range_mut(..&key).next_back();
-        let prevbool = prev.map(| mut x| x.1.get_readable().meta.get_last_read_time() <= time);
-        let mut next = btree.range_mut(&key..).next();
-        let nextbool = next.map(| mut x| x.1.get_readable().meta.get_last_read_time() <= time);
+        let prev = btree.range_mut(..&key).next_back();
+
+        // todo: need to deprecate get_readable_unchecked, cause this needs to be checked.
+        // have to move this to mvcc_manager
+        let prevbool = prev.map(| x| x.1.get_readable_unchecked().meta.get_last_read_time() <= time);
+        let next = btree.range_mut(&key..).next();
+        let nextbool = next.map(| x| x.1.get_readable_unchecked().meta.get_last_read_time() <= time);
 
         let should_insert = if prevbool.is_none() && nextbool.is_none() {
             // If there's nowhere that we can lock, this would lead to an error (checked by test `check_phantom3`)

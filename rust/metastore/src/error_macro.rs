@@ -1,10 +1,10 @@
 #[macro_export]
 macro_rules! custom_error_impl {
     ($ty:ty) => {
-        impl Into<String> for $ty {
-            fn into(self) -> String {
+        impl From<$ty> for String {
+            fn from(a: $ty) -> String {
                 let mut buf = String::new();
-                std::fmt::Write::write_fmt(&mut buf, format_args!("{:?}", self));
+                std::fmt::Write::write_fmt(&mut buf, format_args!("{:?}", a)).unwrap();
                 buf
             }
         }

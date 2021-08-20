@@ -2,9 +2,8 @@
 pub mod tests {
     use std::borrow::Cow;
     use std::collections::HashSet;
-    use std::hash::Hasher;
     use std::sync::Arc;
-    use std::time::{Duration, SystemTime};
+    use std::time::{Duration};
 
     use rand::prelude::*;
 
@@ -27,7 +26,7 @@ pub mod tests {
         let mut txn = ReplicatedTxn::new(&*ctx1);
         txn.write(&ObjectPath::from(format!("/test/{}", "1")), "1".into())
             .unwrap();
-        txn.commit();
+        txn.commit().unwrap();
 
         let clos = |ctx: Arc<DbContext>| {
             let ctx: &DbContext = &ctx;
@@ -172,11 +171,11 @@ pub mod tests {
             for mut elem in &mut a {
                 values_tested += 1;
                 // assert!(elem.0.as_str() > &prev_time);
-                if !(elem.1.get_readable().val.parse::<i64>().unwrap() > prevvalue.parse::<i64>().unwrap()) {
+                if !(elem.1.get_readable_unchecked().val.parse::<i64>().unwrap() > prevvalue.parse::<i64>().unwrap()) {
                     println!("{:?}", a);
                     panic!()
                 }
-                prevvalue = elem.1.get_readable().val.clone();
+                prevvalue = elem.1.get_readable_unchecked().val.clone();
             }
 
             if rand::thread_rng().gen_bool(0.05) { println!("passed, tested {} values", values_tested) }
@@ -232,9 +231,8 @@ pub mod tests {
 // wal watcher tests
 pub mod tests_walwatcher {
     use std::borrow::Cow;
-    use std::io::Write;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-    use std::sync::atomic::Ordering::{SeqCst, Relaxed};
+    use std::sync::atomic::Ordering::{ Relaxed};
     use std::time::Duration;
 
     use crossbeam::scope;
@@ -244,7 +242,6 @@ pub mod tests_walwatcher {
     use crate::object_path::ObjectPath;
     use crate::rwtransaction_wrapper::ReplicatedTxn;
     use crate::rwtransaction_wrapper::auto_commit;
-    use crate::wal_watcher::{WalLoader, WalStorer};
     use crate::wal_watcher::wal_check_consistency::check_func;
 
     static COM: AtomicU64 = AtomicU64::new(0);
@@ -283,7 +280,7 @@ pub mod tests_walwatcher {
                     process();
                 }));
             }
-        });
+        }).unwrap();
 
         assert_eq!(auto_commit::read(&db, &"k".into()).unwrap().into_inner().1.as_str(), "250");
     }
@@ -301,7 +298,7 @@ pub mod tests_walwatcher {
             let mut txn = ReplicatedTxn::new(&db);
 
             let key = keys.choose(&mut *rng).unwrap();
-            let key = ObjectPath::new(&key);
+            let key = ObjectPath::new(key);
             let mut all_good = true;
             for _ in 0..10 {
                 let res = txn.read(&key).and_then(|str| {
@@ -311,7 +308,7 @@ pub mod tests_walwatcher {
 
                 let res = match res {
                     Err(err) => {
-                        if err == "Other(\"Read value doesn't exist\")".to_string() {
+                        if err == *"Other(\"Read value doesn't exist\")" {
                             txn.write(&key.as_str().into(), Cow::from("1")).map(|_| ())
                         } else {
                             Err(format!("Txn error {}", err))

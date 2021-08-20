@@ -20,9 +20,11 @@ pub use rwtransaction_wrapper::{IntentMap, MutBTreeMap};
 pub use rwtransaction_wrapper::ValueWithMVCC;
 pub use db_context::DbContext;
 
-use crate::replicated_slave::ReplicatedDatabase;
+use crate::replicated_slave::SelfContainedDb;
 use crate::thread_tests::tests::monotonic;
 use crate::wal_watcher::ByteBufferWAL;
+pub use crate::object_path::ObjectPath;
+
 
 // mod hyper_error_converter;
 extern crate quickcheck;
@@ -33,6 +35,10 @@ mod c_interface;
 mod object_path;
 mod parsing;
 mod rwtransaction_wrapper;
+
+#[macro_use]
+mod retry;
+
 
 #[macro_use]
 mod test_transaction_generate;
@@ -49,6 +55,7 @@ mod replicated_slave;
 mod file_debugger;
 mod db_context;
 mod history_storage;
+mod btree_index;
 
 pub struct MutSlab(Mutex<UnsafeCell<slab::Slab<ValueWithMVCC>>>);
 

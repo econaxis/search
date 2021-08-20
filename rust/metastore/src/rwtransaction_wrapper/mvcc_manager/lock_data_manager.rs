@@ -4,10 +4,8 @@ use super::mvcc_metadata::WriteIntentStatus;
 use crate::timestamp::Timestamp;
 use std::sync::{RwLock};
 
-use parking_lot::{Mutex, RawMutex};
-use parking_lot::lock_api::MutexGuard;
+use parking_lot::{Mutex};
 use std::fmt::{Debug, Formatter};
-use std::ops::Deref;
 
 #[derive(Eq, PartialEq, Hash, Debug, Copy, Clone)]
 pub struct LockDataRef {
@@ -15,18 +13,26 @@ pub struct LockDataRef {
     pub timestamp: Timestamp,
 }
 
+impl LockDataRef {
+    pub fn debug_new(id: u64) -> Self {
+        Self {id, timestamp: Timestamp::from(id)}
+    }
+}
+
+
 impl TransactionLockData {
     pub fn get_write_intent(&self) -> WriteIntentStatus {
         self.0
     }
 }
 
+#[derive(Default)]
 pub struct IntentMap(RwLock<HashMap<LockDataRef, TransactionLockData>>, Mutex<()>);
 
 impl Debug for IntentMap {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.0.read().unwrap().iter().for_each(|(a, b)| {
-            f.write_fmt(format_args!("{}: {:?}, ", a.id, b));
+            f.write_fmt(format_args!("{}: {:?}, ", a.id, b)).unwrap();
         });
         Ok(())
     }
@@ -36,7 +42,7 @@ unsafe impl Send for IntentMap {}
 
 impl IntentMap {
     pub fn new() -> Self {
-        Self(RwLock::new(HashMap::new()), Mutex::new(()))
+        Self::default()
     }
 
     pub fn set_txn_status(&self, txn: LockDataRef, status: WriteIntentStatus) -> Result<(), String> {
@@ -67,7 +73,7 @@ impl IntentMap {
     }
 
     pub fn get_by_ref(&self, l: &LockDataRef) -> Option<TransactionLockData> {
-        self.0.read().unwrap().get(l).map(|a| a.clone())
+        self.0.read().unwrap().get(l).cloned()
     }
     pub fn make_write_txn_with_time(&self, timestamp: Timestamp) -> LockDataRef {
         let txn = TransactionLockData(WriteIntentStatus::Pending);

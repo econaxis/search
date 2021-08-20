@@ -1,26 +1,28 @@
-
-
-
 #[macro_export]
+#[allow(unused_mut)]
 macro_rules! db {
     (
         $(
             $key:literal = $value:literal
-        ), *
+        ), +
     ) => {{
         let ctx = $crate::db_context::create_replicated_context();
-        let mut txninit = $crate::rwtransaction_wrapper::ReplicatedTxn::new(&ctx);
 
+
+            let mut txninit = $crate::rwtransaction_wrapper::ReplicatedTxn::new(&ctx);
         $(
             txninit.write(&crate::object_path::ObjectPath::from($key), std::borrow::Cow::from($value)).unwrap();
         )*
-        txninit.commit();
+            txninit.commit().unwrap();
 
         ctx}};
 
+        () => {{
+        let ctx = $crate::db_context::create_replicated_context();
+        ctx}};
 }
 
-
+#[cfg(test)]
 mod tests {
     use crate::rwtransaction_wrapper::ReplicatedTxn;
 

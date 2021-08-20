@@ -1,17 +1,17 @@
-use std::fmt::{Debug, Display, Formatter, Write};
+use std::fmt::{Debug, Display, Formatter};
 
 use super::lock_data_manager::{IntentMap, LockDataRef};
 use crate::timestamp::Timestamp;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{Ordering};
-use std::sync::{Mutex, MutexGuard, TryLockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use crate::DbContext;
 use crate::rwtransaction_wrapper::ValueWithMVCC;
+use std::cell::Cell;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum WriteIntentError {
     Aborted(LockDataRef),
     PendingIntent(LockDataRef),
+    Committed(WriteIntent),
     Other(String),
 }
 
@@ -32,7 +32,7 @@ impl MVCCMetadata {
         new: Option<WriteIntent>,
     ) -> Result<(), String> {
         let curwi = self.get_write_intents();
-        if curwi.map_or(None, |a| Some(a.associated_transaction)) != Some(compare) {
+        if curwi.map(|a| a.associated_transaction) != Some(compare) {
             return Err("Write intent not equals to compar, can't swap".to_string());
         }
         let curwi = curwi.unwrap().clone();
@@ -48,7 +48,7 @@ impl MVCCMetadata {
         Self {
             begin_ts: txn.timestamp,
             end_ts: Timestamp::maxtime(),
-            last_read: txn.timestamp,
+            last_read: Cell::new(txn.timestamp),
             cur_write_intent: WriteIntentMutex::new(Some(WriteIntent {
                 associated_transaction: txn,
                 was_commited: false,
@@ -64,17 +64,17 @@ impl MVCCMetadata {
     }
 
     pub(super) fn check_write_intents(
-        &mut self,
+        &self,
         txnmap: &IntentMap,
         cur_txn: LockDataRef,
     ) -> Result<(), WriteIntentError> {
-        let curwriteintent = self.cur_write_intent.get();
+        let curwriteintent = self.cur_write_intent.get().clone();
         match curwriteintent {
             None => Ok(()),
             Some(wi) if wi.associated_transaction == cur_txn => Ok(()),
             Some(WriteIntent {
                      associated_transaction,
-                     ..
+                     was_commited
                  }) => {
                 match txnmap
                     .get_by_ref(&associated_transaction)
@@ -84,16 +84,16 @@ impl MVCCMetadata {
                     // If the transaction is committed already, then all good.
                     WriteIntentStatus::Committed => {
                         // All good, we write after the txn has committed
-                        self.cur_write_intent.compare_swap_none(curwriteintent.clone(), None).map_err(|a| WriteIntentError::Other(a))?;
-                        Ok(())
+                        // todo: remove committed intent
+                        Err(WriteIntentError::Committed(WriteIntent { associated_transaction, was_commited }))
                     }
                     WriteIntentStatus::Aborted => {
 
                         // Transaction has been aborted, so we are reading an aborted value. Therefore, we should also abort this current transaction.
-                        Err(WriteIntentError::Aborted(*associated_transaction))
+                        Err(WriteIntentError::Aborted(associated_transaction))
                     }
                     WriteIntentStatus::Pending => {
-                        Err(WriteIntentError::PendingIntent(*associated_transaction))
+                        Err(WriteIntentError::PendingIntent(associated_transaction))
                     }
                 }
             }
@@ -101,7 +101,7 @@ impl MVCCMetadata {
     }
 
     pub(super) fn check_write(
-        &mut self,
+        &self,
         cur_txn: LockDataRef,
     ) -> Result<(), String> {
         if self.end_ts != Timestamp::maxtime() {
@@ -109,7 +109,7 @@ impl MVCCMetadata {
             return Err("Trying to write on a historical MVCC record".to_string());
         }
 
-        if cur_txn.timestamp < self.last_read {
+        if cur_txn.timestamp < self.last_read.get() {
             Err("Timestamp smaller than last read".to_string())
         } else if cur_txn.timestamp < self.begin_ts {
             Err("Timestamp smaller than begin time".to_string())
@@ -118,7 +118,7 @@ impl MVCCMetadata {
         }
     }
 
-    pub(super) fn into_newer(&mut self, timestamp: Timestamp) -> Self {
+    pub(super) fn inplace_into_newer(&mut self, timestamp: Timestamp) -> Self {
         // We should have a lock on this to access the inner.
         assert!(self.cur_write_intent.get().is_some());
 
@@ -131,8 +131,8 @@ impl MVCCMetadata {
 
         // Can't write to a value that has already been read before us.
         // Should've been checked before in `check_read`. we check again for correctness, just in case
-        assert!(self.last_read <= timestamp);
-        self.last_read = timestamp;
+        assert!(self.last_read.get() <= timestamp);
+        self.last_read.set(timestamp);
 
 
         old.cur_write_intent.compare_swap_none(self.cur_write_intent.get().clone(), None).unwrap();
@@ -142,7 +142,7 @@ impl MVCCMetadata {
         // todo! design a better api so we remove get_mut functoin
         self.cur_write_intent.get_mut().unwrap().was_commited = false;
 
-        if !(old.begin_ts <= old.end_ts) {
+        if old.begin_ts > old.end_ts {
             println!("{:?} {:?}", old, self);
             panic!()
         }
@@ -152,7 +152,7 @@ impl MVCCMetadata {
     }
 
     pub(super) fn check_read(
-        &mut self,
+        &self,
         txnmap: &IntentMap,
         cur_txn: LockDataRef,
     ) -> Result<(), String> {
@@ -164,24 +164,22 @@ impl MVCCMetadata {
         Ok(())
     }
 
-    pub(super) fn confirm_read(&mut self, timestamp: Timestamp) {
-        self.last_read = self.last_read.max(timestamp);
+    pub(super) fn confirm_read(&self, timestamp: Timestamp) {
+        if self.last_read.get() < timestamp {
+            self.last_read.set(timestamp);
+        }
     }
 
 }
 
 
 #[derive(Clone)]
-struct WriteIntentMutex(Option<WriteIntent>);
+pub struct WriteIntentMutex(Option<WriteIntent>);
 
 
 impl PartialEq for WriteIntentMutex {
     fn eq(&self, other: &Self) -> bool {
-        if self.get() == other.get() {
-            true
-        } else {
-            false
-        }
+        return self.get() == other.get();
     }
 }
 
@@ -223,37 +221,14 @@ impl Debug for WriteIntentMutex {
     }
 }
 
-static ORD: Ordering = Ordering::SeqCst;
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ReadCounter {
-    data: RwLock<()>,
-}
-
-impl ReadCounter {
-    fn new() -> ReadCounter {
-        ReadCounter {
-            data: RwLock::new(()),
-        }
-    }
-}
-
-impl ReadCounter {
-    pub fn read(&self) -> RwLockReadGuard<'_, ()> {
-        self.data.read().unwrap()
-    }
-    pub fn update(&self) -> RwLockWriteGuard<'_, ()> {
-        self.data.write().unwrap()
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MVCCMetadata {
     begin_ts: Timestamp,
     end_ts: Timestamp,
-    last_read: Timestamp,
+    last_read: Cell<Timestamp>,
     #[serde(skip)]
-    cur_write_intent: WriteIntentMutex,
+    pub(crate) cur_write_intent: WriteIntentMutex,
     previous_mvcc_value: Option<usize>,
 }
 
@@ -270,6 +245,7 @@ impl MVCCMetadata {
     pub(crate) fn get_beg_time(&self) -> Timestamp {
         self.begin_ts
     }
+
     pub(crate) fn get_prev_mvcc<'a>(&self, ctx: &'a DbContext) -> Result<&'a mut ValueWithMVCC, String> {
         // Don't want to return erroneous values when another thread is doing a swap/mutating this value.
         // Because we're just reading previous_mvcc_value and not trusting that the actual String value is correct, we can bypass putting down a write intent.
@@ -278,7 +254,7 @@ impl MVCCMetadata {
         // Check that there are no write intents
         self.previous_mvcc_value.map(|a| {
             ctx.old_values_store.get_mut(a)
-        }).ok_or("MVCC Value doesn't exist".to_string())
+        }).ok_or_else(|| "MVCC Value doesn't exist".to_string())
     }
 
     pub(crate) fn remove_prev_mvcc(&self, ctx: &DbContext) -> ValueWithMVCC {
@@ -298,7 +274,7 @@ impl MVCCMetadata {
         self.end_ts = time;
     }
     pub fn get_last_read_time(&self) -> Timestamp {
-        self.last_read
+        self.last_read.get()
     }
 }
 
@@ -384,7 +360,7 @@ impl Display for MVCCMetadata {
             "beg: {}, end: {}, lr: {}",
             self.begin_ts.to_string(),
             self.end_ts.to_string(),
-            self.last_read.to_string(),
+            self.get_last_read_time().to_string(),
         ))
     }
 }

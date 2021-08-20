@@ -8,7 +8,7 @@ pub use mvcc_manager::IntentMap;
 pub use mvcc_manager::MVCCMetadata;
 pub use mvcc_manager::btreemap_kv_backend::MutBTreeMap;
 use mvcc_manager::WriteIntentStatus;
-pub use mvcc_manager::{LockDataRef, UnlockedWritableMVCC, ValueWithMVCC};
+pub use mvcc_manager::{LockDataRef, UnlockedWritableMVCC, ValueWithMVCC, btreemap_kv_backend::TOMBSTONE};
 
 use log::debug;
 
@@ -35,9 +35,9 @@ impl Transaction {
         }
     }
     pub fn abort(&mut self, ctx: &DbContext) {
-        let prev = ctx
+       ctx
             .transaction_map
-            .set_txn_status(self.txn, WriteIntentStatus::Aborted);
+            .set_txn_status(self.txn, WriteIntentStatus::Aborted).unwrap();
     }
     pub fn read_range_owned(
         &mut self, ctx: &DbContext,
@@ -66,9 +66,9 @@ impl Transaction {
         Ok(keys1)
     }
     pub fn read_mvcc(&mut self, ctx: &DbContext, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
-        let ret = mvcc_manager::read(ctx, &key, self.txn).map_err(|a| <ReadError as Into<String>>::into(a))?;
+        let ret = mvcc_manager::read(ctx, key, self.txn).map_err(<ReadError as Into<String>>::into)?;
 
-        self.log.log_read(ObjectPath::from(key.to_owned()), ret.clone());
+        self.log.log_read(key.clone(), ret.clone());
         Ok(ret)
     }
 
@@ -97,7 +97,6 @@ use crate::timestamp::Timestamp;
 use crate::wal_watcher::{WalTxn, WalStorer};
 
 use crate::rwtransaction_wrapper::mvcc_manager::ReadError;
-use crate::file_debugger::print_to_file;
 
 impl<'a> ReplicatedTxn<'a> {
     pub fn get_txn(&self) -> &LockDataRef {
@@ -109,7 +108,7 @@ impl<'a> ReplicatedTxn<'a> {
             ctx,
             committed: false
         };
-        ctx.replicator().new_with_time(&ret.get_txn());
+        ctx.replicator().new_transaction(ret.get_txn());
         ret
     }
 }
@@ -159,19 +158,19 @@ impl<'a> ReplicatedTxn<'a> {
             debug!("nonmatching write results: {:?} {:?} {}", res, res1, self.get_txn().id);
             // Must abort writes, todo!
         }
-        return res.and(res1);
+        res.and(res1)
     }
     pub fn commit(mut self) -> Result<(), String> {
         // todo fix atomic commit section with actual two-phase commit.
         let t = *self.get_txn();
-        let _two = self.main.commit(self.ctx)?;
-        let _one = self.ctx.replicator().commit(t);
+        self.main.commit(self.ctx)?;
+        self.ctx.replicator().commit(t);
         self.committed = true;
         Ok(())
     }
     pub fn abort(&mut self) {
         self.ctx.replicator().abort(*self.get_txn());
-        self.main.abort(self.ctx)
+        self.main.abort(self.ctx);
     }
 
     pub fn new(ctx: &'a DbContext) -> Self {
@@ -190,19 +189,14 @@ pub mod auto_commit {
     pub fn read(db: &DbContext, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
         let mut txn = ReplicatedTxn::new(db);
         let ret = txn.read_mvcc(key);
-        txn.commit();
+        txn.commit().unwrap();
         ret
-    }
-
-    pub fn read_range(db: &DbContext, key: &ObjectPath) -> Vec<(ObjectPath, ValueWithMVCC)> {
-        let mut txn = ReplicatedTxn::new(db);
-        txn.read_range_owned(key).unwrap()
     }
 
     pub fn write(db: &DbContext, key: &ObjectPath, value: Cow<str>) {
         let mut txn = ReplicatedTxn::new(db);
         txn.write(key, value).unwrap();
-        txn.commit();
+        txn.commit().unwrap();
     }
 }
 
@@ -211,6 +205,9 @@ impl Drop for ReplicatedTxn<'_> {
     fn drop(&mut self) {
         if !self.committed {
             self.abort()
+        } else {
+            let status =self.ctx.transaction_map.get_by_ref(&self.main.txn);
+            assert_eq!(status.unwrap().0, WriteIntentStatus::Committed);
         }
     }
 }
@@ -235,6 +232,7 @@ mod tests {
         assert_matches!(wtxn.write(&"/test/0".into(), "4".into()), Err(..));
         assert_matches!(wtxn.write(&"/test/4".into(), "4".into()), Err(..));
         assert_matches!(wtxn.write(&"/user/4".into(), "4".into()), Ok(..));
+        wtxn.commit().unwrap();
     }
 
 
@@ -332,7 +330,9 @@ mod tests {
     pub fn independent_writes_dont_block() {
         use crate::wal_watcher::wal_check_consistency::check_func;
         use crate::db;
+        use std::time::SystemTime;
         // tests that locks only acquired for individual key/value operations, not for the whole transaction
+        let time = SystemTime::now();
         let db = db!("k" = "v");
         let mut t1 = ReplicatedTxn::new(&db);
         let mut t2 = ReplicatedTxn::new(&db);
@@ -351,6 +351,8 @@ mod tests {
         }
         t1.commit();
         t2.commit();
+        println!("time {}", time.elapsed().unwrap().as_millis());
         check_func(&db);
+        println!("time {}", time.elapsed().unwrap().as_millis());
     }
 }

@@ -2,7 +2,6 @@ use std::{fmt, fs};
 use std::io::Write;
 
 
-use lazy_static::lazy_static;
 use std::fs::OpenOptions;
 use std::cell::RefCell;
 

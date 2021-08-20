@@ -1,4 +1,4 @@
-use crate::replicated_slave::ReplicatedDatabase;
+use crate::replicated_slave::SelfContainedDb;
 use crate::wal_watcher::ByteBufferWAL;
 
 use crate::history_storage::MutSlab;
@@ -22,7 +22,7 @@ pub fn create_replicated_context() -> DbContext {
         transaction_map: IntentMap::new(),
         old_values_store: MutSlab::new(),
         wallog: ByteBufferWAL::new(),
-        replicators: Some(Box::new(ReplicatedDatabase::new())),
+        replicators: Some(Box::new(SelfContainedDb::default())),
     }
 }
 
@@ -31,20 +31,15 @@ pub struct DbContext {
     pub transaction_map: IntentMap,
     pub old_values_store: MutSlab,
     pub wallog: ByteBufferWAL,
-    pub replicators: Option<Box<ReplicatedDatabase>>,
+    pub replicators: Option<Box<SelfContainedDb>>,
 }
 
 impl Drop for DbContext {
     fn drop(&mut self) {
         // Checks if our database and the replicated database are the exact same by comparing debug strings.
         if let Some(repl) = &self.replicators {
-            let my = self.db.printdb();
-            let theirs = repl.dump();
-
-            if my != theirs {
-                if !check_func1(self, repl.get_inner(), Timestamp::now()).unwrap() {
-                    panic!("error: nonmatching");
-                }
+            if !check_func1(self, repl.get_inner(), Timestamp::now()).unwrap() {
+                panic!("error: nonmatching");
             } else {
                 println!("replication matches");
             }
@@ -53,7 +48,7 @@ impl Drop for DbContext {
 }
 
 impl DbContext {
-    pub fn replicator(&self) -> &ReplicatedDatabase {
+    pub fn replicator(&self) -> &SelfContainedDb {
         self.replicators.as_ref().unwrap()
     }
 }

@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::sync::Mutex;
-use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -49,6 +48,7 @@ impl PartialEq for WalTxn {
     }
 }
 
+#[allow(clippy::mutex_atomic)]
 #[derive(Default)]
 pub struct ByteBufferWAL {
     buf: RefCell<Vec<u8>>,
@@ -124,10 +124,7 @@ impl WalLoader for ByteBufferWAL {
         };
 
         let iter = serde_json::Deserializer::from_reader(buf.as_slice()).into_iter::<WalTxn>();
-        let mut vec: Vec<_> = iter.map(|a| {
-            let a = a.unwrap();
-            a
-        }).collect();
+        let mut vec: Vec<_> = iter.map(|a| a.unwrap()).collect();
 
         vec.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
         vec

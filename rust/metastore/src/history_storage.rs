@@ -5,6 +5,7 @@ use crate::rwtransaction_wrapper::ValueWithMVCC;
 pub struct MutSlab(Mutex<UnsafeCell<slab::Slab<ValueWithMVCC>>>);
 
 impl MutSlab {
+    #[allow(clippy::mut_from_ref)]
     pub fn get_mut(&self, key: usize) -> &mut ValueWithMVCC {
         unsafe { &mut *self.0.lock().unwrap().get() }
             .get_mut(key)

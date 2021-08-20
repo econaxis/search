@@ -27,6 +27,8 @@ pub mod c_interface;
 pub mod object_path;
 pub mod parsing;
 pub mod rwtransaction_wrapper;
+pub mod btree_index;
+
 
 #[macro_use]
 pub mod test_transaction_generate;
@@ -43,4 +45,5 @@ pub mod replicated_slave;
 pub mod file_debugger;
 pub mod db_context;
 pub mod history_storage;
+mod retry;
 

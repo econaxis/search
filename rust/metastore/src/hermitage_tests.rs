@@ -1,6 +1,5 @@
 // tests stolen from https://github.com/ept/hermitage/blob/master/cockroachdb.md
-
-
+#![cfg(test)]
 
 use crate::rwtransaction_wrapper::ReplicatedTxn;
 
@@ -15,4 +14,6 @@ pub fn g1ctest() {
 
     assert_matches!(txn2.read(&"1".into()), Err(..));
     assert_matches!(txn1.read(&"2".into()), Ok(..));
+    txn1.commit().unwrap();
+    txn2.commit().unwrap();
 }

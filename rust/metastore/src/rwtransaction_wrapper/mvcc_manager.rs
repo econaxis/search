@@ -15,7 +15,6 @@ pub use mvcc_metadata::{WriteIntent, WriteIntentStatus};
 use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
 use std::sync::{RwLockReadGuard};
-use crate::rwtransaction_wrapper::mvcc_manager::mvcc_metadata::{WriteIntentError};
 use crate::rwtransaction_wrapper::MutBTreeMap;
 
 use crate::custom_error_impl;
@@ -36,19 +35,31 @@ pub(super) fn update(
 ) -> Result<ValueWithMVCC, String> {
     let ret = if check_has_value(&ctx.db, key) {
         let (_lock, res) = get_latest_mvcc_value(&ctx.db, key);
-        let res = res.ok_or("Key not found".to_string())?;
-        let mut resl = res.get_readable().lock_for_write(ctx, txn)?;
+        std::mem::drop(_lock);
+        let res = res.unwrap();
+
+         match res.get_readable_fix_errors(ctx, txn) {
+             Ok(_) => {},
+             Err(ReadError::ValueNotFound) => {
+                 // This is actually OK. Caused when we're updating a value that was previously
+                 // todo: do we need to handle any special case here?
+             },
+             Err(err) => {
+                 return Err(format!("{:?}", err));
+             }
+         };
+        let mut resl = res.get_writable(txn)?;
 
         assert_eq!(
-            resl.0.meta
+            resl.meta
                 .get_write_intents().as_ref()
                 .unwrap()
                 .associated_transaction,
             txn
         );
-        assert!(resl.0.meta.get_beg_time() <= txn.timestamp);
+        assert!(resl.meta.get_beg_time() <= txn.timestamp);
 
-        resl.0.meta.check_write(txn).unwrap();
+        resl.meta.check_write(txn).unwrap();
 
         // Actually update the value with the desired new_value.
         resl.inplace_update(ctx, txn, new_value);
@@ -96,29 +107,32 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
         ctx: &'a DbContext,
         txn: LockDataRef,
     ) -> Result<R<'a>, ReadError> {
-        let mut resl = res.get_readable();
-        let read_latest = resl.clean_intents(&ctx, txn).map_err(|err| match err {
-            WriteIntentError::PendingIntent(x) => ReadError::PendingIntentErr(x),
-            WriteIntentError::Other(x) => ReadError::Other(x),
-            _ => unreachable!()
-        });
-        let read_latest = read_latest.and_then(|_| resl.check_read(&ctx, txn));
+        let read_latest = res.get_readable_fix_errors(ctx, txn);
+        let is_ok = read_latest.is_ok();
 
-        if read_latest.is_ok() {
-            resl.confirm_read(txn.timestamp);
-            let cloned = ValueWithMVCC::from_tuple(resl.meta.clone(), resl.val.clone());
-            Ok(R::Result(cloned))
-        } else if resl.meta.get_beg_time() >= txn.timestamp {
-            return if let Ok(prevval) = resl.meta.get_prev_mvcc(ctx) {
-                std::mem::drop(resl);
-                // no tail call optimization in rust, this might stack overflow when we have a lot of aborts to a single value.
-                Ok(R::Recurse(prevval))
-            } else {
-                // We've reached beginning of version chain, and yet the timestamp is smaller than the begin timestamp.
-                Err(ReadError::ValueNotFound)
-            };
-        } else {
-            Err(read_latest.unwrap_err().into())
+        match is_ok {
+            true => {
+                let resl = read_latest.unwrap();
+                resl.confirm_read(txn.timestamp);
+                let cloned = ValueWithMVCC::from_tuple(resl.meta.clone(), resl.val.clone());
+                Ok(R::Result(cloned))
+            }
+            false => {
+                std::mem::drop(read_latest);
+                let resl = res.get_readable_unchecked();
+                if resl.meta.get_beg_time() >= txn.timestamp {
+                    return if let Ok(prevval) = resl.meta.get_prev_mvcc(ctx) {
+                        std::mem::drop(resl);
+                        // no tail call optimization in rust, this might stack overflow when we have a lot of aborts to a single value.
+                        Ok(R::Recurse(prevval))
+                    } else {
+                        // We've reached beginning of version chain, and yet the timestamp is smaller than the begin timestamp.
+                        Err(ReadError::ValueNotFound)
+                    };
+                } else {
+                    Err(ReadError::Other("Read value doesn't exist".to_string()))
+                }
+            }
         }
     }
 
@@ -137,7 +151,6 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
         unreachable!()
     }
 }
-
 
 #[cfg(test)]
 mod tests {

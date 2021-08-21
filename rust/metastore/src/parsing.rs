@@ -131,18 +131,17 @@ enum BooleanOp {
 type Sqlb = Box<Expr>;
 
 enum ColumnExpr {
-    Add(ColumnExpr1, ColumnExpr1),
-    Multiply(ColumnExpr1, ColumnExpr1),
-    String(&'static str),
+    Add(Box<Self>, Box<Self>),
+    Multiply(Box<Self>, Box<Self>),
+    CastExpr(CastExpr, Box<Self>),
+    String(String),
     Number(u64),
-    Expr(Box<ColumnExpr>),
-    CastExpr(CastExpr),
 }
 
 #[derive(Debug)]
 enum CastExpr {
-    Int(Box<ColumnExpr>),
-    Bool(Box<ColumnExpr>),
+    Int,
+    Bool,
 }
 
 type ColumnExpr1 = Box<ColumnExpr>;
@@ -154,8 +153,7 @@ impl Debug for ColumnExpr {
             ColumnExpr::Multiply(a, b) => f.write_fmt(format_args!("Multiply({:?}, {:?})", a, b)),
             ColumnExpr::String(s) => f.write_str(s),
             ColumnExpr::Number(a) => f.write_fmt(format_args!("{}", a)),
-            ColumnExpr::Expr(a) => f.write_fmt(format_args!("{:?}", &a)),
-            ColumnExpr::CastExpr(a) => f.write_fmt(format_args!("{:?}", &a)),
+            ColumnExpr::CastExpr(a, b) => f.write_fmt(format_args!("{:?}({:?})", &a, b)),
         }
     }
 }
@@ -171,7 +169,7 @@ enum Expr {
 enum Tokens {
     EqualsEquals,
     Number(u64),
-    String(&'static str),
+    String(String),
     LParens,
     RParens,
     Gt,
@@ -181,7 +179,13 @@ enum Tokens {
     Comma,
     Select,
     Where,
-    From
+    From,
+}
+
+impl Tokens {
+    fn str(a: &str) -> Tokens {
+        Tokens::String(a.to_string())
+    }
 }
 
 type Tok<'a> = &'a [Tokens];
@@ -212,7 +216,7 @@ ArithmeticTerm = String
 
 fn parse_expr(t: Tok) -> (Expr, Tok) {
     let mut remaining;
-    let expr = match t[0] {
+    let expr = match &t[0] {
         Tokens::LParens => {
             let (expr, next) = parse_expr(&t[1..]);
             remaining = &next[1..];
@@ -224,7 +228,7 @@ fn parse_expr(t: Tok) -> (Expr, Tok) {
             assert_matches!(t[0], Tokens::Gt | Tokens::Lt | Tokens::EqualsEquals);
             let (right, rem) = parse_column_expr(&t[1..]);
             remaining = rem;
-            Expr::Op(match t[0] {
+            Expr::Op(match &t[0] {
                 Tokens::Gt => Op::Gt(left, right),
                 Tokens::Lt => Op::Lt(left, right),
                 Tokens::EqualsEquals => Op::Equals(left, right),
@@ -239,13 +243,13 @@ fn parse_expr(t: Tok) -> (Expr, Tok) {
 #[test]
 fn test_parse_expr() {
     use Tokens::*;
-    dbg!(parse_expr(&[String("test"), Multiply, String("telephone"), EqualsEquals, String("id"), Plus, Number(1), Multiply, Number(10)]));
+    dbg!(parse_expr(&[Tokens::str("test"), Multiply, Tokens::str("telephone"), EqualsEquals, Tokens::str("id"), Plus, Number(1), Multiply, Number(10)]));
 }
 
 fn parse_arithmetic_term(t: Tok) -> (ColumnExpr, Tok) {
-    match t[0] {
-        Tokens::String(str) => (ColumnExpr::String(str), &t[1..]),
-        Tokens::Number(num) => (ColumnExpr::Number(num), &t[1..]),
+    match &t[0] {
+        Tokens::String(str) => (ColumnExpr::String(str.to_string()), &t[1..]),
+        Tokens::Number(num) => (ColumnExpr::Number(*num), &t[1..]),
         Tokens::LParens => {
             let (expr, rest) = parse_column_expr(&t[1..]);
             assert_eq!(rest[0], Tokens::RParens);
@@ -256,17 +260,17 @@ fn parse_arithmetic_term(t: Tok) -> (ColumnExpr, Tok) {
 }
 
 
-fn parse_cast(t: Tok) -> (CastExpr, Tok) {
-    let str = match t[0] {
+fn parse_cast(t: Tok) -> (ColumnExpr, Tok) {
+    let str = match &t[0] {
         Tokens::String(str) => str,
         _ => unreachable!()
     };
     assert_eq!(t[1], Tokens::LParens);
     let (column, rest) = parse_column_expr(&t[2..]);
     assert_eq!(rest[0], Tokens::RParens);
-    match str {
-        "int" => (CastExpr::Int(column.into()), &rest[1..]),
-        "bool" => (CastExpr::Bool(column.into()), &rest[1..]),
+    match str.as_str() {
+        "int" => (ColumnExpr::CastExpr(CastExpr::Int, column.into()), &rest[1..]),
+        "bool" => (ColumnExpr::CastExpr(CastExpr::Bool, column.into()), &rest[1..]),
         _ => unreachable!()
     }
 }
@@ -276,7 +280,7 @@ fn parse_column_expr(t: Tok) -> (ColumnExpr, Tok) {
         if t.len() == 0 {
             return (before, t);
         }
-        let (term, rest) = match t[0] {
+        let (term, rest) = match &t[0] {
             Tokens::Plus => {
                 let (term, rest) = parse_arithmetic_term(&t[1..]);
                 (ColumnExpr::Add(before.into(), term.into()), rest)
@@ -292,10 +296,10 @@ fn parse_column_expr(t: Tok) -> (ColumnExpr, Tok) {
         let after = parse_arithmetic_rest(rest, term);
         after
     }
-    match t[0] {
+    match &t[0] {
         Tokens::String(str) if t.get(1).map(|a| a == &Tokens::LParens).unwrap_or(false) => {
             let (a, b) = parse_cast(&t[0..]);
-            (ColumnExpr::CastExpr(a), b)
+            (a, b)
         }
         _ => {
             let (t1, t2) = parse_arithmetic_term(t);
@@ -334,6 +338,14 @@ fn parse_column_list(t: Tok) -> (Vec<ColumnExpr>, Tok) {
     (columns, t)
 }
 
+
+#[test]
+fn test_lex() {
+    let lexed = lex("SELECT int(id),tele, address FROM (SELECT number FROM subtable) WHERE 3 * ((id + 1) * tele) >= tele".to_string());
+
+    dbg!(parse_select_stmt(&lexed));
+}
+
 #[derive(Debug)]
 enum TableExpression {
     NamedTable(String),
@@ -345,17 +357,18 @@ struct SelectQuery {
     distinct: bool,
     column_list: Vec<ColumnExpr>,
     where_exp: Option<Expr>,
+    from: Box<TableExpression>
 }
 
 fn parse_table_expr(t: Tok) -> (TableExpression, Tok) {
-    match t[0] {
+    match &t[0] {
         Tokens::LParens => {
             let (select, t) = parse_select_stmt(&t[1..]);
             let t = match1(t, Tokens::RParens);
             (TableExpression::SelectQuery(select), t)
         }
         _ => {
-            match t[0] {
+            match &t[0] {
                 Tokens::String(a) => (TableExpression::NamedTable(a.to_string()), &t[1..]),
                 _ => unreachable!()
             }
@@ -365,7 +378,7 @@ fn parse_table_expr(t: Tok) -> (TableExpression, Tok) {
 
 fn parse_select_stmt(t: Tok) -> (SelectQuery, Tok) {
     let t = match1(t, Tokens::Select);
-    let (distinct, t) = match_or(t, Tokens::String("DISTINCT"));
+    let (distinct, t) = match_or(t, Tokens::str("DISTINCT"));
     let (list, t) = parse_column_list(t);
 
     let t = match1(t, Tokens::From);
@@ -383,17 +396,51 @@ fn parse_select_stmt(t: Tok) -> (SelectQuery, Tok) {
         distinct,
         column_list: list,
         where_exp,
+        from: table_expression.into()
     }, t)
 }
 
 #[test]
 fn test_select() {
     use Tokens::*;
-    let t1 = [Select, String("int"), LParens, String("id"), RParens, Comma, String("tele"), Comma, String("address"),
-        From, LParens, Select, String("int"), LParens, String("id"), RParens, Comma, String("tele"), Comma, String("address"),
-        From, String("table_name"), RParens,
-        Where, String("id"), Plus, Number(1), EqualsEquals, String("tele")];
+    let t1 = [Select, Tokens::str("int"), LParens, Tokens::str("id"), RParens, Comma, Tokens::str("tele"), Comma, Tokens::str("address"),
+        From, LParens, Select, Tokens::str("int"), LParens, Tokens::str("id"), RParens, Comma, Tokens::str("tele"), Comma, Tokens::str("address"),
+        From, Tokens::str("table_name"), RParens,
+        Where, Tokens::str("id"), Plus, Number(1), EqualsEquals, Tokens::str("tele")];
     parse_select_stmt(&t1);
+}
+
+fn lex(s: String) -> Vec<Tokens> {
+    use Tokens::*;
+    let chars = ['(', ' ', ')', ','];
+    let split = s.as_str().match_indices(&chars[..]);
+
+    let mut prev_index = 0;
+    let mut tokens: Vec<&str> = Vec::new();
+
+    for (index, s1) in split {
+        tokens.push(&s[prev_index..index]);
+        tokens.push(s1);
+        prev_index = index + 1;
+    }
+    tokens.push(&s[prev_index..]);
+    let tokens: Vec<_> = tokens.drain_filter(|&mut a| !matches!(a, "" | " ")).collect();
+    tokens.iter().map(|&a| match a {
+        "SELECT" | "select" => Select,
+        "FROM" | "from" => From,
+        "WHERE" | "where" => Where,
+        "(" => LParens,
+        ")" => RParens,
+        "," => Comma,
+        "*" => Multiply,
+        "+" => Plus,
+        ">=" => Gt,
+        "<=" => Lt,
+        _ if a.chars().all(|c| c.is_numeric()) => Number(a.parse::<u64>().unwrap()),
+        _ => {
+            Tokens::str(a)
+        }
+    }).collect()
 }
 
 #[cfg(test)]
@@ -404,7 +451,7 @@ mod tests {
     fn test1() {
         use Tokens::*;
         dbg!(parse_column_expr(&[LParens, LParens, Number(3), Multiply, Number(3), RParens, Plus, Number(5), Plus, Number(7), RParens, Multiply, Number(100)]));
-        dbg!(parse_column_expr(&[String("int"), LParens, String("idcol"), RParens]));
+        dbg!(parse_column_expr(&[Tokens::str("int"), LParens, Tokens::str("idcol"), RParens]));
     }
 
     #[test]

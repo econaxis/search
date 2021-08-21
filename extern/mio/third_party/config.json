@@ -1,11 +1,3 @@
-{
-	"project": "Cross-platform C++11 header-only library for memory mapped file IO",
-	"target": "../single_include/mio/mio.hpp",
-	"sources": [
-		"../include/mio/mmap.hpp",
-		"../include/mio/page.hpp",
-		"../include/mio/shared_mmap.hpp"
-	],
-	"include_paths": ["../include"]
-}
-
+version https://git-lfs.github.com/spec/v1
+oid sha256:4dc5d721d59946732b4f5e3fd22af2548dffadbfe99abbf65596eb0d0301558a
+size 275

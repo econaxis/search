@@ -1,12 +1,3 @@
-#include "stdio.h"
-
-extern void myfunc();
-
-int main() {
-    int iters;
-    scanf("%d", &iters);
-    for(int i =0; i < iters; i++) {
-        i = i + 1;
-        myfunc();
-    }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:56dd45816115b26ad4d0700d66b7d23ac16d85f6bc6fbbd94ccb232de36e520d
+size 176

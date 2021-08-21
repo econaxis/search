@@ -1,7 +1,3 @@
-// Initiated once for every term.
-// Responsible for searching through that term's documents + frequencies list.
-// Handles tiered-index searching as well.
-// Tiered indexes: documents are split into document groups of 128 documents each. Total documents list is sorted
-// by frequency, but within a document group, documents are sorted by score.
-
-
+version https://git-lfs.github.com/spec/v1
+oid sha256:1aa9bf042bd9ea1ac421ec16f81b6696c30d49b8fd53c5f65bffd2ecbf4a6dff
+size 349

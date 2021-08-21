@@ -1,23 +1,3 @@
-#[macro_export]
-macro_rules! custom_error_impl {
-    ($ty:ty) => {
-        impl From<$ty> for String {
-            fn from(a: $ty) -> String {
-                let mut buf = String::new();
-                std::fmt::Write::write_fmt(&mut buf, format_args!("{:?}", a)).unwrap();
-                buf
-            }
-        }
-        impl From<String> for $ty {
-            fn from(a: String) -> Self {
-                Self::Other(a)
-            }
-        }
-
-        impl From<&str> for $ty {
-            fn from(a: &str) -> Self {
-                Self::Other(a.to_string())
-            }
-        }
-    };
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:6f068adbb52cc031f1ae42139d524e8cfed9be52032290952d92a5790f102e46
+size 601

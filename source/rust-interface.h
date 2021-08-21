@@ -1,15 +1,3 @@
-#ifndef GAME_RUST_INTERFACE_H
-#define GAME_RUST_INTERFACE_H
-
-using NamesDatabase = void;
-using RustVec = void;
-
-extern "C" NamesDatabase* new_name_database(const char* name);
-
-extern "C" bool search_name_database(const NamesDatabase* ndb, const char *key);
-extern "C" void serialize_namesdb(NamesDatabase* ndb);
-extern "C" void fill_rust_vec (RustVec*, void* data, std::size_t size);
-extern "C" void register_temporary_file(const NamesDatabase *, const char* path, uint32_t docid);
-extern "C" void drop_name_database(NamesDatabase *);
-
-#endif //GAME_RUST_INTERFACE_H
+version https://git-lfs.github.com/spec/v1
+oid sha256:34f4168d2416d77e3c379ae4d0483e5029beebed9a4266ee45cc4a07d30716d4
+size 567

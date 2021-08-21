@@ -1,22 +1,3 @@
-#ifndef GAME_GENERALINDEXER_H
-#define GAME_GENERALINDEXER_H
-
-
-#include <set>
-#include <ostream>
-#include <sstream>
-#include "WordIndexEntry.h"
-#include "Serializer.h"
-#include <atomic>
-#include <queue>
-#include "SortedKeysIndex.h"
-#include <condition_variable>
-
-struct SyncedQueue;
-
-namespace GeneralIndexer {
-    using ContentProducerFunc = void (SyncedQueue &);
-    std::string read_some_files(ContentProducerFunc* func);
-}
-
-#endif //GAME_GENERALINDEXER_H
+version https://git-lfs.github.com/spec/v1
+oid sha256:472686e7ba2ff611a62a729a03c57ceb033dcc224292f72b77898e6ccce317db
+size 458

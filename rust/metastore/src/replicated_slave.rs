@@ -7,35 +7,39 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::cell::{UnsafeCell};
 
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{FairMutex, FairMutexGuard};
 use std::sync::atomic::Ordering::SeqCst;
 use std::ops::{DerefMut, Deref};
 use crate::db_context::create_empty_context;
 use std::sync::atomic::AtomicU64;
 use std::hint::spin_loop;
+use parking_lot::lock_api::RawMutexFair;
 
 mod rpc_handler;
 
 struct ConcurrentHashmap {
-    lock: Mutex<()>,
+    lock: FairMutex<()>,
     counter: AtomicU64,
-    map: UnsafeCell<HashMap<LockDataRef, Mutex<Transaction>>>,
+    map: UnsafeCell<HashMap<LockDataRef, FairMutex<Transaction>>>,
 }
+
 struct CounterGuard<'a>(&'a AtomicU64);
-impl<'a> CounterGuard <'a> {
+
+impl<'a> CounterGuard<'a> {
     pub fn new(a: &'a AtomicU64) -> Self {
         a.fetch_add(1, SeqCst);
         Self(a)
     }
 }
+
 struct HashmapGuard<'a> {
-    inner: MutexGuard<'a, Transaction>,
+    inner: FairMutexGuard<'a, Transaction>,
     // drop order is important! counter must be dropped last
     counter: CounterGuard<'a>,
 }
 
 impl<'a> HashmapGuard<'a> {
-    pub fn new(inner: MutexGuard<'a, Transaction>, counter: &'a AtomicU64) -> Self {
+    pub fn new(inner: FairMutexGuard<'a, Transaction>, counter: &'a AtomicU64) -> Self {
         let counter = CounterGuard::new(counter);
         Self { inner, counter }
     }
@@ -70,14 +74,23 @@ impl ConcurrentHashmap {
         }
     }
     pub fn insert(&self, k: LockDataRef, v: Transaction) {
-        let _l = self.lock.lock();
+        // Poor man's RWLock and CondVar, implemented using atomic counters and mutexes for low-contention workloads
+        let _lock = loop {
+            while self.counter.load(SeqCst) != 0 {
+                spin_loop();
+                // Yield to OS scheduler to avoid spin looping too much.
+                std::thread::yield_now();
+            }
+            let mut lock = self.lock.lock();
+            // Check if the counter is still 0, if not, then loop again.
+            if self.counter.load(SeqCst) == 0 {
+                break lock;
+            }
+        };
         let map = unsafe { &mut *self.map.get().as_mut().unwrap() };
 
-        while self.counter.load(SeqCst) != 0 {
-            spin_loop();
-        }
 
-        map.insert(k, Mutex::new(v));
+        map.insert(k, FairMutex::new(v));
     }
 
     pub fn get(&self, k: &LockDataRef) -> Option<HashmapGuard<'_>> {
@@ -87,9 +100,10 @@ impl ConcurrentHashmap {
     }
 
     pub fn remove(&self, v: HashmapGuard<'_>) -> Option<Transaction> {
+        // There might be error here as someone might try to lock the removed version while we don't have the hashmapguard lock.
+        let _l = self.lock.lock();
         let txn = v.inner.txn;
         std::mem::drop(v);
-        let _l = self.lock.lock();
         let map = unsafe { &mut *self.map.get().as_mut().unwrap() };
         map.remove(&txn).map(|a| a.into_inner())
     }
@@ -101,7 +115,6 @@ pub struct SelfContainedDb {
 }
 
 unsafe impl Sync for SelfContainedDb {}
-
 unsafe impl Send for SelfContainedDb {}
 
 // Utility implementation
@@ -113,6 +126,7 @@ impl Default for SelfContainedDb {
         }
     }
 }
+
 impl SelfContainedDb {
     pub fn get_inner(&self) -> &DbContext {
         &self.db
@@ -129,8 +143,6 @@ impl SelfContainedDb {
     }
 
     fn remove_txn(&self, a: HashmapGuard<'_>) -> Option<Transaction> {
-        // todo: temporary solution
-        // todo: must find a way to remove transactions, or else everything erorrs out.
         self.transactions.remove(a)
     }
 }

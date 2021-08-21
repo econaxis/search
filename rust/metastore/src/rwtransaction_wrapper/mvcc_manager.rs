@@ -130,7 +130,7 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
                         Err(ReadError::ValueNotFound)
                     };
                 } else {
-                    Err(ReadError::Other("Read value doesn't exist".to_string()))
+                    Err(err)
                 }
             }
         }
@@ -156,6 +156,17 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
 mod tests {
     use crate::rwtransaction_wrapper::ReplicatedTxn;
     use crate::db;
+
+    #[test]
+    fn regression_wrong_error_emitted() {
+        let db = db!();
+        let mut txn1 = ReplicatedTxn::new(&db);
+        let mut txn2 = ReplicatedTxn::new(&db);
+        txn1.write(&"/test/a".into(), "a".into()).unwrap();
+        assert_matches!(txn2.read_range_owned(&"/test/".into()), Err(..));
+        txn1.commit();
+        assert_matches!(txn2.read_range_owned(&"/test/".into()), Ok(..));
+    }
 
     #[test]
     fn writes_dont_block_reads() {

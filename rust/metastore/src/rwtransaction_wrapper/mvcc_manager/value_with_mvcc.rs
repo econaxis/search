@@ -135,12 +135,9 @@ fn rescue_previous_value(meta: &mut MVCCMetadata, val: &mut String, ctx: &DbCont
     }
 }
 impl ValueWithMVCC {
-    pub fn get_readable_unchecked(&self) -> UnlockedReadableMVCC<'_> {
-        UnlockedReadableMVCC {
-            meta: &self.meta,
-            val: &self.val,
-            lock: self.lock.lock(),
-        }
+    pub fn get_mvcc_copy(&self) -> MVCCMetadata {
+        let _l = self.lock.lock();
+        self.meta.clone()
     }
 
 
@@ -154,9 +151,9 @@ impl ValueWithMVCC {
                     self.meta.aborted_reset_write_intent(x, Some(WriteIntent {
                         associated_transaction: x,
                         was_commited: true,
-                    })).unwrap();
+                    }))?;
 
-                    self.rescue_previous_value(ctx);
+                    rescue_previous_value(&mut self.meta, &mut self.val, ctx);
 
                     // The value we rescued may also have been aborted, so we continue checking.
                     // In the common case, this should return Ok.

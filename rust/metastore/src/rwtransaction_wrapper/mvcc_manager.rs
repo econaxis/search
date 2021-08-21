@@ -118,10 +118,10 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
                 Ok(R::Result(cloned))
             }
             false => {
-                std::mem::drop(read_latest);
-                let resl = res.get_readable_unchecked();
-                if resl.meta.get_beg_time() >= txn.timestamp {
-                    return if let Ok(prevval) = resl.meta.get_prev_mvcc(ctx) {
+                let err = read_latest.unwrap_err();
+                let resl = res.get_mvcc_copy();
+                if resl.get_beg_time() >= txn.timestamp {
+                    return if let Ok(prevval) = resl.get_prev_mvcc(ctx) {
                         std::mem::drop(resl);
                         // no tail call optimization in rust, this might stack overflow when we have a lot of aborts to a single value.
                         Ok(R::Recurse(prevval))

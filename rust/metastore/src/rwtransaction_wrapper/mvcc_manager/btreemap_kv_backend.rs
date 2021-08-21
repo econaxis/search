@@ -107,11 +107,10 @@ impl MutBTreeMap {
         let btree = unsafe { &mut *lock.get() };
         let prev = btree.range_mut(..&key).next_back();
 
-        // todo: need to deprecate get_readable_unchecked, cause this needs to be checked.
-        // have to move this to mvcc_manager
-        let prevbool = prev.map(| x| x.1.get_readable_unchecked().meta.get_last_read_time() <= time);
+        // maybe have to move this to mvcc_manager? btreemap shouldn't deal with concurrency-related issues at all.
+        let prevbool = prev.map(| x| x.1.get_mvcc_copy().get_last_read_time() <= time);
         let next = btree.range_mut(&key..).next();
-        let nextbool = next.map(| x| x.1.get_readable_unchecked().meta.get_last_read_time() <= time);
+        let nextbool = next.map(| x| x.1.get_mvcc_copy().get_last_read_time() <= time);
 
         let should_insert = if prevbool.is_none() && nextbool.is_none() {
             // If there's nowhere that we can lock, this would lead to an error (checked by test `check_phantom3`)

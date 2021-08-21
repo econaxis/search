@@ -33,7 +33,7 @@ impl MVCCMetadata {
     ) -> Result<(), String> {
         let curwi = self.get_write_intents();
         if curwi.map(|a| a.associated_transaction) != Some(compare) {
-            return Err("Write intent not equals to compar, can't swap".to_string());
+            return Err("Write intent not equals to compare, can't swap".to_string());
         }
         let curwi = curwi.unwrap().clone();
 
@@ -241,6 +241,9 @@ impl PartialEq for MVCCMetadata {
 }
 
 
+// Getters and setters for the struct
+// We don't want public API access on this thing, because there's no locking whatsoever.
+// Therefore, should open read-only access.
 impl MVCCMetadata {
     pub(crate) fn get_beg_time(&self) -> Timestamp {
         self.begin_ts

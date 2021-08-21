@@ -111,7 +111,29 @@ impl ValueWithMVCC {
         Self { meta, val, lock: MyMutex::new(()) }
     }
 }
+// From an unlocked MVCC (so we have exclusive write access to this thing),
+// pull out the old value from self.prev_mvcc because this current value was written by an aborted txn,
+// and therefore is invalid.
+// At the end, self should be the old metadata and the old value.
+// The old value should have a write intent that is also aborted (as when the previous txn wrote, it would've
+// layed out WI on both the committed (old value) and the aborted invalid value. Must clear that WI and replace it with ours.
+fn rescue_previous_value(meta: &mut MVCCMetadata, val: &mut String, ctx: &DbContext) {
+    let cur_end_ts = meta.get_end_time();
 
+    if meta.get_prev_mvcc(ctx).is_ok() {
+        let (mut oldmeta, oldstr) = meta.remove_prev_mvcc(ctx).into_inner();
+
+        assert!(oldmeta.get_write_intents().is_none());
+
+        oldmeta.set_end_time(cur_end_ts);
+        *meta = oldmeta;
+        *val = oldstr;
+    } else {
+        *val = crate::rwtransaction_wrapper::mvcc_manager::btreemap_kv_backend::TOMBSTONE.to_owned();
+        let txn = meta.get_write_intents().unwrap().associated_transaction;
+        meta.aborted_reset_write_intent(txn, None).unwrap();
+    }
+}
 impl ValueWithMVCC {
     pub fn get_readable_unchecked(&self) -> UnlockedReadableMVCC<'_> {
         UnlockedReadableMVCC {
@@ -120,32 +142,10 @@ impl ValueWithMVCC {
             lock: self.lock.lock(),
         }
     }
-    // From an unlocked MVCC (so we have exclusive write access to this thing),
-    // pull out the old value from self.prev_mvcc because this current value was written by an aborted txn,
-    // and therefore is invalid.
-    // At the end, self should be the old metadata and the old value.
-    // The old value should have a write intent that is also aborted (as when the previous txn wrote, it would've
-    // layed out WI on both the committed (old value) and the aborted invalid value. Must clear that WI and replace it with ours.
-    fn rescue_previous_value(&mut self, ctx: &DbContext) {
-        let cur_end_ts = self.meta.get_end_time();
 
-        if self.meta.get_prev_mvcc(ctx).is_ok() {
-            let (mut oldmeta, oldstr) = self.meta.remove_prev_mvcc(ctx).into_inner();
-
-            assert!(oldmeta.get_write_intents().is_none());
-
-            oldmeta.set_end_time(cur_end_ts);
-            self.meta = oldmeta;
-            self.val = oldstr;
-        } else {
-            // todo!("aborted insertion transaction -- cannot be rollbacked yet/deleted")
-            self.val = crate::rwtransaction_wrapper::mvcc_manager::btreemap_kv_backend::TOMBSTONE.to_owned();
-            let txn = self.meta.get_write_intents().unwrap().associated_transaction;
-            self.meta.aborted_reset_write_intent(txn, None).unwrap();
-        }
-    }
 
     pub fn fixup_write_intents(&mut self, ctx: &DbContext, txn: LockDataRef) -> Result<(), WriteIntentError> {
+        let _l = self.lock.lock();
         let res = self.meta.check_write_intents(&ctx.transaction_map, txn);
         // Clean intents
         if let Err(err) = res {

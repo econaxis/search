@@ -12,6 +12,7 @@ secondary indexes
 #![feature(try_blocks)]
 #![feature(trace_macros)]
 #![feature(backtrace)]
+#![feature(drain_filter)]
 
 use std::cell::UnsafeCell;
 use std::sync::Mutex;

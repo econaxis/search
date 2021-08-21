@@ -13,6 +13,8 @@ secondary indexes
 #![feature(trace_macros)]
 #![feature(backtrace)]
 
+#![feature(drain_filter)]
+
 
 // mod hyper_error_converter;
 extern crate quickcheck;

@@ -132,6 +132,7 @@ pub mod tests {
             let retry = || {
                 let mut txn = ReplicatedTxn::new(ctx);
                 let range = txn.read_range_owned(&ObjectPath::new("/test/"))?;
+
                 let len = range.len();
                 let max = range.into_iter().map(|x| x.1.into_inner().1.parse::<u64>().unwrap()).max().unwrap_or(0) + 1;
                 if (max - 1) != len as u64 {
@@ -168,24 +169,24 @@ pub mod tests {
                 let k = k.as_str().strip_prefix("/test/").unwrap();
                 k.parse::<u64>().unwrap()
             });
-            for mut elem in &mut a {
+            let a_ = a.clone();
+            for mut elem in a {
                 values_tested += 1;
-                // assert!(elem.0.as_str() > &prev_time);
-                if !(elem.1.get_readable_unchecked().val.parse::<i64>().unwrap() > prevvalue.parse::<i64>().unwrap()) {
-                    println!("{:?}", a);
+                let val = elem.1.into_inner();
+                if !(val.1.parse::<i64>().unwrap() > prevvalue.parse::<i64>().unwrap()) {
+                    println!("{:?}", a_);
                     panic!()
                 }
-                prevvalue = elem.1.get_readable_unchecked().val.clone();
+                prevvalue = val.1.clone();
             }
 
-            if rand::thread_rng().gen_bool(0.05) { println!("passed, tested {} values", values_tested) }
+            if rand::thread_rng().gen_bool(0.5) { println!("passed, tested {} values", values_tested) }
         }
 
         fn read(ctx: &DbContext) {
             let retry = || -> Result<(), String> {
                 let mut txn = ReplicatedTxn::new(ctx);
                 let range = txn.read_range_owned(&ObjectPath::new("/test/"))?;
-                // let mut r1 = range.into_iter().map(|a| (a.0, a.1.into_inner().1));
                 check(range);
 
                 txn.commit();

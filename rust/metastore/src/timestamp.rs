@@ -1,3 +1,65 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:7375804ad306e26593625a968ea5fe54fe7164f615a0cb1dc98c23733132fdcf
-size 1468
+use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::ops::{Add, Sub};
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Hash, Serialize, Deserialize)]
+pub struct Timestamp(pub u64);
+
+impl Sub for Timestamp {
+    type Output = Timestamp;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Timestamp(self.0  - rhs.0)
+    }
+}
+impl Add for Timestamp {
+    type Output = Timestamp;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Timestamp(self.0  + rhs.0)
+    }
+}
+impl PartialOrd for Timestamp {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(match (self.0, other.0) {
+            (0, 0) => Ordering::Equal,
+            (0, _left) => Ordering::Greater,
+            (_right, 0) => Ordering::Less,
+            (left, right) => left.cmp(&right),
+        })
+    }
+}
+
+impl Ord for Timestamp {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+static MONOTIC_COUNTER: AtomicU64 = AtomicU64::new(100);
+
+impl Timestamp {
+    pub fn mintime() -> Self {
+        Self(1)
+    }
+    pub fn maxtime() -> Self {
+        Self(0)
+    }
+
+    pub fn now() -> Self {
+        Self(MONOTIC_COUNTER.fetch_add(10, AtomicOrdering::SeqCst))
+    }
+}
+
+impl ToString for Timestamp {
+    fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+impl From<u64> for Timestamp {
+    fn from(a: u64) -> Self {
+        Self(a)
+    }
+}

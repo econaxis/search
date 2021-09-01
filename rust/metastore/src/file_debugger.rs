@@ -1,3 +1,15 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:7aefa9918fcac4a330c5fb6625b8214e697d80485608909591c02d2f0cea4123
-size 359
+use std::{fmt, fs};
+use std::io::Write;
+
+
+use std::fs::OpenOptions;
+use std::cell::RefCell;
+
+thread_local! {
+    static FILE: RefCell<fs::File> = RefCell::new(OpenOptions::new().append(true).create(true).open("debug.txt").unwrap());
+}
+
+#[allow(unused)]
+pub fn print_to_file(args: fmt::Arguments) {
+    FILE.with(|f| f.borrow_mut().write_fmt(args)).unwrap();
+}

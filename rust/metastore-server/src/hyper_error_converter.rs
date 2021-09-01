@@ -1,3 +1,10 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:83d4d573ba0e91a615e7f42f8a2e74abef7eea1e57e8a0e26b92b649c92932b2
-size 273
+use hyper::{Body, Response};
+
+pub fn map_str_error(a: Result<Response<Body>, String>) -> Result<Response<Body>, String> {
+    if let Err(err) = a {
+        let errorstr = format!("Error!: {}", err);
+        Ok(Response::new(errorstr.into()))
+    } else {
+        a
+    }
+}

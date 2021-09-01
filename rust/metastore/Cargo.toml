@@ -1,3 +1,42 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:ae3d82b5557967fd05ae70bc36637579f96e4951591adfa4fa89c3ed33c67cb6
-size 725
+[package]
+name = "metastore"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde_json = "*"
+serde = {version = "*", features = ["derive"]}
+slab = "*"
+rand = "*"
+lazy_static = "*"
+quickcheck = "1.0.3"
+crossbeam = "*"
+log = "*"
+parking_lot = "*"
+quickcheck_macros = "1.0.0"
+coz = "*"
+
+[dev-dependencies]
+complexity = "*"
+ansi_term = "0.12.1"
+syn = "*"
+[dev-dependencies.anyhow]
+version = "1.0.28"
+
+[dev-dependencies.structopt]
+version = "0.3.13"
+
+[dev-dependencies.tabular]
+version = "0.1.4"
+
+[dev-dependencies.walkdir]
+version = "2.3.1"
+
+[[example]]
+name = "complexity"
+path = "src/cyclomatic.rs"
+
+[profile.release]
+debug=1

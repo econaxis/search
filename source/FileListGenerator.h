@@ -1,3 +1,97 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:9dd291aecc5287cfb59de47871f91eba1d2adc914e0c98405e3350f3f16481e9
-size 3068
+#ifndef GAME_FILELISTGENERATOR_H
+#define GAME_FILELISTGENERATOR_H
+
+#include <filesystem>
+#include "rust-interface.h"
+#include <iostream>
+#include <memory>
+#include "DocIDFilePair.h"
+#include "IndexFileLocker.h"
+#include "random_b64_gen.h"
+
+constexpr unsigned int MAX_FILES_PER_INDEX = 300000;
+
+namespace FileListGenerator {
+    using FilePairs = std::vector<DocIDFilePair>;
+    namespace fs = std::filesystem;
+
+    struct NamesDatabaseRAIIWrapper {
+        NamesDatabase *inner;
+
+        ~NamesDatabaseRAIIWrapper() noexcept {
+            std::cout<<"Dropping NDB";
+            drop_name_database(inner);
+        }
+        NamesDatabaseRAIIWrapper(NamesDatabase *inner) : inner(inner) {};
+    };
+
+    inline std::shared_ptr<NamesDatabaseRAIIWrapper> ndb{nullptr};
+
+
+    inline NamesDatabase *get_ndb() {
+        if (!ndb || ndb->inner == nullptr) {
+            auto path = indice_files_dir;
+            ndb = std::make_shared<NamesDatabaseRAIIWrapper>(new_name_database(path.c_str()));
+            std::cout << "Created NDB\n";
+        }
+        return ndb->inner;
+    }
+
+    inline std::ifstream &get_index_files() {
+        static auto dir_it = std::ifstream(data_files_dir / "total-files-list");
+        return dir_it;
+    }
+
+    // Creates a list of files to index.
+    // Deals with multiple processes by acquiring a lock file.
+    inline FilePairs from_file() {
+        using namespace std::chrono;
+
+        // Add some jitter as we're not sure that creating a file is an atomic operation in the filesystem implementation.
+        std::this_thread::sleep_for(milliseconds(random_long(10, 100)));
+
+        while (!IndexFileLocker::acquire_lock_file()) {
+            std::cerr << "Blocking: lock file already exists\n";
+            std::this_thread::sleep_for(seconds(5 + random_long(0, 5)));
+        }
+
+        FilePairs filepairs;
+
+        auto &dir_it = get_index_files();
+
+        uint32_t doc_id_counter = 1;
+        std::string file_line;
+        auto cur_size = 0ULL;
+        // Consume directory iterator and push into filepairs vector
+        while (std::getline(dir_it, file_line)) {
+            if (search_name_database(get_ndb(), file_line.c_str())) {
+                // Entry already exists.
+                std::cout << "Entry " << file_line << " already exists\r";
+                continue;
+            }
+            auto abspath = data_files_dir / "data" / file_line;
+
+            cur_size += fs::file_size(abspath);
+
+            // Don't index more than x files or 500MB at a time.
+            if (filepairs.size() > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(200e6)) break;
+            register_temporary_file(get_ndb(), file_line.c_str(), doc_id_counter);
+            filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});
+
+            doc_id_counter++;
+
+        }
+        std::cout << filepairs.size() << " files will be processed\n";
+
+        serialize_namesdb(get_ndb());
+        // Release the lock file.
+        IndexFileLocker::release_lock_file();
+
+        return filepairs;
+    }
+
+
+};
+
+
+#endif //GAME_FILELISTGENERATOR_H

@@ -1,3 +1,10 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:7a8c3c77423b709627b4d60532dc086bb9a38ce58e0b27cc1d15fbbc3d244470
-size 213
+#![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)]
+#![allow(non_snake_case)]
+#![feature(extern_types)]
+#![feature(min_specialization)]
+#![feature(drain_filter)]
+
+
+pub mod cffi;
+mod RustVecInterface;

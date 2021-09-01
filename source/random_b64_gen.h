@@ -1,3 +1,35 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:34bcfd562b94491a38cb00070d29894c439a6dfd4ae355239de47d0303489604
-size 1001
+#ifndef GAME_RANDOM_B64_GEN_H
+#define GAME_RANDOM_B64_GEN_H
+
+#include <random>
+
+inline std::mt19937 &randgen() {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    return gen;
+}
+inline constexpr std::string_view b64chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_";
+
+// Generates a random alphanumeric (and some other URL-safe characters)
+inline std::string random_b64_str(int length = 5) {
+    static std::uniform_int_distribution<unsigned int> dist(0, b64chars.size() - 1); // ASCII table codes for normal characters.
+
+    std::string output;
+    output.reserve(length);
+
+    for (int i = 0; i < length; i++) {
+        auto temp = dist(randgen());
+
+        output += static_cast<char>(b64chars[temp]);
+    }
+    return output;
+}
+using ullong = unsigned long long;
+inline ullong random_long(ullong min = 0, ullong max = 1UL<<63) {
+    std::uniform_int_distribution<ullong> dist(min, max);
+
+    return dist(randgen());
+}
+
+
+#endif //GAME_RANDOM_B64_GEN_H

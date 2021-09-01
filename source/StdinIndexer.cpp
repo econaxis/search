@@ -1,3 +1,28 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:aa5a80b4c5237e32416c8fdfe417a2e226b1efed512bff00e9e0ccab17cee12a
-size 583
+#define STDININDEXER_PRINT_PROGRESS
+
+#include <iostream>
+#include "GeneralIndexer.h"
+#include "Constants.h"
+#include "FileListGenerator.h"
+#include "StdinIndexer.h"
+#include "IndexFileLocker.h"
+
+
+int main() {
+    initialize_directory_variables();
+
+    FileListGenerator::get_ndb();
+
+    auto str = GeneralIndexer::read_some_files(queue_produce_file_contents_stdin);
+    IndexFileLocker::do_lambda([&] {
+        std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
+        index_file << str << "\n";
+    });
+
+
+    std::cout<<"Suffix: " << str <<"\n";
+}
+
+
+
+

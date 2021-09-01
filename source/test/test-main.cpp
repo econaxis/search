@@ -1,3 +1,19 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:c35fa4d9b7737ea795b184a007cd6c03d10ca86bb342e9b7c56a5a14bf1ba858
-size 513
+#include <gtest/gtest.h>
+#include <span>
+#include "all_includes.h"
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+
+    std::span argvs(argv, argc);
+
+    for(auto c=  argvs.begin(); c != argvs.end(); c++) {
+        if(strcmp(*c, "--loop-multiply") == 0) {
+            LOOP_ITERS_MULTIPLY = std::stof(*(c+1));
+            fmt::print("Using multiply: {:.2f}\n", LOOP_ITERS_MULTIPLY);
+        }
+    }
+
+    fmt::print("Args: {}\n", fmt::join(argvs, " "));
+    return RUN_ALL_TESTS();
+}

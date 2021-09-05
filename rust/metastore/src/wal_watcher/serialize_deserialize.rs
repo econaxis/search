@@ -1,22 +1,22 @@
 use std::fmt::Formatter;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{MapAccess, Visitor};
 use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::object_path::ObjectPath;
-use crate::rwtransaction_wrapper::{MVCCMetadata, ValueWithMVCC, TypedValue};
+use crate::rwtransaction_wrapper::{MVCCMetadata, TypedValue, ValueWithMVCC};
 use crate::wal_watcher::Operation;
 
 pub struct CustomSerde<K>(K);
 
-impl From<CustomSerde<ObjectPath>> for  ObjectPath {
+impl From<CustomSerde<ObjectPath>> for ObjectPath {
     fn from(a: CustomSerde<ObjectPath>) -> Self {
         a.0
     }
 }
 
-impl From< CustomSerde<ValueWithMVCC>> for ValueWithMVCC {
+impl From<CustomSerde<ValueWithMVCC>> for ValueWithMVCC {
     fn from(a: CustomSerde<ValueWithMVCC>) -> Self {
         a.0
     }
@@ -24,8 +24,8 @@ impl From< CustomSerde<ValueWithMVCC>> for ValueWithMVCC {
 
 impl Serialize for CustomSerde<&ObjectPath> {
     fn serialize<SS>(&self, s: SS) -> Result<SS::Ok, SS::Error>
-        where
-            SS: Serializer,
+    where
+        SS: Serializer,
     {
         s.serialize_newtype_struct("ObjectPath", self.0.as_str())
     }
@@ -33,8 +33,8 @@ impl Serialize for CustomSerde<&ObjectPath> {
 
 impl Serialize for CustomSerde<&ValueWithMVCC> {
     fn serialize<SS>(&self, s: SS) -> Result<SS::Ok, SS::Error>
-        where
-            SS: Serializer,
+    where
+        SS: Serializer,
     {
         let mut stct = s.serialize_struct("ValueWithMVCC", 2)?;
         let inner = self.0.as_inner();
@@ -46,8 +46,8 @@ impl Serialize for CustomSerde<&ValueWithMVCC> {
 
 impl<'de> Deserialize<'de> for CustomSerde<ObjectPath> {
     fn deserialize<D>(deser: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         struct ObjPathVisitor;
         impl<'de> Visitor<'de> for ObjPathVisitor {
@@ -58,8 +58,8 @@ impl<'de> Deserialize<'de> for CustomSerde<ObjectPath> {
             }
 
             fn visit_newtype_struct<D>(self, d: D) -> Result<Self::Value, D::Error>
-                where
-                    D: Deserializer<'de>,
+            where
+                D: Deserializer<'de>,
             {
                 Ok(ObjectPath::from(String::deserialize(d)?))
             }
@@ -74,8 +74,8 @@ impl<'de> Deserialize<'de> for CustomSerde<ObjectPath> {
 
 impl<'de> Deserialize<'de> for CustomSerde<ValueWithMVCC> {
     fn deserialize<D>(deser: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         struct ValueVisitor;
         impl<'de> Visitor<'de> for ValueVisitor {
@@ -86,8 +86,8 @@ impl<'de> Deserialize<'de> for CustomSerde<ValueWithMVCC> {
             }
 
             fn visit_map<A>(self, mut v: A) -> Result<Self::Value, A::Error>
-                where
-                    A: MapAccess<'de>,
+            where
+                A: MapAccess<'de>,
             {
                 let (mvcccheck, mvccvalue) = v.next_entry::<String, MVCCMetadata>()?.unwrap();
                 assert_eq!(&mvcccheck, "MVCC");
@@ -105,11 +105,10 @@ impl<'de> Deserialize<'de> for CustomSerde<ValueWithMVCC> {
     }
 }
 
-
 impl Serialize for Operation<ObjectPath, ValueWithMVCC> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         let converted = match self {
             Operation::Write(k, v) => Operation::Write(CustomSerde(k), CustomSerde(v)),
@@ -122,8 +121,8 @@ impl Serialize for Operation<ObjectPath, ValueWithMVCC> {
 
 impl<'de> Deserialize<'de> for Operation<ObjectPath, ValueWithMVCC> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         // deserializer.deserialize_struct()
         let converted =

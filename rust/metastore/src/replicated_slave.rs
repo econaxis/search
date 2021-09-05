@@ -1,16 +1,15 @@
-use crate::{DbContext};
 use crate::object_path::ObjectPath;
-use crate::rwtransaction_wrapper::{ValueWithMVCC, LockDataRef, Transaction};
+use crate::rwtransaction_wrapper::{LockDataRef, Transaction, ValueWithMVCC};
+use crate::DbContext;
 
-
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
-use std::cell::{UnsafeCell};
 
-use parking_lot::{FairMutex, FairMutexGuard, RwLock, Mutex};
-use std::sync::atomic::Ordering::SeqCst;
-use std::ops::{DerefMut, Deref};
 use crate::db_context::create_empty_context;
+use parking_lot::{FairMutex, FairMutexGuard, Mutex, RwLock};
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering::SeqCst;
 
 struct ConcurrentHashmap {
     lock: FairMutex<()>,
@@ -72,10 +71,8 @@ impl ConcurrentHashmap {
         }
     }
     pub fn insert(&self, k: LockDataRef, v: Transaction) {
-        // Poor man's RWLock and CondVar, implemented using atomic counters and mutexes for low-contention workloads
         let _lock = self.counter.write();
         let map = unsafe { &mut *self.map.get().as_mut().unwrap() };
-
 
         map.insert(k, FairMutex::new(v));
     }
@@ -100,7 +97,9 @@ impl ConcurrentHashmap {
             let _lock = self.counter.write();
             let _l = self.lock.lock();
             let map = unsafe { &mut *self.map.get().as_mut().unwrap() };
-            queue_cloned.drain(..).for_each(|txn| { map.remove(&txn); });
+            queue_cloned.drain(..).for_each(|txn| {
+                map.remove(&txn);
+            });
         }
     }
 }
@@ -140,16 +139,19 @@ impl SelfContainedDb {
             None => {
                 panic!("Transaction doesn't already exist")
             }
-            Some(a) => a
+            Some(a) => a,
         }
     }
     fn create_txn(&self, txn: &LockDataRef) -> HashmapGuard {
         match self.transactions.get(txn) {
             None => {
-                self.transactions.insert(*txn, Transaction::new_with_time_id(&self.db, txn.timestamp, txn.id));
+                self.transactions.insert(
+                    *txn,
+                    Transaction::new_with_time_id(&self.db, txn.timestamp, txn.id),
+                );
                 self.transactions.get(txn).unwrap()
             }
-            Some(a) => panic!("Transaction already exists")
+            Some(a) => panic!("Transaction already exists"),
         }
     }
 
@@ -169,16 +171,29 @@ impl DatabaseInterface for SelfContainedDb {
     }
 
     // todo: make new type instead of valuewithmvcc to represent a "safe", thread-local value
-    fn serve_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<ValueWithMVCC, String> {
+    fn serve_read(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+    ) -> NetworkResult<ValueWithMVCC, String> {
         let mut rwtxn = self.get_txn(&txn);
         NetworkResult::from(rwtxn.read_mvcc(&self.db, key))
     }
-    fn serve_range_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String> {
+    fn serve_range_read(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+    ) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String> {
         let mut rwtxn = self.get_txn(&txn);
         NetworkResult::from(rwtxn.read_range_owned(&self.db, key))
     }
 
-    fn serve_write(&self, txn: LockDataRef, key: &ObjectPath, value: TypedValue) -> NetworkResult<(), String> {
+    fn serve_write(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+        value: TypedValue,
+    ) -> NetworkResult<(), String> {
         let mut rwtxn = self.get_txn(&txn);
         NetworkResult::from(rwtxn.write(&self.db, key, value))
     }

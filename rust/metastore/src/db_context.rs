@@ -2,16 +2,14 @@ use crate::replicated_slave::SelfContainedDb;
 use crate::wal_watcher::{ByteBufferWAL, WalLoader};
 
 use crate::history_storage::MutSlab;
-use crate::rwtransaction_wrapper::{MutBTreeMap, IntentMap};
+use crate::rwtransaction_wrapper::{IntentMap, MutBTreeMap};
 
-
-use crate::rpc_handler::{DatabaseInterface};
+use crate::file_debugger::print_to_file;
 use crate::local_replication_handler::LocalReplicationHandler;
+use crate::rpc_handler::DatabaseInterface;
+use crate::timestamp::Timestamp;
 use crate::wal_watcher::wal_check_consistency::check_func1;
 use std::ops::Deref;
-use crate::timestamp::Timestamp;
-use crate::file_debugger::print_to_file;
-
 
 pub mod self_contained_wrapper;
 
@@ -31,7 +29,10 @@ pub fn create_replicated_context() -> DbContext {
         transaction_map: IntentMap::new(),
         old_values_store: MutSlab::new(),
         wallog: ByteBufferWAL::new(),
-        replicators: Some(Box::new(LocalReplicationHandler::new(3, SelfContainedDb::default))),
+        replicators: Some(Box::new(LocalReplicationHandler::new(
+            3,
+            SelfContainedDb::default,
+        ))),
     }
 }
 
@@ -57,7 +58,7 @@ impl Drop for DbContext {
 }
 
 impl DbContext {
-    pub fn replicator(&self) -> &Box<dyn DatabaseInterface >{
+    pub fn replicator(&self) -> &Box<dyn DatabaseInterface> {
         self.replicators.as_ref().unwrap()
     }
 }

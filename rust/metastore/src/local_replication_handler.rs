@@ -1,27 +1,41 @@
-use crate::{ObjectPath, TypedValue};
 use crate::rpc_handler::{DatabaseInterface, NetworkResult};
 use crate::rwtransaction_wrapper::{LockDataRef, ValueWithMVCC};
+use crate::{ObjectPath, TypedValue};
 use std::iter::FromIterator;
 
+// Automatically fans out replication requests to `replication_factor` of nodes.
 pub struct LocalReplicationHandler<A> {
     nodes: Vec<Box<A>>,
     replication_factor: u8,
 }
 impl<A: DatabaseInterface> DatabaseInterface for LocalReplicationHandler<A> {
-    fn new_transaction(&self, txn: &LockDataRef) -> NetworkResult<(), String>{
+    fn new_transaction(&self, txn: &LockDataRef) -> NetworkResult<(), String> {
         self.iter(|a| a.new_transaction(txn));
         NetworkResult::default()
     }
 
-    fn serve_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<ValueWithMVCC, String> {
+    fn serve_read(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+    ) -> NetworkResult<ValueWithMVCC, String> {
         self.nodes.get(0).unwrap().serve_read(txn, key)
     }
 
-    fn serve_range_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String> {
+    fn serve_range_read(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+    ) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String> {
         self.nodes.get(0).unwrap().serve_range_read(txn, key)
     }
 
-    fn serve_write(&self, txn: LockDataRef, key: &ObjectPath, value: TypedValue) -> NetworkResult<(), String> {
+    fn serve_write(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+        value: TypedValue,
+    ) -> NetworkResult<(), String> {
         self.iter_result(|a| a.serve_write(txn, key, value.clone()))
     }
 
@@ -44,11 +58,18 @@ impl<A> LocalReplicationHandler<A> {
         let iter = std::iter::repeat_with(boxer).take(num as usize);
         Self {
             nodes: Vec::from_iter(iter),
-            replication_factor: num as u8
+            replication_factor: num as u8,
         }
     }
-    fn iter_result<Ret, Err, Func: FnMut(&Box<A>) -> NetworkResult<Ret, Err>>(&self, function: Func) -> NetworkResult<Ret, Err> {
-        self.nodes.iter().map(function).reduce(|a, b| a.and(b)).unwrap()
+    fn iter_result<Ret, Err, Func: FnMut(&Box<A>) -> NetworkResult<Ret, Err>>(
+        &self,
+        function: Func,
+    ) -> NetworkResult<Ret, Err> {
+        self.nodes
+            .iter()
+            .map(function)
+            .reduce(|a, b| a.and(b))
+            .unwrap()
     }
     fn iter<Ret, Func: FnMut(&Box<A>) -> Ret>(&self, function: Func) -> Ret {
         self.nodes.iter().map(function).last().unwrap()

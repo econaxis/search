@@ -15,31 +15,25 @@ secondary indexes
 #![feature(drain_filter)]
 #![feature(try_trait_v2)]
 
-extern crate serde_json;
-extern crate serde;
-extern crate slab;
-extern crate rand;
-extern crate lazy_static;
-extern crate quickcheck;
 extern crate crossbeam;
+extern crate lazy_static;
 extern crate log;
 extern crate parking_lot;
+extern crate quickcheck;
 extern crate quickcheck_macros;
+extern crate rand;
+extern crate serde;
+extern crate serde_json;
+extern crate slab;
 
-
-
-mod rpc_handler;
 mod local_replication_handler;
+mod rpc_handler;
 
-
-pub use rwtransaction_wrapper::{IntentMap, MutBTreeMap};
-pub use rwtransaction_wrapper::ValueWithMVCC;
 pub use db_context::DbContext;
-
-
+pub use rwtransaction_wrapper::ValueWithMVCC;
+pub use rwtransaction_wrapper::{IntentMap, MutBTreeMap};
 
 pub use crate::object_path::ObjectPath;
-
 
 // mod hyper_error_converter;
 
@@ -51,7 +45,6 @@ mod rwtransaction_wrapper;
 
 #[macro_use]
 mod retry;
-
 
 #[macro_use]
 mod test_transaction_generate;
@@ -66,14 +59,12 @@ pub use crate::rwtransaction_wrapper::ReplicatedTxn;
 pub use rwtransaction_wrapper::TypedValue;
 #[macro_use]
 mod error_macro;
-mod hermitage_tests;
-mod replicated_slave;
-mod file_debugger;
-mod db_context;
-mod history_storage;
 mod btree_index;
-
-
+mod db_context;
+mod file_debugger;
+mod hermitage_tests;
+mod history_storage;
+mod replicated_slave;
 
 fn main() {
     for _ in 0..20 {
@@ -87,4 +78,3 @@ fn main() {
     }
     // thread_tests::tests::unique_set_insertion_test();
 }
-

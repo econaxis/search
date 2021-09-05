@@ -1,9 +1,9 @@
-use crate::{ObjectPath, TypedValue, ReplicatedTxn, DbContext};
+use crate::parsing::{ColumnExpr, SelectQuery};
 use crate::rwtransaction_wrapper::ValueWithMVCC;
-use std::collections::{HashMap, HashSet};
-use std::iter::{Peekable, FromIterator};
-use crate::parsing::{SelectQuery, ColumnExpr};
+use crate::{DbContext, ObjectPath, ReplicatedTxn, TypedValue};
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use std::iter::{FromIterator, Peekable};
 
 #[derive(Debug)]
 struct Tuple(String, HashMap<String, TypedValue>);
@@ -13,12 +13,15 @@ enum ExtractValue {
     List(HashSet<String>),
 }
 
-impl From<Vec<ColumnExpr>> for ExtractValue  {
+impl From<Vec<ColumnExpr>> for ExtractValue {
     fn from(col: Vec<ColumnExpr>) -> Self {
-        let cols: HashSet<_> = col.into_iter().map(|a| match a {
-            ColumnExpr::String(a) => a,
-            _ => unimplemented!()
-        }).collect();
+        let cols: HashSet<_> = col
+            .into_iter()
+            .map(|a| match a {
+                ColumnExpr::String(a) => a,
+                _ => unimplemented!(),
+            })
+            .collect();
 
         ExtractValue::List(cols)
     }
@@ -54,26 +57,32 @@ impl ExtractValue {
 
         match self {
             Self::All if !str.is_empty() => Some(str),
-            Self::List(set) if set.contains(str) =>  Some(str),
-            _ => None
+            Self::List(set) if set.contains(str) => Some(str),
+            _ => None,
         }
     }
 }
 
-fn consume_single_tuple<I: Iterator<Item=(ObjectPath, ValueWithMVCC)>>(iter: &mut Peekable<I>, top_level: &ObjectPath, extract_values: &ExtractValue) -> Tuple {
+fn consume_single_tuple<I: Iterator<Item = (ObjectPath, ValueWithMVCC)>>(
+    iter: &mut Peekable<I>,
+    top_level: &ObjectPath,
+    extract_values: &ExtractValue,
+) -> Tuple {
     let mut tup = None;
     loop {
         let v = iter.peek();
         let v = match v {
             Some(x) => x,
-            None => break
+            None => break,
         };
 
         assert!(v.0.as_str().ends_with('/'));
 
-
         if tup.is_none() {
-            tup = Some(Tuple(get_latter(&v.0, top_level).to_string(), HashMap::new()));
+            tup = Some(Tuple(
+                get_latter(&v.0, top_level).to_string(),
+                HashMap::new(),
+            ));
         }
         let tup = tup.as_mut().unwrap();
 
@@ -89,27 +98,41 @@ fn consume_single_tuple<I: Iterator<Item=(ObjectPath, ValueWithMVCC)>>(iter: &mu
             iter.next();
             continue;
         }
-    };
+    }
     tup.unwrap()
 }
 
 #[test]
 fn test2() {
-    let db = db!("/test/and/and1/" = 1f64, "/test/bat/" = 2f64, "/test/cat/" = 2f64,"/test/dog/" = 2f64,"/zther/a/" = "3");
+    let db = db!(
+        "/test/and/and1/" = 1f64,
+        "/test/bat/" = 2f64,
+        "/test/cat/" = 2f64,
+        "/test/dog/" = 2f64,
+        "/zther/a/" = "3"
+    );
     let mut txn = ReplicatedTxn::new(&db);
     let ret = txn.read_range_owned(&"/".into()).unwrap();
 
     let mut iter = ret.into_iter().peekable();
-    dbg!(consume_single_tuple(&mut iter, &"/".into(), &ExtractValue::new_list(&["bat", "and/and1", "dog"])));
+    dbg!(consume_single_tuple(
+        &mut iter,
+        &"/".into(),
+        &ExtractValue::new_list(&["bat", "and/and1", "dog"])
+    ));
 }
 
-fn consume_as_tuples(iter: &mut impl Iterator<Item=(ObjectPath, ValueWithMVCC)>, top_level: &ObjectPath, extract_values: ExtractValue) -> Vec<Tuple> {
+fn consume_as_tuples(
+    iter: &mut impl Iterator<Item = (ObjectPath, ValueWithMVCC)>,
+    top_level: &ObjectPath,
+    extract_values: ExtractValue,
+) -> Vec<Tuple> {
     let mut iter = iter.peekable();
     let mut tuples = Vec::new();
     loop {
         let peek = match iter.peek() {
             None => break,
-            Some(x) => x
+            Some(x) => x,
         };
         if peek.0.as_str().starts_with(top_level.as_str()) {
             let tuple = consume_single_tuple(&mut iter, top_level, &extract_values);
@@ -117,7 +140,7 @@ fn consume_as_tuples(iter: &mut impl Iterator<Item=(ObjectPath, ValueWithMVCC)>,
                 tuples.push(tuple);
             }
         }
-    };
+    }
     tuples
 }
 
@@ -125,9 +148,9 @@ use serde_json::Number;
 
 fn typed_value_to_json(t: TypedValue) -> Option<Value> {
     match t {
-        TypedValue::String(s) => { Some(Value::String(s)) }
-        TypedValue::Number(s) => { Some(Value::Number(Number::from_f64(s).unwrap())) }
-        TypedValue::Deleted => { None }
+        TypedValue::String(s) => Some(Value::String(s)),
+        TypedValue::Number(s) => Some(Value::Number(Number::from_f64(s).unwrap())),
+        TypedValue::Deleted => None,
     }
 }
 
@@ -137,8 +160,9 @@ use crate::parsing::TableExpression::NamedTable;
 pub fn do_select_stmt(q: SelectQuery, db: &DbContext) {
     let from = match *q.from {
         TableExpression::NamedTable(s) => s,
-        _ => panic!()
-    }.into();
+        _ => panic!(),
+    }
+    .into();
 
     let mut txn = ReplicatedTxn::new(&db);
     let ret = txn.read_range_owned(&from).unwrap();
@@ -152,7 +176,10 @@ pub fn do_select_stmt(q: SelectQuery, db: &DbContext) {
 fn test4() {
     let q = SelectQuery {
         distinct: false,
-        column_list: vec![ColumnExpr::String("id".to_string()), ColumnExpr::String("tele".to_string())],
+        column_list: vec![
+            ColumnExpr::String("id".to_string()),
+            ColumnExpr::String("tele".to_string()),
+        ],
         where_exp: None,
         from: Box::new(NamedTable("/".to_string())),
     };
@@ -162,13 +189,10 @@ fn test4() {
         "/user1/id/" = "fdsvcx",
         "/user1/fd3f/fdsavc42/" = 42f64,
         "/user1/tele/" = 4252424f64,
-
         "/user2/id/" = "fdsvcx",
         "/user2/tele/" = 4252424f64,
-
         "/user3/id/" = "fdsvcx",
         "/user3/tele/" = 4252424f64,
-
         "/user4/id/" = "fdsvcx",
         "/user4/tele/" = 4252424f64
     );
@@ -178,9 +202,18 @@ fn test4() {
 
 #[test]
 fn test3() {
-    let db = db!("/test/and/" = 1f64, "/test/bat/" = 2f64, "/test/cat/" = 2f64,"/test/dog/" = 2f64,
-        "/zther/a/" = "3", "/zther/afd/" = "3", "/zther/afx/" = "3", "/zther/fds/" = "3", "/zther/fdsav/" = "3",
-        "/fdsvc/" = 5.32f64);
+    let db = db!(
+        "/test/and/" = 1f64,
+        "/test/bat/" = 2f64,
+        "/test/cat/" = 2f64,
+        "/test/dog/" = 2f64,
+        "/zther/a/" = "3",
+        "/zther/afd/" = "3",
+        "/zther/afx/" = "3",
+        "/zther/fds/" = "3",
+        "/zther/fdsav/" = "3",
+        "/fdsvc/" = 5.32f64
+    );
 
     let mut txn = ReplicatedTxn::new(&db);
     let ret = txn.read_range_owned(&"/".into()).unwrap();

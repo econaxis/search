@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::ops::{Add, Sub};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct Timestamp(pub u64);
@@ -10,14 +10,14 @@ impl Sub for Timestamp {
     type Output = Timestamp;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Timestamp(self.0  - rhs.0)
+        Timestamp(self.0 - rhs.0)
     }
 }
 impl Add for Timestamp {
     type Output = Timestamp;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Timestamp(self.0  + rhs.0)
+        Timestamp(self.0 + rhs.0)
     }
 }
 impl PartialOrd for Timestamp {

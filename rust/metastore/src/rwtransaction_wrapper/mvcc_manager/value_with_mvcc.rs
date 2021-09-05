@@ -1,18 +1,15 @@
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 
-use crate::DbContext;
-use crate::rwtransaction_wrapper::{MutBTreeMap, MVCCMetadata};
-use super::{LockDataRef, ReadError, WriteIntent};
 use super::mvcc_metadata::WriteIntentError;
-use crate::timestamp::Timestamp;
 use super::typed_value::TypedValue;
+use super::{LockDataRef, ReadError, WriteIntent};
+use crate::rwtransaction_wrapper::{MVCCMetadata, MutBTreeMap};
+use crate::timestamp::Timestamp;
+use crate::DbContext;
 
 type MyMutex<T> = parking_lot::Mutex<T>;
 type Guard<'a, T> = parking_lot::MutexGuard<'a, T>;
-
-
-
 
 #[derive(Debug)]
 pub struct ValueWithMVCC {
@@ -87,7 +84,6 @@ impl<'a> UnlockedWritableMVCC<'a> {
     }
 }
 
-
 impl ValueWithMVCC {
     pub fn get_val(&self) -> &TypedValue {
         let _l = self.lock.lock();
@@ -106,7 +102,6 @@ impl ValueWithMVCC {
             lock: MyMutex::new(()),
         }
     }
-
 
     pub fn from_tuple(meta: MVCCMetadata, val: TypedValue) -> Self {
         Self {
@@ -145,16 +140,24 @@ fn rescue_previous_value(meta: &mut MVCCMetadata, val: &mut TypedValue, ctx: &Db
 // This is a fre function rather than a member method because of Rust's borrowing rules
 // Lock needs to be held immutably, but this function needs to borrow &self mutably.
 // Free function allows splitting borrows of lock, meta, and val.
-fn fixup_write_intents(meta: &mut MVCCMetadata, val: &mut TypedValue, ctx: &DbContext, txn: LockDataRef) -> Result<(), WriteIntentError> {
+fn fixup_write_intents(
+    meta: &mut MVCCMetadata,
+    val: &mut TypedValue,
+    ctx: &DbContext,
+    txn: LockDataRef,
+) -> Result<(), WriteIntentError> {
     let res = meta.check_write_intents(&ctx.transaction_map, txn);
     // Clean intents
     if let Err(err) = res {
         match err {
             WriteIntentError::Aborted(x) => {
-                meta.aborted_reset_write_intent(x, Some(WriteIntent {
-                    associated_transaction: txn,
-                    was_commited: true,
-                }))?;
+                meta.aborted_reset_write_intent(
+                    x,
+                    Some(WriteIntent {
+                        associated_transaction: txn,
+                        was_commited: true,
+                    }),
+                )?;
 
                 rescue_previous_value(meta, val, ctx);
 
@@ -164,11 +167,14 @@ fn fixup_write_intents(meta: &mut MVCCMetadata, val: &mut TypedValue, ctx: &DbCo
                 Ok(())
             }
             WriteIntentError::Committed(curwriteintent) => {
-                meta.cur_write_intent.compare_swap_none(Some(curwriteintent), None).map_err(WriteIntentError::Other).unwrap();
+                meta.cur_write_intent
+                    .compare_swap_none(Some(curwriteintent), None)
+                    .map_err(WriteIntentError::Other)
+                    .unwrap();
                 assert!(meta.get_write_intents().is_none());
                 Ok(())
             }
-            _ => { Err(err) }
+            _ => Err(err),
         }
     } else {
         Ok(())
@@ -177,7 +183,13 @@ fn fixup_write_intents(meta: &mut MVCCMetadata, val: &mut TypedValue, ctx: &DbCo
 
 impl ValueWithMVCC {
     pub fn clear_committed_intent(&mut self, txn: LockDataRef) {
-        self.meta.cur_write_intent.compare_swap_none(Some(WriteIntent { associated_transaction: txn, was_commited: false }), None);
+        self.meta.cur_write_intent.compare_swap_none(
+            Some(WriteIntent {
+                associated_transaction: txn,
+                was_commited: false,
+            }),
+            None,
+        );
     }
     pub fn get_mvcc_copy(&self) -> MVCCMetadata {
         let _l = self.lock.lock();
@@ -210,7 +222,8 @@ impl ValueWithMVCC {
         // We guarantee there's no other threads accessing this value because we hold the lock.
         let mut_meta = unsafe { &mut *(&self.meta as *const MVCCMetadata as *mut MVCCMetadata) };
         let mut_val = unsafe { &mut *(&self.val as *const TypedValue as *mut TypedValue) };
-        fixup_write_intents(mut_meta, mut_val, ctx, txn).map_err(|a| ReadError::Other(a.tostring()))?;
+        fixup_write_intents(mut_meta, mut_val, ctx, txn)
+            .map_err(|a| ReadError::Other(a.tostring()))?;
         self.check_read(ctx, txn)?;
         Ok(UnlockedReadableMVCC {
             meta: mut_meta,
@@ -219,12 +232,14 @@ impl ValueWithMVCC {
         })
     }
 
-
     // Take in `readable` by value to ensure that this value was previously checked for readability/has no existing write intents on it.
-    pub(super) fn get_writable<'a>(&'a self, txn: LockDataRef, readable: UnlockedReadableMVCC<'a>) -> Result<UnlockedWritableMVCC<'a>, String> {
+    pub(super) fn get_writable<'a>(
+        &'a self,
+        txn: LockDataRef,
+        readable: UnlockedReadableMVCC<'a>,
+    ) -> Result<UnlockedWritableMVCC<'a>, String> {
         let lock = readable.lock;
         self.meta.check_write(txn)?;
-
 
         let writable = UnlockedWritableMVCC {
             meta_ptr: &self.meta as *const MVCCMetadata as *mut MVCCMetadata,
@@ -239,16 +254,17 @@ impl ValueWithMVCC {
             Some(wi) if wi.associated_transaction == txn => {}
             None => {
                 // Insert our write intent into this value to "lock" it from future transactions.
-                unsafe { &mut *writable.meta_ptr }.atomic_insert_write_intents(WriteIntent {
-                    associated_transaction: txn,
-                    was_commited: true,
-                }).unwrap();
+                unsafe { &mut *writable.meta_ptr }
+                    .atomic_insert_write_intents(WriteIntent {
+                        associated_transaction: txn,
+                        was_commited: true,
+                    })
+                    .unwrap();
             }
             _ => {
                 panic!("Write intent still exists, unreachable code. This function should've been called *after* calling get_readable(), which guarantees that no other transactions are currently writing");
             }
         };
-
 
         Ok(writable)
     }
@@ -299,7 +315,6 @@ mod tests {
             write.write(&"adfs".into(), "fdsvcx".into());
             write.abort();
         }
-
 
         let mut read = ReplicatedTxn::new(&db);
         assert_eq!(read.read(&"adfs".into()).unwrap(), "value".into());

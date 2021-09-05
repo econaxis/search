@@ -1,8 +1,8 @@
-use std::borrow::{Borrow};
+use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 use std::collections::Bound;
 use std::fmt::{Display, Formatter};
 use std::iter::FromIterator;
-use serde::{Serialize, Deserialize};
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ObjectPath(String);
 
@@ -19,7 +19,7 @@ impl From<&str> for ObjectPath {
 }
 
 impl<BS: Borrow<str>> FromIterator<BS> for ObjectPath {
-    fn from_iter<T: IntoIterator<Item=BS>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = BS>>(iter: T) -> Self {
         iter.into_iter().fold(
             ObjectPath::new(""),
             |one: ObjectPath, two: BS| -> ObjectPath { one.concat(two) },
@@ -65,8 +65,8 @@ impl ObjectPath {
             // (undesireable)
             self.0[1..len - 1].as_ref(),
         )
-            .unwrap()
-            .split('/')
+        .unwrap()
+        .split('/')
     }
 
     pub fn make_correct_suffix(&mut self) {

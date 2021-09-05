@@ -2,9 +2,9 @@ mod mvcc_manager;
 
 use crate::object_path::ObjectPath;
 use crate::DbContext;
+pub use mvcc_manager::btreemap_kv_backend::MutBTreeMap;
 pub use mvcc_manager::IntentMap;
 pub use mvcc_manager::MVCCMetadata;
-pub use mvcc_manager::btreemap_kv_backend::MutBTreeMap;
 use mvcc_manager::WriteIntentStatus;
 pub use mvcc_manager::{LockDataRef, UnlockedWritableMVCC, ValueWithMVCC};
 
@@ -16,7 +16,6 @@ pub struct ReplicatedTxn<'a> {
     done: bool,
 }
 
-
 // equivalent to RWTransactionWrapper but without the borrowing reference.
 pub struct Transaction {
     pub(crate) txn: LockDataRef,
@@ -26,26 +25,35 @@ pub struct Transaction {
 
 impl Transaction {
     fn new(txn: LockDataRef) -> Self {
-        Self { txn, log: WalTxn::new(txn.timestamp), written_kv: Vec::new() }
+        Self {
+            txn,
+            log: WalTxn::new(txn.timestamp),
+            written_kv: Vec::new(),
+        }
     }
     pub fn new_with_time_id(ctx: &DbContext, time: Timestamp, id: u64) -> Self {
         let txn = ctx.transaction_map.make_write_txn_with_time(time, id);
         Self::new(txn)
     }
     pub fn new_with_time(ctx: &DbContext, time: Timestamp) -> Self {
-        let txn = ctx.transaction_map.make_write_txn_with_time(time, Timestamp::now().0);
+        let txn = ctx
+            .transaction_map
+            .make_write_txn_with_time(time, Timestamp::now().0);
         Self::new(txn)
     }
     pub fn abort(&mut self, ctx: &DbContext) {
-        ctx
-            .transaction_map
-            .set_txn_status(self.txn, WriteIntentStatus::Aborted).unwrap();
+        ctx.transaction_map
+            .set_txn_status(self.txn, WriteIntentStatus::Aborted)
+            .unwrap();
     }
     pub fn read_range_owned(
-        &mut self, ctx: &DbContext,
+        &mut self,
+        ctx: &DbContext,
         key: &ObjectPath,
     ) -> Result<Vec<(ObjectPath, ValueWithMVCC)>, String> {
-        let (_lock, range) = ctx.db.range_with_lock(key.get_prefix_ranges(), self.txn.timestamp);
+        let (_lock, range) = ctx
+            .db
+            .range_with_lock(key.get_prefix_ranges(), self.txn.timestamp);
 
         let mut keys1 = Vec::new();
         for (key, value_ptr) in range {
@@ -61,17 +69,23 @@ impl Transaction {
                     return Err(format!("{:?}", err));
                 }
             }
-        };
+        }
 
         Ok(keys1)
     }
-    pub fn read_mvcc(&mut self, ctx: &DbContext, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
-        let ret = mvcc_manager::read(ctx, key, self.txn).map_err(<ReadError as Into<String>>::into)?;
+    pub fn read_mvcc(
+        &mut self,
+        ctx: &DbContext,
+        key: &ObjectPath,
+    ) -> Result<ValueWithMVCC, String> {
+        let ret =
+            mvcc_manager::read(ctx, key, self.txn).map_err(<ReadError as Into<String>>::into)?;
         Ok(ret)
     }
 
     pub fn write(
-        &mut self, ctx: &DbContext,
+        &mut self,
+        ctx: &DbContext,
         key: &ObjectPath,
         value: TypedValue,
     ) -> Result<(), String> {
@@ -93,17 +107,16 @@ impl Transaction {
         std::mem::swap(&mut placeholder, &mut self.log);
         ctx.wallog.store(placeholder).unwrap();
 
-        ctx
-            .transaction_map
+        ctx.transaction_map
             .set_txn_status(self.txn, WriteIntentStatus::Committed)
     }
 }
 
 use crate::timestamp::Timestamp;
-use crate::wal_watcher::{WalTxn, WalStorer};
+use crate::wal_watcher::{WalStorer, WalTxn};
 
-pub use crate::rwtransaction_wrapper::mvcc_manager::{ReadError, TypedValue};
 use crate::rpc_handler::DatabaseInterface;
+pub use crate::rwtransaction_wrapper::mvcc_manager::{ReadError, TypedValue};
 use rand::Rng;
 
 impl<'a> ReplicatedTxn<'a> {
@@ -120,7 +133,6 @@ impl<'a> ReplicatedTxn<'a> {
         ret
     }
 }
-
 
 impl<'a> ReplicatedTxn<'a> {
     pub fn read_range_owned(
@@ -149,16 +161,24 @@ impl<'a> ReplicatedTxn<'a> {
     pub fn read(&mut self, key: &ObjectPath) -> Result<TypedValue, String> {
         self.read_mvcc(key).map(|a| a.into_inner().1)
     }
-    pub fn write(
-        &mut self,
-        key: &ObjectPath,
-        value: TypedValue,
-    ) -> Result<(), String> {
-        let res1 = self.main.write(self.ctx, key, value.clone()).map_err(|a| format!("main error {}", a));
-        let res = self.ctx.replicator().serve_write(*self.get_txn(), key, value)?.map_err(|a| format!("replicator error {}", a));
+    pub fn write(&mut self, key: &ObjectPath, value: TypedValue) -> Result<(), String> {
+        let res1 = self
+            .main
+            .write(self.ctx, key, value.clone())
+            .map_err(|a| format!("main error {}", a));
+        let res = self
+            .ctx
+            .replicator()
+            .serve_write(*self.get_txn(), key, value)?
+            .map_err(|a| format!("replicator error {}", a));
 
         if res.is_ok() != res1.is_ok() {
-            debug!("nonmatching write results: {:?} {:?} {}", res, res1, self.get_txn().id);
+            debug!(
+                "nonmatching write results: {:?} {:?} {}",
+                res,
+                res1,
+                self.get_txn().id
+            );
             // Must abort writes, todo!
         }
         res.and(res1)
@@ -190,10 +210,10 @@ fn probabilistic_should_quorum_read() -> bool {
 // Static functions for convenience (auto-generates a transaction)
 #[allow(unused)]
 pub mod auto_commit {
-    use crate::{DbContext, ReplicatedTxn};
     use crate::object_path::ObjectPath;
     use crate::rwtransaction_wrapper::mvcc_manager::TypedValue;
     use crate::rwtransaction_wrapper::ValueWithMVCC;
+    use crate::{DbContext, ReplicatedTxn};
 
     pub fn read(db: &DbContext, key: &ObjectPath) -> Result<ValueWithMVCC, String> {
         let mut txn = ReplicatedTxn::new(db);
@@ -209,14 +229,16 @@ pub mod auto_commit {
     }
 }
 
-
 impl Drop for ReplicatedTxn<'_> {
     fn drop(&mut self) {
         if !self.done {
             self.abort()
         } else {
             let status = self.ctx.transaction_map.get_by_ref(&self.main.txn);
-            debug_assert_matches!(status.unwrap().0, WriteIntentStatus::Committed | WriteIntentStatus::Aborted);
+            debug_assert_matches!(
+                status.unwrap().0,
+                WriteIntentStatus::Committed | WriteIntentStatus::Aborted
+            );
         }
     }
 }
@@ -226,8 +248,8 @@ mod tests {
     use super::*;
     use crate::wal_watcher::WalLoader;
 
-    use crate::db_context::{create_replicated_context, create_empty_context};
     use crate::db;
+    use crate::db_context::{create_empty_context, create_replicated_context};
 
     #[test]
     #[should_panic]
@@ -268,10 +290,14 @@ mod tests {
         println!("{}", db.db.printdb());
     }
 
-
     #[test]
     fn check_phantom() {
-        let db = db!("/test/1" = "1", "/test/2" = "2", "/test/5" = "5", "/user/0" = "0");
+        let db = db!(
+            "/test/1" = "1",
+            "/test/2" = "2",
+            "/test/5" = "5",
+            "/user/0" = "0"
+        );
         let mut wtxn = ReplicatedTxn::new(&db);
         let mut txn = ReplicatedTxn::new(&db);
 
@@ -293,7 +319,6 @@ mod tests {
         assert_matches!(auto_commit::read(&db, &"k".into()), Err(..));
     }
 
-
     #[test]
     fn check_phantom3() {
         // regression test
@@ -314,7 +339,6 @@ mod tests {
         txn2.commit();
         println!("{}", db.db.printdb());
     }
-
 
     #[test]
     fn test1() {
@@ -391,15 +415,15 @@ mod tests {
         t1.write(&"k".into(), "v2".into());
         match t2.write(&"k".into(), "v3".into()) {
             Err(x) => println!("(good) expected error: {}", x),
-            _ => panic!("should've errored")
+            _ => panic!("should've errored"),
         }
         match t2.read(&"k".into()) {
             Err(x) => println!("(good) expected error: {}", x),
-            _ => panic!("should've errored")
+            _ => panic!("should've errored"),
         }
         match t2.write(&"k1".into(), "v3".into()) {
             Ok(x) => println!("(good) expected value: {:?}", x),
-            _ => panic!("should've been ok")
+            _ => panic!("should've been ok"),
         }
         t1.commit();
         t2.commit();

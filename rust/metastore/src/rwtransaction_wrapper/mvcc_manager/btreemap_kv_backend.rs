@@ -1,17 +1,17 @@
 use std::borrow::Borrow;
-use std::cell::{UnsafeCell};
+use std::cell::UnsafeCell;
 use std::collections::btree_map::{BTreeMap, Range};
 use std::ops::RangeBounds;
 
-use crate::object_path::ObjectPath;
-use super::value_with_mvcc::{ValueWithMVCC};
+use super::value_with_mvcc::ValueWithMVCC;
 use super::TypedValue;
+use crate::object_path::ObjectPath;
+use crate::timestamp::Timestamp;
 use std::collections::Bound;
 use std::fmt::Write;
-use std::sync::{RwLockReadGuard, RwLock};
-use crate::timestamp::Timestamp;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::{RwLock, RwLockReadGuard};
 
 type UnsafeMapType = UnsafeCell<MapType>;
 type MapType = BTreeMap<ObjectPath, ValueWithMVCC>;
@@ -25,10 +25,12 @@ unsafe impl Sync for MutBTreeMap {}
 
 unsafe impl Send for MutBTreeMap {}
 
-
 impl Default for MutBTreeMap {
     fn default() -> Self {
-        Self { btree: RwLock::new(UnsafeCell::new(BTreeMap::new())), time: AtomicU64::new(Timestamp::mintime().0) }
+        Self {
+            btree: RwLock::new(UnsafeCell::new(BTreeMap::new())),
+            time: AtomicU64::new(Timestamp::mintime().0),
+        }
     }
 }
 
@@ -40,8 +42,8 @@ impl MutBTreeMap {
     }
 
     pub fn range<R>(&self, range: R) -> Range<'_, ObjectPath, ValueWithMVCC>
-        where
-            R: RangeBounds<ObjectPath>,
+    where
+        R: RangeBounds<ObjectPath>,
     {
         unsafe { &*self.btree.read().unwrap().get() }.range(range)
     }
@@ -54,8 +56,8 @@ impl MutBTreeMap {
         RwLockReadGuard<'_, UnsafeMapType>,
         Range<'_, ObjectPath, ValueWithMVCC>,
     )
-        where
-            R: RangeBounds<ObjectPath>,
+    where
+        R: RangeBounds<ObjectPath>,
     {
         let lock = self.btree.read().unwrap();
         let range = unsafe { &*lock.get() }.range(range);
@@ -80,11 +82,13 @@ impl MutBTreeMap {
         }
     }
     pub fn get_mut<T>(&self, key: &T) -> Option<&mut ValueWithMVCC>
-        where
-            ObjectPath: Borrow<T> + Ord,
-            T: Ord + ?Sized,
+    where
+        ObjectPath: Borrow<T> + Ord,
+        T: Ord + ?Sized,
     {
-        unsafe { &mut *self.btree.read().unwrap().get() }.get_mut(key).and_then(Self::null_value_mapper)
+        unsafe { &mut *self.btree.read().unwrap().get() }
+            .get_mut(key)
+            .and_then(Self::null_value_mapper)
     }
     pub fn get_mut_with_lock<T>(
         &self,
@@ -93,9 +97,9 @@ impl MutBTreeMap {
         RwLockReadGuard<'_, UnsafeMapType>,
         Option<&mut ValueWithMVCC>,
     )
-        where
-            ObjectPath: Borrow<T> + Ord,
-            T: Ord + ?Sized,
+    where
+        ObjectPath: Borrow<T> + Ord,
+        T: Ord + ?Sized,
     {
         let lock = self.btree.read().unwrap();
         let s = unsafe { &mut *lock.get() };
@@ -104,7 +108,11 @@ impl MutBTreeMap {
     }
 
     // Checks for phantoms by making sure our write time is larger than their read times.
-    fn check_adjacent_keys(btree: &MapType, key: &ObjectPath, writetime: Timestamp) -> (Option<bool>, Option<bool>) {
+    fn check_adjacent_keys(
+        btree: &MapType,
+        key: &ObjectPath,
+        writetime: Timestamp,
+    ) -> (Option<bool>, Option<bool>) {
         let prev = btree.range(..key).next_back();
 
         // maybe have to move this to mvcc_manager? btreemap shouldn't deal with concurrency-related issues at all.
@@ -115,7 +123,12 @@ impl MutBTreeMap {
         (prevbool, nextbool)
     }
 
-    pub fn insert(&self, key: ObjectPath, value: ValueWithMVCC, time: Timestamp) -> Result<Option<ValueWithMVCC>, String> {
+    pub fn insert(
+        &self,
+        key: ObjectPath,
+        value: ValueWithMVCC,
+        time: Timestamp,
+    ) -> Result<Option<ValueWithMVCC>, String> {
         // todo: inserts should be handled by mvcc manager
         let lock = self.btree.write().unwrap();
         let btree = unsafe { &mut *lock.get() };
@@ -164,10 +177,9 @@ impl MutBTreeMap {
                     x.get_write_intents().as_ref().map(|a| a),
                     y
                 ))
-                    .unwrap();
+                .unwrap();
             }
         }
         str
     }
 }
-

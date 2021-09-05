@@ -1,11 +1,11 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
 impl TypedValue {
     pub fn as_str(&self) -> &str {
         match self {
             TypedValue::String(s) => s,
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }
@@ -22,7 +22,7 @@ impl Display for TypedValue {
         match self {
             String(s) => f.write_str(s),
             Number(a) => a.fmt(f),
-            Deleted => f.write_str("null")
+            Deleted => f.write_str("null"),
         }
     }
 }
@@ -34,7 +34,7 @@ impl PartialEq for TypedValue {
             (String(s), String(o)) => s == o,
             (Number(n), Number(o)) => (n - o).abs().le(&0.00001f64),
             (Deleted, Deleted) => true,
-            _ => panic!("Can't compare two values of different types")
+            _ => panic!("Can't compare two values of different types"),
         }
     }
 }
@@ -61,7 +61,7 @@ impl From<TypedValue> for String {
     fn from(a: TypedValue) -> Self {
         match a {
             TypedValue::String(s) => s,
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }

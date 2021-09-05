@@ -1,6 +1,6 @@
+use crate::rwtransaction_wrapper::ValueWithMVCC;
 use std::cell::UnsafeCell;
 use std::sync::Mutex;
-use crate::rwtransaction_wrapper::ValueWithMVCC;
 
 pub struct MutSlab(Mutex<UnsafeCell<slab::Slab<ValueWithMVCC>>>);
 

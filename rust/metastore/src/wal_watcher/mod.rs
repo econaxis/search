@@ -1,24 +1,24 @@
 use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
-use std::io::{Write, Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use wal_apply::apply_wal_txn_checked;
 
-use crate::{DbContext, TypedValue};
 use crate::object_path::ObjectPath;
-use crate::rwtransaction_wrapper::{ValueWithMVCC, LockDataRef};
-use crate::timestamp::Timestamp;
-use std::fs::{File, OpenOptions};
-use rand::Rng;
-use rand::distributions::Alphanumeric;
 use crate::rpc_handler::{DatabaseInterface, NetworkResult};
+use crate::rwtransaction_wrapper::{LockDataRef, ValueWithMVCC};
+use crate::timestamp::Timestamp;
+use crate::{DbContext, TypedValue};
+use rand::distributions::Alphanumeric;
+use rand::Rng;
+use std::fs::{File, OpenOptions};
 
-mod wal_apply;
-mod test;
 mod serialize_deserialize;
+mod test;
+mod wal_apply;
 pub mod wal_check_consistency;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -35,7 +35,6 @@ impl PartialEq for Operation<ObjectPath, ValueWithMVCC> {
         }
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WalTxn {
@@ -79,9 +78,20 @@ impl ByteBufferWAL {
         use rand::thread_rng;
         let s = thread_rng().gen::<u16>().to_string();
         let path = "/tmp/wallog-".to_string() + &s;
-        let file = OpenOptions::new().write(true).read(true).truncate(true).create(true).open(path).unwrap();
+        let file = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .truncate(true)
+            .create(true)
+            .open(path)
+            .unwrap();
         let file = Mutex::new(file);
-        Self { buf: RefCell::new(Vec::new()), json_lock: Mutex::new(()), frozen: Mutex::new(false), file }
+        Self {
+            buf: RefCell::new(Vec::new()),
+            json_lock: Mutex::new(()),
+            frozen: Mutex::new(false),
+            file,
+        }
     }
 }
 
@@ -103,14 +113,13 @@ impl Write for &ByteBufferWAL {
     }
 }
 
-
-
-
 impl WalStorer for ByteBufferWAL {
     type K = ObjectPath;
     type V = ValueWithMVCC;
     fn store(&self, waltxn: WalTxn) -> Result<(), String> {
-        if *self.frozen.lock().unwrap() { return Err("Wal log is currently frozen".to_string()); }
+        if *self.frozen.lock().unwrap() {
+            return Err("Wal log is currently frozen".to_string());
+        }
 
         {
             let _guard = self.json_lock.lock().unwrap();
@@ -189,17 +198,30 @@ impl DatabaseInterface for &mut WalTxn {
         unreachable!()
     }
 
-    fn serve_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<ValueWithMVCC, String> {
+    fn serve_read(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+    ) -> NetworkResult<ValueWithMVCC, String> {
         unreachable!()
     }
 
-    fn serve_range_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String> {
+    fn serve_range_read(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+    ) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String> {
         unreachable!()
     }
 
-    fn serve_write(&self, txn: LockDataRef, key: &ObjectPath, value: TypedValue) -> NetworkResult<(), String> {
+    fn serve_write(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+        value: TypedValue,
+    ) -> NetworkResult<(), String> {
         // safety: we implemented this trait for &mut WalTxn so we can cast.
-        let k = unsafe {&mut *(*self as *const WalTxn as *mut WalTxn)};
+        let k = unsafe { &mut *(*self as *const WalTxn as *mut WalTxn) };
 
         k.log_write(key.clone(), value);
 
@@ -214,5 +236,3 @@ impl DatabaseInterface for &mut WalTxn {
         unreachable!()
     }
 }
-
-

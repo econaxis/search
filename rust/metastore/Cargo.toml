@@ -34,9 +34,6 @@ version = "0.1.4"
 [dev-dependencies.walkdir]
 version = "2.3.1"
 
-[[example]]
-name = "complexity"
-path = "src/cyclomatic.rs"
 
 [profile.release]
 debug=1

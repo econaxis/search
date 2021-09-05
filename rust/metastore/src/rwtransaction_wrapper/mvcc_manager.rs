@@ -1,14 +1,12 @@
 pub mod btreemap_kv_backend;
 mod lock_data_manager;
 mod mvcc_metadata;
-pub mod value_with_mvcc;
 mod typed_value;
-
-
+pub mod value_with_mvcc;
 
 pub use mvcc_metadata::MVCCMetadata;
-pub use value_with_mvcc::{UnlockedWritableMVCC, ValueWithMVCC};
 pub use typed_value::TypedValue;
+pub use value_with_mvcc::{UnlockedWritableMVCC, ValueWithMVCC};
 
 use crate::object_path::ObjectPath;
 use crate::DbContext;
@@ -16,10 +14,10 @@ use crate::DbContext;
 pub use lock_data_manager::{IntentMap, LockDataRef};
 pub use mvcc_metadata::{WriteIntent, WriteIntentStatus};
 
+use crate::rwtransaction_wrapper::MutBTreeMap;
 use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
-use std::sync::{RwLockReadGuard};
-use crate::rwtransaction_wrapper::MutBTreeMap;
+use std::sync::RwLockReadGuard;
 
 use crate::custom_error_impl;
 
@@ -61,8 +59,11 @@ pub(super) fn update(
         (lock, None) => {
             std::mem::drop(lock);
             // We're inserting a new key here.
-            ctx.db
-                .insert(key.clone(), ValueWithMVCC::new(txn, new_value), txn.timestamp)?;
+            ctx.db.insert(
+                key.clone(),
+                ValueWithMVCC::new(txn, new_value),
+                txn.timestamp,
+            )?;
         }
     };
 
@@ -76,7 +77,10 @@ fn check_has_value(db: &MutBTreeMap, key: &ObjectPath) -> bool {
 fn get_latest_mvcc_value<'a>(
     db: &'a MutBTreeMap,
     key: &ObjectPath,
-) -> (RwLockReadGuard<'a, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>, Option<&'a mut ValueWithMVCC>) {
+) -> (
+    RwLockReadGuard<'a, UnsafeCell<BTreeMap<ObjectPath, ValueWithMVCC>>>,
+    Option<&'a mut ValueWithMVCC>,
+) {
     // todo! right now, we locking the whole database for each single read/write (not a transaction, which is good).
     // this because there's no atomic way to set an enum (WriteIntent) right now.
     // Also because I haven't thought of a way to do low-level per-value locking
@@ -89,7 +93,11 @@ fn get_latest_mvcc_value<'a>(
     db.get_mut_with_lock(key)
 }
 
-pub fn read_reference(ctx: &DbContext, v: &ValueWithMVCC, txn: LockDataRef) -> Result<ValueWithMVCC, ReadError> {
+pub fn read_reference(
+    ctx: &DbContext,
+    v: &ValueWithMVCC,
+    txn: LockDataRef,
+) -> Result<ValueWithMVCC, ReadError> {
     enum R<'a> {
         Result(ValueWithMVCC),
         Recurse(&'a mut ValueWithMVCC),
@@ -135,10 +143,13 @@ pub fn read_reference(ctx: &DbContext, v: &ValueWithMVCC, txn: LockDataRef) -> R
     } else {
         unreachable!()
     }
-
 }
 
-pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<ValueWithMVCC, ReadError> {
+pub fn read(
+    ctx: &DbContext,
+    key: &ObjectPath,
+    txn: LockDataRef,
+) -> Result<ValueWithMVCC, ReadError> {
     let (_lock, res) = get_latest_mvcc_value(&ctx.db, key);
     let res = res.ok_or_else(|| "Read value doesn't exist".to_string())?;
 
@@ -147,8 +158,8 @@ pub fn read(ctx: &DbContext, key: &ObjectPath, txn: LockDataRef) -> Result<Value
 
 #[cfg(test)]
 mod tests {
-    use crate::rwtransaction_wrapper::ReplicatedTxn;
     use crate::db;
+    use crate::rwtransaction_wrapper::ReplicatedTxn;
 
     #[test]
     fn regression_wrong_error_emitted() {

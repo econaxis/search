@@ -2,9 +2,9 @@ use std::convert::Infallible;
 use std::iter::FromIterator;
 use std::ops::{ControlFlow, FromResidual, Try};
 
-use crate::ObjectPath;
 use crate::replicated_slave::SelfContainedDb;
 use crate::rwtransaction_wrapper::{LockDataRef, TypedValue, ValueWithMVCC};
+use crate::ObjectPath;
 
 pub struct NetworkError(std::io::Error);
 
@@ -19,10 +19,9 @@ impl<R, E> NetworkResult<R, E> {
     pub fn and(self, res: NetworkResult<R, E>) -> NetworkResult<R, E> {
         match self.0 {
             Ok(_) => res,
-            Err(_) => self
+            Err(_) => self,
         }
     }
-
 }
 
 impl<R, E> From<Result<R, E>> for NetworkResult<R, E> {
@@ -31,7 +30,7 @@ impl<R, E> From<Result<R, E>> for NetworkResult<R, E> {
     }
 }
 
-impl Default for  NetworkResult<(), String> {
+impl Default for NetworkResult<(), String> {
     fn default() -> Self {
         Self::from(Result::Ok(()))
     }
@@ -39,15 +38,27 @@ impl Default for  NetworkResult<(), String> {
 
 pub trait DatabaseInterface {
     fn new_transaction(&self, txn: &LockDataRef) -> NetworkResult<(), String>;
-    fn serve_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<ValueWithMVCC, String>;
-    fn serve_range_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String>;
-    fn serve_write(&self, txn: LockDataRef, key: &ObjectPath, value: TypedValue) -> NetworkResult<(), String>;
+    fn serve_read(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+    ) -> NetworkResult<ValueWithMVCC, String>;
+    fn serve_range_read(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+    ) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String>;
+    fn serve_write(
+        &self,
+        txn: LockDataRef,
+        key: &ObjectPath,
+        value: TypedValue,
+    ) -> NetworkResult<(), String>;
     fn commit(&self, txn: LockDataRef) -> NetworkResult<(), String>;
     fn abort(&self, p0: LockDataRef) -> NetworkResult<(), String>;
 }
 
-
-impl <R, E> FromResidual<Result<std::convert::Infallible, NetworkError>> for NetworkResult<R, E> {
+impl<R, E> FromResidual<Result<std::convert::Infallible, NetworkError>> for NetworkResult<R, E> {
     fn from_residual(residual: Result<std::convert::Infallible, NetworkError>) -> Self {
         Self(Err(residual.unwrap_err()))
     }
@@ -64,7 +75,7 @@ impl<R, E> Try for NetworkResult<R, E> {
     fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
         match self.0 {
             Ok(a) => ControlFlow::Continue(a),
-            Err(a) => ControlFlow::Break(Err(a))
+            Err(a) => ControlFlow::Break(Err(a)),
         }
     }
 }

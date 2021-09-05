@@ -122,7 +122,6 @@ impl Tokens {
 
 type Tok<'a> = &'a [Tokens];
 
-
 /*
 
 Expr = Expr "AND" Expr
@@ -164,14 +163,13 @@ fn parse_expr(t: Tok) -> (Expr, Tok) {
                 Tokens::Gt => Op::Gt(left, right),
                 Tokens::Lt => Op::Lt(left, right),
                 Tokens::EqualsEquals => Op::Equals(left, right),
-                _ => unreachable!()
+                _ => unreachable!(),
             })
         }
     };
 
     (expr, remaining)
 }
-
 
 fn parse_arithmetic_term(t: Tok) -> (ColumnExpr, Tok) {
     match &t[0] {
@@ -186,23 +184,30 @@ fn parse_arithmetic_term(t: Tok) -> (ColumnExpr, Tok) {
             let (expr, rest) = parse_arithmetic_term(&t[1..]);
             (ColumnExpr::Negate(expr.into()), rest)
         }
-        _ => { unreachable!() }
+        _ => {
+            unreachable!()
+        }
     }
 }
-
 
 fn parse_cast(t: Tok) -> (ColumnExpr, Tok) {
     let str = match &t[0] {
         Tokens::String(str) => str,
-        _ => unreachable!()
+        _ => unreachable!(),
     };
     assert_eq!(t[1], Tokens::LParens);
     let (column, rest) = parse_column_expr(&t[2..]);
     assert_eq!(rest[0], Tokens::RParens);
     match str.as_str() {
-        "int" => (ColumnExpr::CastExpr(CastExpr::Int, column.into()), &rest[1..]),
-        "bool" => (ColumnExpr::CastExpr(CastExpr::Bool, column.into()), &rest[1..]),
-        _ => unreachable!()
+        "int" => (
+            ColumnExpr::CastExpr(CastExpr::Int, column.into()),
+            &rest[1..],
+        ),
+        "bool" => (
+            ColumnExpr::CastExpr(CastExpr::Bool, column.into()),
+            &rest[1..],
+        ),
+        _ => unreachable!(),
     }
 }
 
@@ -227,9 +232,11 @@ fn parse_column_expr(t: Tok) -> (ColumnExpr, Tok) {
                         t = t_;
                         t1 = ColumnExpr::Multiply(t1.into(), rhs.into());
                     }
-                    _ => { break; }
+                    _ => {
+                        break;
+                    }
                 }
-            };
+            }
             (t1, t)
         }
     };
@@ -237,7 +244,11 @@ fn parse_column_expr(t: Tok) -> (ColumnExpr, Tok) {
     parse_aliased(t, column, ColumnExpr::Aliased)
 }
 
-fn parse_aliased<Ret: Into<Box<Ret>>, R: FnOnce(Box<Ret>, String) -> Ret>(t: Tok, previous: Ret, constructor: R) -> (Ret, Tok) {
+fn parse_aliased<Ret: Into<Box<Ret>>, R: FnOnce(Box<Ret>, String) -> Ret>(
+    t: Tok,
+    previous: Ret,
+    constructor: R,
+) -> (Ret, Tok) {
     // Try to match the optional alias
     match t.get(0) {
         Some(Tokens::As) => {
@@ -247,7 +258,7 @@ fn parse_aliased<Ret: Into<Box<Ret>>, R: FnOnce(Box<Ret>, String) -> Ret>(t: Tok
                 panic!()
             }
         }
-        _ => (previous, t)
+        _ => (previous, t),
     }
 }
 
@@ -263,7 +274,6 @@ fn match1(t: Tok, a: Tokens) -> Tok {
     assert_eq!(t[0], a);
     &t[1..]
 }
-
 
 fn parse_column_list(t: Tok) -> (Vec<ColumnExpr>, Tok) {
     let (first, rest) = parse_column_expr(t);
@@ -281,9 +291,6 @@ fn parse_column_list(t: Tok) -> (Vec<ColumnExpr>, Tok) {
 }
 
 const TESTQUERY: &'static str = "SELECT DISTINCT bool(int(id)),tele AS telephone_alias, address FROM (SELECT tele AS telephone_alias2 FROM subtable) AS subtable WHERE 3 * ((id + -1) + tele) >= tele";
-
-
-
 
 #[derive(Debug)]
 pub enum TableExpression {
@@ -307,12 +314,10 @@ fn parse_table_expr(t: Tok) -> (TableExpression, Tok) {
             let t = match1(t, Tokens::RParens);
             (TableExpression::SelectQuery(select), t)
         }
-        _ => {
-            match &t[0] {
-                Tokens::String(a) => (TableExpression::NamedTable(a.to_string()), &t[1..]),
-                _ => unreachable!()
-            }
-        }
+        _ => match &t[0] {
+            Tokens::String(a) => (TableExpression::NamedTable(a.to_string()), &t[1..]),
+            _ => unreachable!(),
+        },
     };
     parse_aliased(t, table, TableExpression::Aliased)
 }
@@ -332,15 +337,20 @@ fn parse_select_stmt(t: Tok) -> (SelectQuery, Tok) {
         whereexp
     });
 
-    println!("select columns {:?} from {:?} where {:?}", list, table_expression, where_exp);
-    (SelectQuery {
-        distinct,
-        column_list: list,
-        where_exp,
-        from: table_expression.into(),
-    }, t)
+    println!(
+        "select columns {:?} from {:?} where {:?}",
+        list, table_expression, where_exp
+    );
+    (
+        SelectQuery {
+            distinct,
+            column_list: list,
+            where_exp,
+            from: table_expression.into(),
+        },
+        t,
+    )
 }
-
 
 fn lex(s: String) -> Vec<Tokens> {
     use Tokens::*;
@@ -356,25 +366,28 @@ fn lex(s: String) -> Vec<Tokens> {
         prev_index = index + 1;
     }
     tokens.push(&s[prev_index..]);
-    let tokens: Vec<_> = tokens.drain_filter(|&mut a| !matches!(a, "" | " ")).collect();
-    tokens.iter().map(|&a| match a {
-        "SELECT" | "select" => Select,
-        "FROM" | "from" => From,
-        "WHERE" | "where" => Where,
-        "(" => LParens,
-        "AS" => As,
-        ")" => RParens,
-        "," => Comma,
-        "*" => Multiply,
-        "-" => Dash,
-        "+" => Plus,
-        ">=" => Gt,
-        "<=" => Lt,
-        _ if a.chars().all(|c| c.is_numeric()) => Number(a.parse::<u64>().unwrap()),
-        _ => {
-            Tokens::str(a)
-        }
-    }).collect()
+    let tokens: Vec<_> = tokens
+        .drain_filter(|&mut a| !matches!(a, "" | " "))
+        .collect();
+    tokens
+        .iter()
+        .map(|&a| match a {
+            "SELECT" | "select" => Select,
+            "FROM" | "from" => From,
+            "WHERE" | "where" => Where,
+            "(" => LParens,
+            "AS" => As,
+            ")" => RParens,
+            "," => Comma,
+            "*" => Multiply,
+            "-" => Dash,
+            "+" => Plus,
+            ">=" => Gt,
+            "<=" => Lt,
+            _ if a.chars().all(|c| c.is_numeric()) => Number(a.parse::<u64>().unwrap()),
+            _ => Tokens::str(a),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -384,7 +397,17 @@ mod tests {
     #[test]
     fn test_parse_expr() {
         use Tokens::*;
-        dbg!(parse_expr(&[Tokens::str("test"), Multiply, Tokens::str("telephone"), EqualsEquals, Tokens::str("id"), Plus, Number(1), Multiply, Number(10)]));
+        dbg!(parse_expr(&[
+            Tokens::str("test"),
+            Multiply,
+            Tokens::str("telephone"),
+            EqualsEquals,
+            Tokens::str("id"),
+            Plus,
+            Number(1),
+            Multiply,
+            Number(10)
+        ]));
     }
 
     #[test]
@@ -402,11 +425,7 @@ mod tests {
         let lexed = lex("SELECT id, tele FROM table".to_string());
         let (stmt, tok) = dbg!(parse_select_stmt(&lexed));
 
-
         let columns = ["id", "tel"];
-
-
-
 
         /* Compile to
         Pi_{id, tele} (table)
@@ -417,18 +436,64 @@ mod tests {
     #[test]
     fn test_select() {
         use Tokens::*;
-        let t1 = [Select, Tokens::str("int"), LParens, Tokens::str("id"), RParens, Comma, Tokens::str("tele"), Comma, Tokens::str("address"),
-            From, LParens, Select, Tokens::str("int"), LParens, Tokens::str("id"), RParens, Comma, Tokens::str("tele"), Comma, Tokens::str("address"),
-            From, Tokens::str("table_name"), RParens,
-            Where, Tokens::str("id"), Plus, Number(1), EqualsEquals, Tokens::str("tele")];
+        let t1 = [
+            Select,
+            Tokens::str("int"),
+            LParens,
+            Tokens::str("id"),
+            RParens,
+            Comma,
+            Tokens::str("tele"),
+            Comma,
+            Tokens::str("address"),
+            From,
+            LParens,
+            Select,
+            Tokens::str("int"),
+            LParens,
+            Tokens::str("id"),
+            RParens,
+            Comma,
+            Tokens::str("tele"),
+            Comma,
+            Tokens::str("address"),
+            From,
+            Tokens::str("table_name"),
+            RParens,
+            Where,
+            Tokens::str("id"),
+            Plus,
+            Number(1),
+            EqualsEquals,
+            Tokens::str("tele"),
+        ];
         parse_select_stmt(&t1);
     }
 
     #[test]
     fn test1() {
         use Tokens::*;
-        dbg!(parse_column_expr(&[LParens, LParens, Number(3), Multiply, Number(3), RParens, Plus, Number(5), Plus, Number(7), RParens, Multiply, Number(100)]));
-        dbg!(parse_column_expr(&[Tokens::str("int"), LParens, Tokens::str("idcol"), RParens]));
+        dbg!(parse_column_expr(&[
+            LParens,
+            LParens,
+            Number(3),
+            Multiply,
+            Number(3),
+            RParens,
+            Plus,
+            Number(5),
+            Plus,
+            Number(7),
+            RParens,
+            Multiply,
+            Number(100)
+        ]));
+        dbg!(parse_column_expr(&[
+            Tokens::str("int"),
+            LParens,
+            Tokens::str("idcol"),
+            RParens
+        ]));
     }
 
     #[test]
@@ -456,9 +521,4 @@ mod tests {
     fn take_to_delimiter_test() {
         assert_eq!(take_to_delimiter("fdsa?428dsvc", b'?'), Ok("fdsa"))
     }
-
-
-
-
-
 }

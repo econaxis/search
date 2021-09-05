@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use super::mvcc_metadata::WriteIntentStatus;
 use crate::timestamp::Timestamp;
-use std::sync::{RwLock};
+use std::sync::RwLock;
 
-use parking_lot::{Mutex};
+use parking_lot::Mutex;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Eq, PartialEq, Hash, Debug, Copy, Clone)]
@@ -15,10 +15,12 @@ pub struct LockDataRef {
 
 impl LockDataRef {
     pub fn debug_new(id: u64) -> Self {
-        Self {id, timestamp: Timestamp::from(id)}
+        Self {
+            id,
+            timestamp: Timestamp::from(id),
+        }
     }
 }
-
 
 impl TransactionLockData {
     pub fn get_write_intent(&self) -> WriteIntentStatus {
@@ -45,8 +47,17 @@ impl IntentMap {
         Self::default()
     }
 
-    pub fn set_txn_status(&self, txn: LockDataRef, status: WriteIntentStatus) -> Result<(), String> {
-        let prev = self.0.write().unwrap().insert(txn, TransactionLockData(status)).map(|a| a.0);
+    pub fn set_txn_status(
+        &self,
+        txn: LockDataRef,
+        status: WriteIntentStatus,
+    ) -> Result<(), String> {
+        let prev = self
+            .0
+            .write()
+            .unwrap()
+            .insert(txn, TransactionLockData(status))
+            .map(|a| a.0);
         if prev == Some(WriteIntentStatus::Pending) || status == WriteIntentStatus::Aborted {
             Ok(())
         } else {
@@ -78,10 +89,7 @@ impl IntentMap {
     pub fn make_write_txn_with_time(&self, timestamp: Timestamp, id: u64) -> LockDataRef {
         let txn = TransactionLockData(WriteIntentStatus::Pending);
 
-        let txnref = LockDataRef {
-            id,
-            timestamp,
-        };
+        let txnref = LockDataRef { id, timestamp };
         self.0.write().unwrap().insert(txnref, txn);
         txnref
     }

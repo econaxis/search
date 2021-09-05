@@ -15,7 +15,10 @@ pub fn apply_wal_txn_checked(waltxn: WalTxn, ctx: &DbContext) {
                 txn.write(&ctx, &k, v).unwrap();
             }
             Operation::Read(k, v) => {
-                let v1 = txn.read_mvcc(&ctx, &k).map_err(|err| format!("{} {}", err, k.as_str())).unwrap();
+                let v1 = txn
+                    .read_mvcc(&ctx, &k)
+                    .map_err(|err| format!("{} {}", err, k.as_str()))
+                    .unwrap();
                 let value1 = v1.get_val();
                 if value1 != &v {
                     println!("read error! non matching {:?} {:?}", value1, v);

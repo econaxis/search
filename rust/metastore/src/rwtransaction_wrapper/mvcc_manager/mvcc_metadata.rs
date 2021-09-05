@@ -1,10 +1,10 @@
 use std::fmt::{Debug, Display, Formatter};
 
 use super::lock_data_manager::{IntentMap, LockDataRef};
-use crate::timestamp::Timestamp;
-use serde::{Deserialize, Serialize};
-use crate::DbContext;
 use crate::rwtransaction_wrapper::ValueWithMVCC;
+use crate::timestamp::Timestamp;
+use crate::DbContext;
+use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::sync::Mutex;
 
@@ -16,9 +16,7 @@ pub enum WriteIntentError {
     Other(String),
 }
 
-
 crate::custom_error_impl!(WriteIntentError);
-
 
 impl WriteIntentError {
     pub fn tostring(self) -> String {
@@ -58,9 +56,7 @@ impl MVCCMetadata {
         }
     }
 
-    pub(super) fn get_write_intents(
-        &self,
-    ) -> Option<WriteIntent> {
+    pub(super) fn get_write_intents(&self) -> Option<WriteIntent> {
         self.cur_write_intent.get()
     }
 
@@ -74,9 +70,9 @@ impl MVCCMetadata {
             None => Ok(()),
             Some(wi) if wi.associated_transaction == cur_txn => Ok(()),
             Some(WriteIntent {
-                     associated_transaction,
-                     was_commited
-                 }) => {
+                associated_transaction,
+                was_commited,
+            }) => {
                 match txnmap
                     .get_by_ref(&associated_transaction)
                     .unwrap()
@@ -86,10 +82,12 @@ impl MVCCMetadata {
                     WriteIntentStatus::Committed => {
                         // All good, we write after the txn has committed
                         // todo: remove committed intent
-                        Err(WriteIntentError::Committed(WriteIntent { associated_transaction, was_commited }))
+                        Err(WriteIntentError::Committed(WriteIntent {
+                            associated_transaction,
+                            was_commited,
+                        }))
                     }
                     WriteIntentStatus::Aborted => {
-
                         // Transaction has been aborted, so we are reading an aborted value. Therefore, we should also abort this current transaction.
                         Err(WriteIntentError::Aborted(associated_transaction))
                     }
@@ -101,10 +99,7 @@ impl MVCCMetadata {
         }
     }
 
-    pub(super) fn check_write(
-        &self,
-        cur_txn: LockDataRef,
-    ) -> Result<(), String> {
+    pub(super) fn check_write(&self, cur_txn: LockDataRef) -> Result<(), String> {
         if self.end_ts != Timestamp::maxtime() {
             // This record is not the latest, so we can't write to it.
             return Err("Trying to write on a historical MVCC record".to_string());
@@ -135,9 +130,9 @@ impl MVCCMetadata {
         assert!(self.last_read.get() <= timestamp);
         self.last_read.set(timestamp);
 
-
-        old.cur_write_intent.compare_swap_none(self.cur_write_intent.get().clone(), None).unwrap();
-
+        old.cur_write_intent
+            .compare_swap_none(self.cur_write_intent.get().clone(), None)
+            .unwrap();
 
         // Because we're creating a newer value, newer value must be not committed
         // todo! design a better api so we remove get_mut functoin
@@ -170,17 +165,14 @@ impl MVCCMetadata {
             self.last_read.set(timestamp);
         }
     }
-
 }
 
-
 pub struct WriteIntentMutex(Option<WriteIntent>, Mutex<()>);
-impl Clone for WriteIntentMutex{
+impl Clone for WriteIntentMutex {
     fn clone(&self) -> Self {
         Self(self.0.clone(), Mutex::new(()))
     }
 }
-
 
 impl PartialEq for WriteIntentMutex {
     fn eq(&self, other: &Self) -> bool {
@@ -189,10 +181,14 @@ impl PartialEq for WriteIntentMutex {
 }
 
 impl WriteIntentMutex {
-    pub(crate) fn get_mut(&mut self) -> Option<&mut WriteIntent>{
+    pub(crate) fn get_mut(&mut self) -> Option<&mut WriteIntent> {
         self.0.as_mut()
     }
-    pub(crate) fn compare_swap_none(&mut self, compare: Option<WriteIntent>, swap: Option<WriteIntent>) -> Result<(), String> {
+    pub(crate) fn compare_swap_none(
+        &mut self,
+        compare: Option<WriteIntent>,
+        swap: Option<WriteIntent>,
+    ) -> Result<(), String> {
         let _l = self.1.lock();
         if self.0 == compare {
             let oldvalue = std::mem::replace(&mut self.0, swap.clone());
@@ -212,7 +208,6 @@ impl WriteIntentMutex {
     pub fn new(wi: Option<WriteIntent>) -> Self {
         Self(wi, Mutex::new(()))
     }
-
 }
 
 impl Default for WriteIntentMutex {
@@ -223,12 +218,12 @@ impl Default for WriteIntentMutex {
 
 impl Debug for WriteIntentMutex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.get().as_ref()
+        self.get()
+            .as_ref()
             .map(|a| f.write_fmt(format_args!("{:?}", a)));
         Ok(())
     }
 }
-
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MVCCMetadata {
@@ -242,12 +237,11 @@ pub struct MVCCMetadata {
 
 impl PartialEq for MVCCMetadata {
     fn eq(&self, other: &Self) -> bool {
-        self.begin_ts == other.begin_ts &&
-            self.end_ts == other.end_ts &&
-            self.last_read == other.last_read
+        self.begin_ts == other.begin_ts
+            && self.end_ts == other.end_ts
+            && self.last_read == other.last_read
     }
 }
-
 
 // Getters and setters for the struct
 // We don't want public API access on this thing, because there's no locking whatsoever.
@@ -257,19 +251,24 @@ impl MVCCMetadata {
         self.begin_ts
     }
 
-    pub(crate) fn get_prev_mvcc<'a>(&self, ctx: &'a DbContext) -> Result<&'a mut ValueWithMVCC, String> {
+    pub(crate) fn get_prev_mvcc<'a>(
+        &self,
+        ctx: &'a DbContext,
+    ) -> Result<&'a mut ValueWithMVCC, String> {
         // Don't want to return erroneous values when another thread is doing a swap/mutating this value.
         // Because we're just reading previous_mvcc_value and not trusting that the actual String value is correct, we can bypass putting down a write intent.
         // This usually happens for reads.
 
         // Check that there are no write intents
-        self.previous_mvcc_value.map(|a| {
-            ctx.old_values_store.get_mut(a)
-        }).ok_or_else(|| "MVCC Value doesn't exist".to_string())
+        self.previous_mvcc_value
+            .map(|a| ctx.old_values_store.get_mut(a))
+            .ok_or_else(|| "MVCC Value doesn't exist".to_string())
     }
 
     pub(crate) fn remove_prev_mvcc(&self, ctx: &DbContext) -> ValueWithMVCC {
-        ctx.old_values_store.get_mut(self.previous_mvcc_value.unwrap()).clone()
+        ctx.old_values_store
+            .get_mut(self.previous_mvcc_value.unwrap())
+            .clone()
     }
     pub(crate) fn insert_prev_mvcc(&mut self, p0: usize) {
         self.previous_mvcc_value.replace(p0);
@@ -293,7 +292,6 @@ impl MVCCMetadata {
 mod tests {
     use crate::object_path::ObjectPath;
     use crate::rwtransaction_wrapper::ReplicatedTxn;
-    
 
     use super::*;
     use crate::db_context::create_replicated_context;
@@ -363,7 +361,6 @@ pub struct WriteIntent {
     pub associated_transaction: LockDataRef,
     pub was_commited: bool,
 }
-
 
 impl Display for MVCCMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

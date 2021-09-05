@@ -7,7 +7,7 @@ pub use mvcc_manager::IntentMap;
 pub use mvcc_manager::MVCCMetadata;
 use mvcc_manager::WriteIntentStatus;
 pub use mvcc_manager::{LockDataRef, UnlockedWritableMVCC, ValueWithMVCC};
-
+use std::assert_matches::debug_assert_matches;
 use log::debug;
 
 pub struct ReplicatedTxn<'a> {
@@ -57,7 +57,6 @@ impl Transaction {
 
         let mut keys1 = Vec::new();
         for (key, value_ptr) in range {
-            coz::progress!();
             match mvcc_manager::read_reference(ctx, value_ptr, self.txn) {
                 Ok(kv2) => {
                     keys1.push((key.clone(), kv2));

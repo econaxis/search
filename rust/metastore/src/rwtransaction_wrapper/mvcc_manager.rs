@@ -88,7 +88,6 @@ fn get_latest_mvcc_value<'a>(
     // It's also true in this DB, but low-level locking comes in when setting atomically timestamp values, or
     // changing the String atomically. In these cases, we must lock the value for a brief moment to do operations, then unlock it.
     // Without this, readers might read invalid memory and will segfault.
-    coz::scope!("get latest");
 
     db.get_mut_with_lock(key)
 }
@@ -108,7 +107,6 @@ pub fn read_reference(
         ctx: &'a DbContext,
         txn: LockDataRef,
     ) -> Result<R<'a>, ReadError> {
-        coz::scope!("read");
 
         let read_latest = res.get_readable_fix_errors(ctx, txn);
 

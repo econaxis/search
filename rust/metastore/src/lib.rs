@@ -30,7 +30,11 @@ pub mod object_path;
 pub mod parsing;
 pub mod rwtransaction_wrapper;
 
-pub use rwtransaction_wrapper::TypedValue;
+pub use replicated_slave::SelfContainedDb;
+pub use rwtransaction_wrapper::LockDataRef;
+pub use rpc_handler::DatabaseInterface;
+pub use rpc_handler::NetworkResult;
+pub use rwtransaction_wrapper::{ValueWithMVCC, TypedValue};
 
 #[macro_use]
 pub mod test_transaction_generate;

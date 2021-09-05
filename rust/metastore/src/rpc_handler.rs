@@ -13,7 +13,7 @@ impl From<NetworkError> for String {
         a.0.to_string()
     }
 }
-pub struct NetworkResult<R, E>(Result<Result<R, E>, NetworkError>);
+pub struct NetworkResult<R, E>(pub Result<Result<R, E>, NetworkError>);
 
 impl<R, E> NetworkResult<R, E> {
     pub fn and(self, res: NetworkResult<R, E>) -> NetworkResult<R, E> {

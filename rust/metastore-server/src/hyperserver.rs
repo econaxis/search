@@ -5,6 +5,9 @@ use serde_json::{Value as JSONValue};
 
 mod hyper_error_converter;
 mod json_request_writers;
+mod replicator_entrypoint;
+mod grpc_defs;
+
 use metastore::{DbContext};
 use std::future::Future;
 use hyper::service::{make_service_fn, service_fn};

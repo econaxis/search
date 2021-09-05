@@ -10,10 +10,21 @@ metastore = {path = "../metastore"}
 futures = "*"
 tokio = { version = "^1", features = ["full"] }
 hyper = { version = "*", features = ["full"] }
+tonic = "*"
+prost = "*"
 serde_json = "*"
 quickcheck = "*"
 quickcheck_macros = "1.0.0"
+env_logger = "*"
+log = "*"
+
+[build-dependencies]
+tonic-build = "*"
 
 [[bin]]
 name = "metastore-server"
 path="src/hyperserver.rs"
+
+[[bin]]
+name = "grpc-server"
+path="src/grpc_server.rs"

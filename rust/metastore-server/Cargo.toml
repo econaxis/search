@@ -27,4 +27,4 @@ path="src/hyperserver.rs"
 
 [[bin]]
 name = "grpc-server"
-path="src/grpc_server.rs"
+path= "src/test_grpc_server.rs"

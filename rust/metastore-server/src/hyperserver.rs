@@ -7,6 +7,7 @@ mod hyper_error_converter;
 mod json_request_writers;
 mod replicator_entrypoint;
 mod grpc_defs;
+mod async_replication_handler;
 
 use metastore::{DbContext};
 use std::future::Future;

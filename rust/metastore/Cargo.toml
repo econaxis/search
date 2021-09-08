@@ -16,6 +16,7 @@ crossbeam = "*"
 log = "*"
 parking_lot = "*"
 quickcheck_macros = "1.0.0"
+bztree = "0.1.0"
 
 [dev-dependencies]
 complexity = "*"

@@ -13,6 +13,7 @@ pub fn setup_logging() {
         .filter_level(LevelFilter::Debug)
         .filter_module("h2", LevelFilter::Warn)
         .filter_module("hyper", LevelFilter::Warn)
+        .filter_module("tower", LevelFilter::Warn)
         .init();
     println!("Using env logger");
 }
@@ -77,9 +78,9 @@ impl grpc_defs::replicator_server::Replicator for FollowerGRPCServer {
 
     async fn serve_write(&self, request: Request<WriteRequest>) -> Result<Response<WriteError>, Status> {
         let (txn, key, value) = request.into_inner().into();
+        log::debug!("Written {} {}", key, &value);
         self.0.serve_write(txn, &key, value);
 
-        log::debug!("Written {}", key);
         Ok(Response::new(WriteError { res: None }))
     }
 
@@ -102,9 +103,12 @@ impl grpc_defs::replicator_server::Replicator for FollowerGRPCServer {
 
 use futures::executor::block_on;
 use std::env;
+use crate::grpc_defs::replicator_server::ReplicatorServer;
+use tokio::runtime::Runtime;
+use std::net::SocketAddr;
 
 
-type Client = grpc_defs::replicator_client::ReplicatorClient<tonic::transport::Channel>;
+pub type Client = grpc_defs::replicator_client::ReplicatorClient<tonic::transport::Channel>;
 
 impl DatabaseInterface for Client {
     fn new_transaction(&self, txn: &LockDataRef) -> NetworkResult<(), String> {
@@ -136,4 +140,16 @@ impl DatabaseInterface for Client {
         block_on(Client::abort(&mut self.clone(), LockDataRefId { id: p0.id }));
         NetworkResult::default()
     }
+}
+
+pub fn generate_follower(addr: SocketAddr) -> std::thread::JoinHandle<()> {
+    let greeter = FollowerGRPCServer::default();
+
+    std::thread::spawn(move || {
+        let handle = Server::builder()
+            .add_service(ReplicatorServer::new(greeter))
+            .serve(addr);
+
+        Runtime::new().unwrap().block_on(handle);
+    })
 }

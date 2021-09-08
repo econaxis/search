@@ -36,6 +36,9 @@ impl Default for NetworkResult<(), String> {
     }
 }
 
+
+// todo: make an interface for GRPC only, specifically for async stuff.
+// todo: terminate instruction.
 pub trait DatabaseInterface {
     fn new_transaction(&self, txn: &LockDataRef) -> NetworkResult<(), String>;
     fn serve_read(

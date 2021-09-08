@@ -28,7 +28,7 @@ unsafe impl Send for MutBTreeMap {}
 impl Default for MutBTreeMap {
     fn default() -> Self {
         Self {
-            btree: RwLock::new(UnsafeCell::new(BTreeMap::new())),
+            btree: RwLock::new(UnsafeCell::new(MapType::new())),
             time: AtomicU64::new(Timestamp::mintime().0),
         }
     }
@@ -41,23 +41,23 @@ impl MutBTreeMap {
         Self::default()
     }
 
-    pub fn range<R>(&self, range: R) -> Range<'_, ObjectPath, ValueWithMVCC>
+    pub fn range<'g, R: 'g>(&'g self, range: R) -> impl DoubleEndedIterator<Item = (&'g ObjectPath, &'g ValueWithMVCC)>
     where
-        R: RangeBounds<ObjectPath>,
+        R: RangeBounds<ObjectPath> + Clone,
     {
         unsafe { &*self.btree.read().unwrap().get() }.range(range)
     }
 
-    pub fn range_with_lock<R>(
-        &self,
+    pub fn range_with_lock<'a, R>(
+        &'a self,
         range: R,
         time: Timestamp,
     ) -> (
         RwLockReadGuard<'_, UnsafeMapType>,
-        Range<'_, ObjectPath, ValueWithMVCC>,
+        impl DoubleEndedIterator<Item = (&'a ObjectPath, &'a ValueWithMVCC)>,
     )
     where
-        R: RangeBounds<ObjectPath>,
+        R: RangeBounds<ObjectPath> + Clone + 'a,
     {
         let lock = self.btree.read().unwrap();
         let range = unsafe { &*lock.get() }.range(range);
@@ -84,7 +84,7 @@ impl MutBTreeMap {
     pub fn get_mut<T>(&self, key: &T) -> Option<&mut ValueWithMVCC>
     where
         ObjectPath: Borrow<T> + Ord,
-        T: Ord + ?Sized,
+        T: Ord + ?Sized + Clone,
     {
         unsafe { &mut *self.btree.read().unwrap().get() }
             .get_mut(key)
@@ -155,7 +155,7 @@ impl MutBTreeMap {
         }
     }
 
-    pub fn iter(&self) -> Range<ObjectPath, ValueWithMVCC> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&'_ ObjectPath,&'_  ValueWithMVCC)> {
         let min = Bound::Included(ObjectPath::new("\x01"));
         let max = Bound::Included(ObjectPath::new("\x7f"));
 

@@ -109,6 +109,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 
 [[package]]
+name = "bztree"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a48def2bda16eab5fd3c9cd0a8b639cee4175f2e193e772fb05e410c08cec9e"
+dependencies = [
+ "crossbeam-epoch",
+ "mwcas",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -604,6 +614,7 @@ version = "0.1.0"
 dependencies = [
  "ansi_term 0.12.1",
  "anyhow",
+ "bztree",
  "complexity",
  "crossbeam",
  "lazy_static",
@@ -666,6 +677,15 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "mwcas"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e7495c05c9091e405ef6ed4dd31237ab5d5a74fcd6e8bc9b04d4fe6d4667c4f"
+dependencies = [
+ "crossbeam-epoch",
+]
 
 [[package]]
 name = "namesdb"

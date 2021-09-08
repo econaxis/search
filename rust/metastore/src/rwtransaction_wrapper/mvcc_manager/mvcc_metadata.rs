@@ -70,9 +70,9 @@ impl MVCCMetadata {
             None => Ok(()),
             Some(wi) if wi.associated_transaction == cur_txn => Ok(()),
             Some(WriteIntent {
-                associated_transaction,
-                was_commited,
-            }) => {
+                     associated_transaction,
+                     was_commited,
+                 }) => {
                 match txnmap
                     .get_by_ref(&associated_transaction)
                     .unwrap()
@@ -168,6 +168,7 @@ impl MVCCMetadata {
 }
 
 pub struct WriteIntentMutex(Option<WriteIntent>, Mutex<()>);
+
 impl Clone for WriteIntentMutex {
     fn clone(&self) -> Self {
         Self(self.0.clone(), Mutex::new(()))
@@ -185,14 +186,17 @@ impl WriteIntentMutex {
         self.0.as_mut()
     }
     pub(crate) fn compare_swap_none(
-        &mut self,
+        &self,
         compare: Option<WriteIntent>,
         swap: Option<WriteIntent>,
     ) -> Result<(), String> {
         let _l = self.1.lock();
         if self.0 == compare {
-            let oldvalue = std::mem::replace(&mut self.0, swap.clone());
-            assert_eq!(oldvalue, compare);
+            unsafe {
+                let oldvalue = std::ptr::read(&self.0);
+                std::ptr::write(&self.0 as *const _ as *mut _, swap.clone());
+                assert_eq!(oldvalue, compare);
+            }
             assert_eq!(self.0, swap);
             Ok(())
         } else if self.0 == swap {

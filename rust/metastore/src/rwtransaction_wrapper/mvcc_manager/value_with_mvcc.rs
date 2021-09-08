@@ -18,6 +18,7 @@ pub struct ValueWithMVCC {
     lock: MyMutex<()>,
     _marker: PhantomData<UnsafeCell<()>>,
 }
+unsafe impl Sync for ValueWithMVCC{}
 
 impl Clone for ValueWithMVCC {
     fn clone(&self) -> Self {
@@ -182,7 +183,7 @@ fn fixup_write_intents(
 }
 
 impl ValueWithMVCC {
-    pub fn clear_committed_intent(&mut self, txn: LockDataRef) {
+    pub fn clear_committed_intent(&self, txn: LockDataRef) {
         self.meta.cur_write_intent.compare_swap_none(
             Some(WriteIntent {
                 associated_transaction: txn,

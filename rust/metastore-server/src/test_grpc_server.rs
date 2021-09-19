@@ -1,47 +1,49 @@
-use tonic::transport::{Server, Error};
+use std::convert::Infallible;
+
+use tokio::runtime::Runtime;
+use tonic::transport::{Error, Server};
+
+use follower_grpc_server::FollowerGRPCServer;
+use grpc_defs::replicator_server::ReplicatorServer;
+use metastore::{DatabaseInterface, LockDataRef};
+use replicator_entrypoint::setup_logging;
+
+use crate::replicator_entrypoint::{Client, generate_threaded_follower};
 
 mod replicator_entrypoint;
 mod grpc_defs;
-
-use grpc_defs::replicator_server::ReplicatorServer;
-use replicator_entrypoint::{FollowerGRPCServer, setup_logging};
-use tokio::runtime::Runtime;
-use crate::replicator_entrypoint::{generate_follower, Client};
-use metastore::{DatabaseInterface, LockDataRef};
-use std::convert::Infallible;
-
+mod follower_grpc_server;
 
 fn main() {
     setup_logging();
-    let handle = generate_follower("0.0.0.0:50051".parse().unwrap());
-
     let mut rt = Runtime::new().unwrap();
+    let client = generate_threaded_follower("0.0.0.0:50051");
+    let client = rt.block_on(client);
+
 
     rt.block_on(async {
         println!("connecting");
-        let client = Client::connect("http://0.0.0.0:50051").await.unwrap();
-        let a: &dyn DatabaseInterface = &client;
+        let a: &dyn DatabaseInterface = client.as_ref();
         let txn = LockDataRef::debug_new(5);
         client.new_transaction(&txn)?;
         a.serve_write(txn, &"k".into(), "value".into())?;
 
+        a.commit(txn)?;
         Result::Ok::<(), String>(())
     }).unwrap();
 
-    handle.join();
 }
 
 #[cfg(test)]
 #[test]
 fn test_grpc() {
-    let handle = generate_follower("0.0.0.0:50051".parse().unwrap());
-
+    let client = generate_threaded_follower("0.0.0.0:50051".parse().unwrap());
     let mut rt = Runtime::new().unwrap();
 
-    rt.block_on(async {
+    rt.block_on(async move {
+        let client = client.await;
         println!("connecting");
-        let client = Client::connect("http://0.0.0.0:50051").await.unwrap();
-        let a = &client as &dyn DatabaseInterface;
+        let a: &dyn DatabaseInterface = client.as_ref();
         let txn = LockDataRef::debug_new(5);
         client.new_transaction(&txn)?;
         a.serve_write(txn, &"k".into(), "value".into())?;

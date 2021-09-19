@@ -8,6 +8,7 @@ mod json_request_writers;
 mod replicator_entrypoint;
 mod grpc_defs;
 mod async_replication_handler;
+mod follower_grpc_server;
 
 use metastore::{DbContext};
 use std::future::Future;

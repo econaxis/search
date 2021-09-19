@@ -28,8 +28,8 @@ enum PrimValueOrOther {
 }
 
 pub fn json_to_map(json: Value) -> Vec<(ObjectPath, PrimitiveValue)> {
-    use Value as V;
-    use PrimitiveValue as PV;
+    type V = Value;
+    type PV = PrimitiveValue;
 
     let mut res = Vec::new();
 
@@ -75,10 +75,15 @@ pub fn json_to_map(json: Value) -> Vec<(ObjectPath, PrimitiveValue)> {
                         elems.push_back(length);
                         elems
                     }
-                    Value::Object(obj) => obj
-                        .into_iter()
-                        .map(|(key, value)| (value, prefix.concat(key)))
-                        .collect(),
+                    Value::Object(obj) => {
+                        let type_specifier = (Value::String("object-type-placeholder".to_string()), prefix.clone());
+                        let mut result: VecDeque<_> = obj
+                            .into_iter()
+                            .map(|(key, value)| (value, prefix.concat(key)))
+                            .collect();
+                        result.push_back(type_specifier);
+                        result
+                    }
                     _ => unreachable!(),
                 };
 
@@ -125,8 +130,11 @@ pub fn create_materialized_path<RawValue: ToString>(
         Value::Object(..) => (),
         Value::Null => *json = Value::Object(serde_json::Map::new()),
         _ => {
-            println!("{:?}, {:?}", json, path);
-            panic!("JSON value already exists and is not object, ")
+            if json.as_str() != Some("object-type-placeholder") {
+                println!("{:?}, {:?}", json, path);
+                panic!("JSON value already exists and is not object, ")
+            }
+            *json = Value::Object(serde_json::Map::new());
         }
     };
 

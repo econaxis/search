@@ -1,11 +1,21 @@
-use tonic::{transport::Server, Response, Request, Status, Code};
-use crate::grpc_defs;
-use crate::grpc_defs::{LockDataRefId, Empty, ReadRequest, Value, ValueRanged, WriteRequest, WriteError, Kv};
-use metastore::{SelfContainedDb, LockDataRef, DatabaseInterface, ObjectPath, TypedValue, NetworkResult, ValueWithMVCC};
+use std::env;
+use std::net::SocketAddr;
+use std::time::Duration;
 
-pub struct FollowerGRPCServer(SelfContainedDb);
-
+use futures::executor::block_on;
 use log::LevelFilter;
+use tokio::runtime::Runtime;
+use tonic::{Code, Request, Response, Status, transport::Server};
+
+use metastore::{DatabaseInterface, LockDataRef, NetworkResult, ObjectPath, SelfContainedDb, TypedValue, ValueWithMVCC};
+
+use crate::follower_grpc_server::FollowerGRPCServer;
+use crate::grpc_defs;
+use crate::grpc_defs::{Empty, Kv, LockDataRefId, ReadRequest, Value, ValueRanged, WriteError, WriteRequest};
+use crate::grpc_defs::replicator_server::ReplicatorServer;
+use std::str::FromStr;
+use std::convert::TryFrom;
+use tonic::transport::Endpoint;
 
 pub fn setup_logging() {
     env_logger::Builder::new().format_timestamp_millis()
@@ -18,113 +28,27 @@ pub fn setup_logging() {
     println!("Using env logger");
 }
 
-impl Default for FollowerGRPCServer {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-impl From<LockDataRefId> for LockDataRef {
-    fn from(request: LockDataRefId) -> Self {
-        LockDataRef { id: request.id, timestamp: request.id.into() }
-    }
-}
-
-impl From<WriteRequest> for (LockDataRef, ObjectPath, TypedValue) {
-    fn from(a: WriteRequest) -> Self {
-        let txn: LockDataRef = a.txn.unwrap().into();
-        let kv = a.kv.unwrap();
-        let key: ObjectPath = kv.key.into();
-        let value = TypedValue::from(kv.value);
-
-        (txn, key, value)
-    }
-}
-
-impl From<ReadRequest> for (LockDataRef, ObjectPath) {
-    fn from(a: ReadRequest) -> Self {
-        let ReadRequest { txn, key } = a;
-        let txn = LockDataRef::from(txn.unwrap());
-        let key = ObjectPath::from(key);
-        (txn, key)
-    }
-}
-
-#[tonic::async_trait]
-impl grpc_defs::replicator_server::Replicator for FollowerGRPCServer {
-    async fn new_with_time(&self, request: Request<LockDataRefId>) -> Result<Response<Empty>, Status> {
-        let request = request.into_inner();
-        let request = LockDataRef::from(request);
-
-        log::debug!("Creating transaction {:?}", request);
-        self.0.new_transaction(&request);
-
-        Ok(Response::new(Empty {}))
-    }
-
-    async fn serve_read(&self, request: Request<ReadRequest>) -> Result<Response<Value>, Status> {
-        let (lockdataref, key) = request.into_inner().into();
-        let res = self.0.serve_read(lockdataref, &key).
-            0.map_err(|err| Status::new(Code::Unavailable, "Unavailable"))?.unwrap();
-
-        let res = grpc_defs::value::Res::Val(res.into_inner().1.to_string());
-        let val = Value { res: Some(res) };
-        Ok(Response::new(val))
-    }
-
-    async fn serve_range_read(&self, request: Request<ReadRequest>) -> Result<Response<ValueRanged>, Status> {
-        todo!()
-    }
-
-    async fn serve_write(&self, request: Request<WriteRequest>) -> Result<Response<WriteError>, Status> {
-        let (txn, key, value) = request.into_inner().into();
-        log::debug!("Written {} {}", key, &value);
-        self.0.serve_write(txn, &key, value);
-
-        Ok(Response::new(WriteError { res: None }))
-    }
-
-    async fn commit(&self, request: Request<LockDataRefId>) -> Result<Response<Empty>, Status> {
-        let request: LockDataRef = request.into_inner().into();
-
-        self.0.commit(request);
-        log::debug!("Committed {}", request.id);
-
-        Ok(Response::new(Empty {}))
-    }
-
-    async fn abort(&self, request: Request<LockDataRefId>) -> Result<Response<Empty>, Status> {
-        let request: LockDataRef = request.into_inner().into();
-
-        self.0.abort(request);
-        Ok(Response::new(Empty {}))
-    }
-}
-
-use futures::executor::block_on;
-use std::env;
-use crate::grpc_defs::replicator_server::ReplicatorServer;
-use tokio::runtime::Runtime;
-use std::net::SocketAddr;
-
-
 pub type Client = grpc_defs::replicator_client::ReplicatorClient<tonic::transport::Channel>;
 
+// todo: implement async_database_interface specifically for this client and make a wrapper around
+// `n` (replication factor) number of clients to reduce latency.
 impl DatabaseInterface for Client {
     fn new_transaction(&self, txn: &LockDataRef) -> NetworkResult<(), String> {
+        log::debug!("(Localside) Creating new transaction {}", txn.id);
         block_on(self.clone().new_with_time(LockDataRefId { id: txn.id }));
         NetworkResult::default()
     }
 
     fn serve_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<ValueWithMVCC, String> {
-        todo!()
+        unimplemented!()
     }
 
     fn serve_range_read(&self, txn: LockDataRef, key: &ObjectPath) -> NetworkResult<Vec<(ObjectPath, ValueWithMVCC)>, String> {
-        todo!()
+        unimplemented!()
     }
 
     fn serve_write(&self, txn: LockDataRef, key: &ObjectPath, value: TypedValue) -> NetworkResult<(), String> {
+        log::debug!("(Localside) Doing serve_write {}", txn.id);
         let kv = Kv { key: key.to_string(), value: value.to_string() };
         let write = WriteRequest { txn: Option::from(LockDataRefId { id: txn.id }), kv: Some(kv) };
         block_on(Client::serve_write(&mut self.clone(), write));
@@ -132,6 +56,7 @@ impl DatabaseInterface for Client {
     }
 
     fn commit(&self, txn: LockDataRef) -> NetworkResult<(), String> {
+        log::debug!("(Localside) Doing commit {}", txn.id);
         block_on(Client::commit(&mut self.clone(), LockDataRefId { id: txn.id }));
         NetworkResult::default()
     }
@@ -142,14 +67,27 @@ impl DatabaseInterface for Client {
     }
 }
 
-pub fn generate_follower(addr: SocketAddr) -> std::thread::JoinHandle<()> {
+
+pub async fn generate_threaded_follower(addr: &str) -> Box<dyn DatabaseInterface> {
+    async fn wait_for_socket_open(addr: &str) {
+        while tokio::net::TcpStream::connect(addr).await.is_err() {}
+    }
+
+
     let greeter = FollowerGRPCServer::default();
 
+    let addr1 = addr.to_string();
     std::thread::spawn(move || {
         let handle = Server::builder()
             .add_service(ReplicatorServer::new(greeter))
-            .serve(addr);
+            .serve(SocketAddr::from_str(&addr1).unwrap());
 
         Runtime::new().unwrap().block_on(handle);
-    })
+    });
+
+    wait_for_socket_open(addr).await;
+
+    let addr = format!("http://{}", addr);
+    let client = Client::connect(Endpoint::try_from(addr).unwrap()).await.unwrap();
+    Box::new(client)
 }

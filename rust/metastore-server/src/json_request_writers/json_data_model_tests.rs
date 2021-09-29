@@ -8,8 +8,8 @@ mod tests {
     use super::super::json_processing::{
         check_valid_json, json_to_map, map_to_json, PrimitiveValue,
     };
-    use metastore::{ObjectPath, ReplicatedTxn};
     use crate::json_request_writers::read_json_request;
+    use metastore::{ObjectPath, ReplicatedTxn};
 
     #[derive(Clone, Debug)]
     struct ArbJson(pub Value);
@@ -146,17 +146,13 @@ mod tests {
 
         map.iter().for_each(|(path, _value)| {
             let new = path.as_str().strip_prefix("/user").unwrap();
-            let _a =
-                read_json_request(new, &ctx);
+            let _a = read_json_request(new, &ctx);
             let stripped = match new.strip_suffix('/') {
                 Some(x) => x,
                 None => new,
             };
             let _b = v.pointer(stripped).unwrap();
-            assert_eq!(
-                *v.pointer(stripped).unwrap(),
-                read_json_request(new, &ctx)
-            );
+            assert_eq!(*v.pointer(stripped).unwrap(), read_json_request(new, &ctx));
         });
 
         assert_eq!(value, v);

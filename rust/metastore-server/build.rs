@@ -1,5 +1,6 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let path = format!("{}/src/", std::env::var("CARGO_MANIFEST_DIR").unwrap());
     tonic_build::configure()
-        .out_dir("src/replicated_slave").compile(&["src/replicated_slave/grpc.proto"], &["src/replicated_slave"]).unwrap();
+        .out_dir(path).compile(&["src/grpc.proto"], &["src/"]).unwrap();
     Ok(())
 }

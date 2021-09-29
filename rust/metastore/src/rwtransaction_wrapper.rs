@@ -17,6 +17,7 @@ pub struct ReplicatedTxn<'a> {
 }
 
 // equivalent to RWTransactionWrapper but without the borrowing reference.
+#[derive(Debug)]
 pub struct Transaction {
     pub(crate) txn: LockDataRef,
     written_kv: Vec<(ObjectPath, ValueWithMVCC)>,

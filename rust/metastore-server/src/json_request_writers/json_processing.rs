@@ -40,16 +40,10 @@ pub fn json_to_map(json: Value) -> Vec<(ObjectPath, PrimitiveValue)> {
         let (obj, mut prefix) = obj_queue.pop_back().unwrap();
 
         let primvalue = match obj {
-            V::Number(n) => {
-                PrimValueOrOther::PrimitiveValue(PV::Number(n.as_f64().unwrap()))
-            }
+            V::Number(n) => PrimValueOrOther::PrimitiveValue(PV::Number(n.as_f64().unwrap())),
             V::String(str) => PrimValueOrOther::PrimitiveValue(PV::String(str)),
-            V::Bool(boolean) => {
-                PrimValueOrOther::PrimitiveValue(PV::Boolean(boolean))
-            }
-            V::Null => {
-                PrimValueOrOther::PrimitiveValue(PV::String("null".to_string()))
-            }
+            V::Bool(boolean) => PrimValueOrOther::PrimitiveValue(PV::Boolean(boolean)),
+            V::Null => PrimValueOrOther::PrimitiveValue(PV::String("null".to_string())),
             _ => PrimValueOrOther::Other(obj),
         };
 
@@ -76,7 +70,10 @@ pub fn json_to_map(json: Value) -> Vec<(ObjectPath, PrimitiveValue)> {
                         elems
                     }
                     Value::Object(obj) => {
-                        let type_specifier = (Value::String("object-type-placeholder".to_string()), prefix.clone());
+                        let type_specifier = (
+                            Value::String("object-type-placeholder".to_string()),
+                            prefix.clone(),
+                        );
                         let mut result: VecDeque<_> = obj
                             .into_iter()
                             .map(|(key, value)| (value, prefix.concat(key)))
@@ -156,12 +153,14 @@ pub fn create_materialized_path<RawValue: ToString>(
 
 #[cfg(test)]
 mod tests {
+    use crate::json_request_writers::json_processing::{
+        create_materialized_path, json_to_map, PrimitiveValue,
+    };
+    use metastore::db_context::create_replicated_context;
+    use metastore::{ObjectPath, ReplicatedTxn, TypedValue};
+    use serde_json::Value;
     use std::borrow::Cow;
     use std::borrow::Cow::Borrowed;
-    use serde_json::Value;
-    use crate::json_request_writers::json_processing::{create_materialized_path, PrimitiveValue, json_to_map};
-    use metastore::{ReplicatedTxn, ObjectPath, TypedValue};
-    use metastore::db_context::create_replicated_context;
 
     #[test]
     fn materialized_test() {
@@ -215,7 +214,8 @@ mod tests {
             .into_iter()
             .enumerate()
             .for_each(|(index, (path, value))| {
-                txn0.write(&path, TypedValue::from(value.to_string())).unwrap();
+                txn0.write(&path, TypedValue::from(value.to_string()))
+                    .unwrap();
             });
 
         txn0.commit();
@@ -223,10 +223,7 @@ mod tests {
 
         let mut txn2 = ReplicatedTxn::new(ctx);
         test_json().into_iter().for_each(|(path, value)| {
-            assert_eq!(
-                txn2.read(&path).unwrap().as_str(),
-                value.to_string()
-            );
+            assert_eq!(txn2.read(&path).unwrap().as_str(), value.to_string());
         });
         txn2.commit();
     }

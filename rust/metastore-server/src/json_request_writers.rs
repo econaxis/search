@@ -5,7 +5,7 @@ use serde_json::{Value as JSONValue, Value};
 
 use metastore::object_path::ObjectPath;
 use metastore::rwtransaction_wrapper::ReplicatedTxn;
-use metastore::DbContext;
+use metastore::{DatabaseInterface, DbContext, LockDataRef, SelfContainedDb};
 
 pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
     let objpath = prettify_json_path(uri);
@@ -25,9 +25,9 @@ pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
         Some(x) => x,
         None => objpath.as_str(),
     };
-    let json = match  json.pointer_mut(stripped) {
+    let json = match json.pointer_mut(stripped) {
         Some(a) => a.take(),
-        None => JSONValue::Null
+        None => JSONValue::Null,
     };
     json
 }
@@ -52,16 +52,38 @@ pub fn write_json(value: Value, txn: &mut ReplicatedTxn) -> Result<(), String> {
     // todo: have to delete all existing values before inserting the new one.
     // or else, we might get data corruption
     /*
-    /test/ = 5             +
+    /test/ = 5             -
     /test/a = 3            +
-    /test/b = true         -
+    /test/b = true         +
 
     ^^^ this is corrupted data. What JSON object does /test/ represent?
-    We can either have all (+) rows or all (-) rows, exclusively.
+    We can either have all (+) rows XOR all (-) rows.
      */
     let map = json_processing::json_to_map(value);
     for (key, value) in map {
         txn.write(&key, value.to_string().into())?;
+    }
+    Ok(())
+}
+
+pub fn write_json_txnid(
+    value: Value,
+    txn: LockDataRef,
+    db: &SelfContainedDb,
+) -> Result<(), String> {
+    // todo: have to delete all existing values before inserting the new one.
+    // or else, we might get data corruption
+    /*
+    /test/ = 5             -
+    /test/a = 3            +
+    /test/b = true         +
+
+    ^^^ this is corrupted data. What JSON object does /test/ represent?
+    We can either have all (+) rows XOR all (-) rows.
+     */
+    let map = json_processing::json_to_map(value);
+    for (key, value) in map {
+        db.serve_write(txn, &key, value.to_string().into())?;
     }
     Ok(())
 }

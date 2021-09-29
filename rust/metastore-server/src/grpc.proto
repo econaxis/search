@@ -1,5 +1,5 @@
 syntax = "proto3";
-package metastore;
+package grpc_defs;
 
 message LockDataRefId {
     uint64 id = 1;
@@ -45,7 +45,18 @@ message ValueRanged {
     }
 }
 
+message Json {
+    string inner = 1;
+}
+
+message JsonWriteRequest {
+    LockDataRefId txn = 1;
+    string path = 2;
+    Json value = 3;
+}
+
 service Replicator {
+    // Creates a new transaction
     rpc new_with_time(LockDataRefId) returns (Empty);
 
     rpc serve_read(ReadRequest) returns (Value);
@@ -54,4 +65,15 @@ service Replicator {
     rpc serve_write(WriteRequest) returns (WriteError);
     rpc commit(LockDataRefId) returns (Empty);
     rpc abort(LockDataRefId) returns (Empty);
+}
+
+service MainReplicator {
+    rpc create_transaction(Empty) returns (LockDataRefId);
+    rpc read(ReadRequest) returns (Json);
+
+    // Todo: better return type for write error/success messages
+    rpc write(JsonWriteRequest) returns (Json);
+
+    rpc abort(LockDataRefId) returns (Empty);
+    rpc commit (LockDataRefId) returns (Empty);
 }

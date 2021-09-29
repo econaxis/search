@@ -2,8 +2,10 @@ use tonic::{Code, Request, Response, Status};
 
 use metastore::{DatabaseInterface, LockDataRef, ObjectPath, SelfContainedDb, TypedValue};
 
-use crate::grpc_defs::{Empty, LockDataRefId, ReadRequest, Value, ValueRanged, WriteError, WriteRequest};
 use crate::grpc_defs;
+use crate::grpc_defs::{
+    Empty, LockDataRefId, ReadRequest, Value, ValueRanged, WriteError, WriteRequest,
+};
 
 pub struct FollowerGRPCServer(SelfContainedDb);
 
@@ -15,7 +17,10 @@ impl Default for FollowerGRPCServer {
 
 impl From<LockDataRefId> for LockDataRef {
     fn from(request: LockDataRefId) -> Self {
-        LockDataRef { id: request.id, timestamp: request.id.into() }
+        LockDataRef {
+            id: request.id,
+            timestamp: request.id.into(),
+        }
     }
 }
 
@@ -41,7 +46,10 @@ impl From<ReadRequest> for (LockDataRef, ObjectPath) {
 
 #[tonic::async_trait]
 impl grpc_defs::replicator_server::Replicator for FollowerGRPCServer {
-    async fn new_with_time(&self, request: Request<LockDataRefId>) -> Result<Response<Empty>, Status> {
+    async fn new_with_time(
+        &self,
+        request: Request<LockDataRefId>,
+    ) -> Result<Response<Empty>, Status> {
         let request = request.into_inner();
         let request = LockDataRef::from(request);
 
@@ -53,19 +61,29 @@ impl grpc_defs::replicator_server::Replicator for FollowerGRPCServer {
 
     async fn serve_read(&self, request: Request<ReadRequest>) -> Result<Response<Value>, Status> {
         let (lockdataref, key) = request.into_inner().into();
-        let res = self.0.serve_read(lockdataref, &key).
-            0.map_err(|err| Status::new(Code::Unavailable, "Unavailable"))?.unwrap();
+        let res = self
+            .0
+            .serve_read(lockdataref, &key)
+            .0
+            .map_err(|err| Status::new(Code::Unavailable, "Unavailable"))?
+            .unwrap();
 
         let res = grpc_defs::value::Res::Val(res.into_inner().1.to_string());
         let val = Value { res: Some(res) };
         Ok(Response::new(val))
     }
 
-    async fn serve_range_read(&self, request: Request<ReadRequest>) -> Result<Response<ValueRanged>, Status> {
+    async fn serve_range_read(
+        &self,
+        request: Request<ReadRequest>,
+    ) -> Result<Response<ValueRanged>, Status> {
         todo!()
     }
 
-    async fn serve_write(&self, request: Request<WriteRequest>) -> Result<Response<WriteError>, Status> {
+    async fn serve_write(
+        &self,
+        request: Request<WriteRequest>,
+    ) -> Result<Response<WriteError>, Status> {
         let (txn, key, value) = request.into_inner().into();
         log::debug!("(Follower) Written {} {}", key, &value);
         self.0.serve_write(txn, &key, value);

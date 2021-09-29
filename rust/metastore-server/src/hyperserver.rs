@@ -1,21 +1,18 @@
 use std::sync::{Arc, Mutex};
 
 use hyper::{Body, Method, Request, Response};
-use serde_json::{Value as JSONValue};
+use serde_json::Value as JSONValue;
 
+mod async_replication_handler;
+mod follower_grpc_server;
+mod grpc_defs;
 mod hyper_error_converter;
 mod json_request_writers;
 mod replicator_entrypoint;
-mod grpc_defs;
-mod async_replication_handler;
-mod follower_grpc_server;
 
-use metastore::{DbContext};
-use std::future::Future;
 use hyper::service::{make_service_fn, service_fn};
-
-
-
+use metastore::DbContext;
+use std::future::Future;
 
 pub async fn route_request<'a>(
     req: Request<Body>,
@@ -31,8 +28,9 @@ pub async fn route_request<'a>(
                 json_request_writers::read_json_request(
                     req.uri().path_and_query().unwrap().as_str(),
                     &*ctx.lock().unwrap(),
-                ).to_string()
-                    .into(),
+                )
+                .to_string()
+                .into(),
             ))
         }
         &Method::POST => write_request(req, ctx).await,
@@ -42,8 +40,8 @@ pub async fn route_request<'a>(
     hyper_error_converter::map_str_error(ret)
 }
 
-use metastore::rwtransaction_wrapper::ReplicatedTxn;
 use metastore::db_context::create_replicated_context;
+use metastore::rwtransaction_wrapper::ReplicatedTxn;
 
 async fn write_request(
     mut req: Request<Body>,
@@ -59,7 +57,9 @@ async fn write_request(
     json_request_writers::write_json(value, &mut txn)?;
     txn.commit();
 
-    Ok(Response::builder().body(Body::from("Written successful")).unwrap())
+    Ok(Response::builder()
+        .body(Body::from("Written successful"))
+        .unwrap())
 }
 
 #[tokio::main]
@@ -97,4 +97,3 @@ fn create_web_server(ctx: Arc<Mutex<DbContext>>) -> impl Future {
     let server = hyper::Server::bind(&addr).serve(make_svc);
     server
 }
-

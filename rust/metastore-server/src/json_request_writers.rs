@@ -5,13 +5,18 @@ use serde_json::{Value as JSONValue, Value};
 
 use metastore::object_path::ObjectPath;
 use metastore::rwtransaction_wrapper::ReplicatedTxn;
-use metastore::{DatabaseInterface, DbContext, LockDataRef, SelfContainedDb};
+use metastore::{DatabaseInterface, DbContext, LockDataRef, SelfContainedDb, TypedValue};
 
-pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
+pub fn read_json_request_txn(uri: &str, ctx: &SelfContainedDb, txn: LockDataRef) -> JSONValue {
     let objpath = prettify_json_path(uri);
 
-    let mut txn = ReplicatedTxn::new(&ctx);
-    let ret = txn.read_range_owned(&objpath).unwrap();
+    let ret = ctx.serve_range_read(txn, &objpath).0.unwrap().unwrap();
+    log::debug!(
+        "Reading {} using txn {}\n{:?}",
+        objpath.as_str(),
+        txn.id,
+        ret
+    );
 
     let mut json = JSONValue::Null;
     for row in ret {
@@ -19,28 +24,29 @@ pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
         json_processing::create_materialized_path(&mut json, &path, row.1.into_inner().1);
     }
 
-    txn.commit();
-
     let stripped = match objpath.as_str().strip_suffix('/') {
         Some(x) => x,
         None => objpath.as_str(),
     };
-    let json = match json.pointer_mut(stripped) {
+    match json.pointer_mut(stripped) {
         Some(a) => a.take(),
         None => JSONValue::Null,
-    };
-    json
+    }
+}
+// todo: modify function to handle transactions
+pub fn read_json_request(uri: &str, ctx: &DbContext) -> JSONValue {
+    unimplemented!()
+    // let mut txn = ReplicatedTxn::new(&ctx);
+    //
+    // txn.commit();
+    // json
 }
 
 fn prettify_json_path(uri: &str) -> ObjectPath {
     let mut uri = uri.to_string();
-    if !uri.starts_with("/user/") {
-        if uri.starts_with('/') {
-            uri = format!("/user{}", uri).into()
-        } else {
-            uri = format!("/user/{}", uri).into()
-        }
-    };
+    if !uri.starts_with('/') {
+        uri = format!("/{}", uri);
+    }
 
     if !uri.ends_with('/') {
         uri.push('/');
@@ -70,6 +76,7 @@ pub fn write_json_txnid(
     value: Value,
     txn: LockDataRef,
     db: &SelfContainedDb,
+    path: &str,
 ) -> Result<(), String> {
     // todo: have to delete all existing values before inserting the new one.
     // or else, we might get data corruption
@@ -83,7 +90,15 @@ pub fn write_json_txnid(
      */
     let map = json_processing::json_to_map(value);
     for (key, value) in map {
-        db.serve_write(txn, &key, value.to_string().into())?;
+        let key_absolute = ObjectPath::from(path.to_owned() + key.as_str());
+        let value: TypedValue = value.to_string().into();
+        log::debug!(
+            "Writing {} (before: {}) {}",
+            key_absolute.as_str(),
+            key.as_str(),
+            value.as_str()
+        );
+        db.serve_write(txn, &key_absolute, value)?;
     }
     Ok(())
 }

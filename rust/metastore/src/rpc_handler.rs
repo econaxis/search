@@ -6,6 +6,7 @@ use crate::replicated_slave::SelfContainedDb;
 use crate::rwtransaction_wrapper::{LockDataRef, TypedValue, ValueWithMVCC};
 use crate::ObjectPath;
 
+#[derive(Debug)]
 pub struct NetworkError(std::io::Error);
 
 impl From<NetworkError> for String {

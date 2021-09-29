@@ -34,7 +34,7 @@ pub fn json_to_map(json: Value) -> Vec<(ObjectPath, PrimitiveValue)> {
     let mut res = Vec::new();
 
     let mut obj_queue: VecDeque<(Value, ObjectPath)> =
-        VecDeque::from_iter([(json, Default::default())]);
+        VecDeque::from_iter([(json, ObjectPath::from(""))]);
 
     while !obj_queue.is_empty() {
         let (obj, mut prefix) = obj_queue.pop_back().unwrap();

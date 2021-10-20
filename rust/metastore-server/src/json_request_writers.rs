@@ -11,12 +11,7 @@ pub fn read_json_request_txn(uri: &str, ctx: &SelfContainedDb, txn: LockDataRef)
     let objpath = prettify_json_path(uri);
 
     let ret = ctx.serve_range_read(txn, &objpath).0.unwrap().unwrap();
-    log::debug!(
-        "Reading {} using txn {}\n{:?}",
-        objpath.as_str(),
-        txn.id,
-        ret
-    );
+    log::debug!("Reading {} using txn {}", objpath.as_str(), txn.id,);
 
     let mut json = JSONValue::Null;
     for row in ret {
@@ -92,13 +87,8 @@ pub fn write_json_txnid(
     for (key, value) in map {
         let key_absolute = ObjectPath::from(path.to_owned() + key.as_str());
         let value: TypedValue = value.to_string().into();
-        log::debug!(
-            "Writing {} (before: {}) {}",
-            key_absolute.as_str(),
-            key.as_str(),
-            value.as_str()
-        );
-        db.serve_write(txn, &key_absolute, value)?;
+        log::debug!("Wrote {} {}", key_absolute.as_str(), value.as_str());
+        db.serve_write(txn, &key_absolute, value).unwrap_all();
     }
     Ok(())
 }

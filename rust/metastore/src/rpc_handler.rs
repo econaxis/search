@@ -5,6 +5,7 @@ use std::ops::{ControlFlow, FromResidual, Try};
 use crate::replicated_slave::SelfContainedDb;
 use crate::rwtransaction_wrapper::{LockDataRef, TypedValue, ValueWithMVCC};
 use crate::ObjectPath;
+use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct NetworkError(std::io::Error);
@@ -21,6 +22,14 @@ impl<R, E> NetworkResult<R, E> {
         match self.0 {
             Ok(_) => res,
             Err(_) => self,
+        }
+    }
+}
+impl<R: Debug, E: Debug> NetworkResult<R, E> {
+    pub fn unwrap_all(self) -> R {
+        match self.0 {
+            Ok(Ok(a)) => a,
+            _ => panic!("Called unwrap_all on error value {:?}", self.0)
         }
     }
 }

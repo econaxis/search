@@ -25,8 +25,8 @@ use tonic::transport::Endpoint;
 pub fn setup_logging() {
     env_logger::Builder::new()
         .format_timestamp_millis()
-        .parse_default_env()
         .filter_level(LevelFilter::Debug)
+        .parse_default_env()
         .filter_module("h2", LevelFilter::Warn)
         .filter_module("hyper", LevelFilter::Warn)
         .filter_module("tower", LevelFilter::Warn)

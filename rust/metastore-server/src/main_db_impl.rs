@@ -18,7 +18,7 @@ impl Default for MainReplicatorServer {
 impl MainReplicator for MainReplicatorServer {
     async fn create_transaction(
         &self,
-        request: Request<Empty>,
+        _request: Request<Empty>,
     ) -> Result<Response<LockDataRefId>, Status> {
         let new_txn_counter = self.1.fetch_add(1, Ordering::SeqCst);
         let txn = LockDataRef::debug_new(new_txn_counter);
@@ -50,7 +50,9 @@ impl MainReplicator for MainReplicatorServer {
     }
 
     async fn abort(&self, request: Request<LockDataRefId>) -> Result<Response<Empty>, Status> {
-        todo!()
+        let txn: LockDataRef = request.into_inner().into();
+        self.0.abort(txn);
+        Ok(Response::new(Empty {}))
     }
 
     async fn commit(&self, request: Request<LockDataRefId>) -> Result<Response<Empty>, Status> {

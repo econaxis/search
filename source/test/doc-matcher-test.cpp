@@ -135,10 +135,11 @@ TEST(DocumentsMatcher, can_extend_if_needed) {
     auto suffix = do_index_custom([&](int index, auto _) {
         auto before = generate_words(3);
         if (index % 4 == 0) before += " testword ";
-        if (index % 5 == 0) before += " testwordone ";
-        if (index % 7 == 0) before += " testwordtwo ";
+        if (index % 5 == 0) before += " yestwordone ";
+        if (index % 7 == 0) before += " uestwordtwo ";
 
         if (index % (4 * 5 * 7) == 0) {
+            std::cout<<"Adding "<<index<<"\n";
             total_and_size++;
         }
 
@@ -146,7 +147,8 @@ TEST(DocumentsMatcher, can_extend_if_needed) {
     });
     SortedKeysIndexStub index(suffix);
 
-    auto res = index.search_many_terms({"TESTWORD", "TESTWORDONE", "TESTWORDTWO"});
+    auto res = index.search_many_terms({"TESTWORD", "YESTWORDONE", "UESTWORDTWO"});
+
 
     while (true) {
         auto anded = DocumentsMatcher::AND_Driver(res);
@@ -157,7 +159,8 @@ TEST(DocumentsMatcher, can_extend_if_needed) {
         ASSERT_GE(total_and_size, 0);
 
         for (auto &d : anded) {
-            ASSERT_EQ(d.document_id % (4 * 5 * 7), 0);
+
+            ASSERT_EQ(d.document_id % (4 * 5 * 7), 0)<<d.document_id;
             for (auto &td : res) {
                 auto cloned = td.get_inner();
                 auto find = std::find(cloned.begin(), cloned.end(), d);

@@ -21,47 +21,6 @@ SortedKeysIndex thread_process_files(SyncedQueue &file_contents);
 std::string persist_indices(const SortedKeysIndex &master,
                             const FilePairs &filepairs);
 
-static void queue_produce_file_contents(SyncedQueue &contents) {
-    const FilePairs filepairs = FileListGenerator::from_file();
-
-    std::vector<SyncedQueue::value_type> thread_local_holder;
-
-    for (auto entry = filepairs.begin(); entry != filepairs.end(); entry++) {
-        auto abspath = data_files_dir / "data" / entry->file_name;
-
-        auto len = fs::file_size(abspath);
-        std::ifstream file(abspath);
-        if (!file.is_open()) {
-            std::cout << "Couldn't open file " << entry->file_name << "!\n";
-        }
-        std::string filestr(len, ' ');
-        file.read(filestr.data(), len);
-
-        if (!file.eof() && !file.fail()) {
-            filestr.append((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        }
-
-
-        if (entry->document_id % 50 == 0) {
-            std::cout << (entry - filepairs.begin() - contents.size()) * 100 / filepairs.size() << "%\r" << std::flush;
-        }
-
-//        if (contents.size() > 400) {
-//            contents.wait_for([&] {
-//                return contents.size() < 400;
-//            });
-//        }
-
-        thread_local_holder.emplace_back(std::move(filestr), *entry);
-
-        if (thread_local_holder.size() >= 200) {
-            contents.push_multi(thread_local_holder.begin(), thread_local_holder.end());
-            thread_local_holder.clear();
-        }
-    }
-    contents.input_is_done = true;
-    contents.cv.notify_all();
-}
 
 static void sort_and_group_all_par(std::vector<WordIndexEntry> &index) {
     std::for_each(std::execution::par, index.begin(), index.end(), [](WordIndexEntry &elem) {
@@ -98,7 +57,8 @@ std::string GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc*
     filecontentproducer.join();
 
     if (a1.get_index().empty()) {
-        print("ERROR: Empty index");
+        print("Got empty index. Exiting early");
+        return "";
     }
 
     a1.sort_and_group_shallow();
@@ -156,4 +116,46 @@ std::string persist_indices(const SortedKeysIndex &master, const FilePairs &file
 
 
     return suffix;
+}
+
+void queue_produce_file_contents(SyncedQueue &contents) {
+    const FilePairs filepairs = FileListGenerator::from_file();
+
+    std::vector<SyncedQueue::value_type> thread_local_holder;
+
+    for (auto entry = filepairs.begin(); entry != filepairs.end(); entry++) {
+        auto abspath = data_files_dir / "data" / entry->file_name;
+
+        auto len = fs::file_size(abspath);
+        std::ifstream file(abspath);
+        if (!file.is_open()) {
+            std::cout << "Couldn't open file " << entry->file_name << "!\n";
+        }
+        std::string filestr(len, ' ');
+        file.read(filestr.data(), len);
+
+        if (!file.eof() && !file.fail()) {
+            filestr.append((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        }
+
+
+        if (entry->document_id % 50 == 0) {
+            std::cout << (entry - filepairs.begin() - contents.size()) * 100 / filepairs.size() << "%\r" << std::flush;
+        }
+
+//        if (contents.size() > 400) {
+//            contents.wait_for([&] {
+//                return contents.size() < 400;
+//            });
+//        }
+
+        thread_local_holder.emplace_back(std::move(filestr), *entry);
+
+        if (thread_local_holder.size() >= 200 || entry == filepairs.end() - 1) {
+            contents.push_multi(thread_local_holder.begin(), thread_local_holder.end());
+            thread_local_holder.clear();
+        }
+    }
+    contents.input_is_done = true;
+    contents.cv.notify_all();
 }

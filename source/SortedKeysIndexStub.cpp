@@ -142,7 +142,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
         // and since majority of keys don't fit within our criteria, previewing reduces computation and memory.
         auto preview = Serializer::preview_work_index_entry(terms);
-
+        log("Matching ", preview.key, "with ", term);
         // If the preview fits within the score cutoff, then we seek back to the previewed position and read the whole thing into memory
         // to process it.
         auto min_cutoff_score = compute_average(output_score.begin(), output_score.end());
@@ -160,18 +160,23 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
                 i.document_freq = (std::log10(i.document_freq) + 1) * score;
                 tot_score += i.document_freq;
             }
+
             TopDocs td(std::move(files));
 
             if (tot_score >= 4000 || preview.key == term) td.add_term_str(PossiblyMatchingTerm(term, ti, score));
 
-            if (preview.key == term) return td;
+            // Early optimization -- if we find the word then just return
+            // (Disable because it misses some matches).
+//            if (preview.key == term) return td;
 
             output_score.emplace_back(tot_score / td.size());
             outputs.push_back(std::move(td));
         }
 
         // Check the exit condition. Has to be placed after the comparing code because file_end is inclusive (it should also be processed).
-        if(Base26Num(preview.key).num >= file_end->key.num) break;
+        if(Base26Num(preview.key).num >= file_end->key.num) {
+            break;
+        }
     }
 
 

@@ -19,6 +19,7 @@ namespace IndexFileLocker {
 
 
     inline bool acquire_lock_file() {
+        return true;
         using namespace std::chrono;
 
         while (fs::exists(LOCKFILE)) {

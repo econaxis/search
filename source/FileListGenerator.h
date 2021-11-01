@@ -28,16 +28,7 @@ namespace FileListGenerator {
     inline std::shared_ptr<NamesDatabaseRAIIWrapper> ndb{nullptr};
 
 
-    inline NamesDatabase *get_ndb() {
-        if (!ndb || ndb->inner == nullptr) {
-            auto path = indice_files_dir;
-            ndb = std::make_shared<NamesDatabaseRAIIWrapper>(new_name_database(path.c_str()));
-            std::cout << "Created NDB\n";
-        }
-        return ndb->inner;
-    }
-
-    inline std::ifstream &get_index_files() {
+    inline std::ifstream &get_files_list() {
         static auto dir_it = std::ifstream(data_files_dir / "total-files-list");
         return dir_it;
     }
@@ -57,25 +48,19 @@ namespace FileListGenerator {
 
         FilePairs filepairs;
 
-        auto &dir_it = get_index_files();
+        auto &dir_it = get_files_list();
 
         uint32_t doc_id_counter = 1;
         std::string file_line;
         auto cur_size = 0ULL;
         // Consume directory iterator and push into filepairs vector
         while (std::getline(dir_it, file_line)) {
-            if (search_name_database(get_ndb(), file_line.c_str())) {
-                // Entry already exists.
-                std::cout << "Entry " << file_line << " already exists\r";
-                continue;
-            }
             auto abspath = data_files_dir / "data" / file_line;
 
             cur_size += fs::file_size(abspath);
 
             // Don't index more than x files or 500MB at a time.
             if (filepairs.size() > MAX_FILES_PER_INDEX || cur_size > static_cast<int>(200e6)) break;
-            register_temporary_file(get_ndb(), file_line.c_str(), doc_id_counter);
             filepairs.push_back(DocIDFilePair{doc_id_counter, file_line});
 
             doc_id_counter++;
@@ -83,7 +68,6 @@ namespace FileListGenerator {
         }
         std::cout << filepairs.size() << " files will be processed\n";
 
-        serialize_namesdb(get_ndb());
         // Release the lock file.
         IndexFileLocker::release_lock_file();
 

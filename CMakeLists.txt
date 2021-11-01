@@ -161,4 +161,10 @@ add_custom_target(
         COMMAND cargo build -p metastore --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust/metastore
         DEPENDS rust/metastore/src
+
 )
+
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    find_library(pythonlib NAMES pythonlib PATHS ${CMAKE_BINARY_DIR} REQUIRED)
+    target_link_libraries(general-indexer PRIVATE pythonlib)
+endif()

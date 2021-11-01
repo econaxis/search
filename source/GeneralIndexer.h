@@ -19,4 +19,5 @@ namespace GeneralIndexer {
     std::string read_some_files(ContentProducerFunc* func);
 }
 
+void queue_produce_file_contents(SyncedQueue &contents);
 #endif //GAME_GENERALINDEXER_H

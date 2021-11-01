@@ -57,7 +57,8 @@ load_all_indices() {
 
     if (!index_file) {
         std::cerr << "Index file doesn't exist at path: " << data_files_dir / "indices" / "index_files" << "\n";
-        return {};
+        throw std::exception();
+//        return {};
     }
 
     std::vector<std::vector<DocIDFilePair>> filepairs;
@@ -83,8 +84,7 @@ int main(int argc, char *argv[]) {
 
 
     if (argc == 1) {
-        while (true) {
-//            GeneralIndexer::read_some_files();
+        while (GeneralIndexer::read_some_files(queue_produce_file_contents) != "") {
         };
         return 1;
     };
@@ -107,7 +107,9 @@ int main(int argc, char *argv[]) {
                 terms.emplace_back(s);
             }
         }
-//        auto temp1 = DocumentsMatcher::collection_merge_search(indices, terms);
-//        std::cout << temp1.size() << " matches found\n";
+        auto result = indices[0].search_many_terms(terms);
+        for(auto& i: result) {
+            std::cout<<i.as_string();
+        }
     }
 }

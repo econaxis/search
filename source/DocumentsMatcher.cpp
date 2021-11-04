@@ -201,4 +201,3 @@ DocumentsMatcher::combiner_with_position(const SortedKeysIndexStub &index, std::
 
 TopDocsWithPositions::Elem::Elem(unsigned int i, unsigned int i1) : document_id(i), document_freq(i1) {}
 
-

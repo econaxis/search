@@ -58,7 +58,8 @@ static int compute_average(Iterator begin, Iterator end) {
 
 
 std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string &term) const {
-    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term)) - 1;
+    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term));
+    if (file_start > index.begin()) file_start--;
 
     // If we can get a lower bound, then continue searching more precisely.
     if (file_start != index.end()) {
@@ -129,7 +130,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     // Looking at a whole range from before and after "term" to imitate fuzzy searching.
     // We can't decrement this when calling std::lower_bound because pointer overflow might occur, and the check
     // "file_start >= index.end()" would be faulty.
-    if(file_start > index.begin()) file_start--;
+    if (file_start > index.begin()) file_start--;
 
     terms.seekg(file_start->terms_pos);
     correct_freq_pos_locations(terms, frequencies);
@@ -174,7 +175,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         }
 
         // Check the exit condition. Has to be placed after the comparing code because file_end is inclusive (it should also be processed).
-        if(Base26Num(preview.key).num >= file_end->key.num) {
+        if (Base26Num(preview.key).num >= file_end->key.num) {
             break;
         }
     }
@@ -208,12 +209,46 @@ SortedKeysIndexStub::SortedKeysIndexStub(const std::string &suffix) :
         frequencies(std::ifstream(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary)),
         terms(std::ifstream(indice_files_dir / ("terms-" + suffix), std::ios_base::binary)),
         positions(std::ifstream(indice_files_dir / ("positions-" + suffix), std::ios_base::binary)),
-        filemap((indice_files_dir / ("filemap-" + suffix))),
         index(Serializer::read_sorted_keys_index_stub_v2(
                 this->frequencies, this->terms)) {
     assert(this->frequencies && this->terms);
 }
 
-std::string SortedKeysIndexStub::query_filemap(uint32_t docid) const {
-    return filemap.query(docid);
+std::vector<std::string> from_char_arr(const char **terms, int length) {
+    auto vec = std::vector<std::string>();
+    for (int i = 0; i < length; i++) {
+        vec.push_back(terms[i]);
+    }
+    return vec;
+}
+// C interface functions
+extern "C" {
+using namespace DocumentsMatcher;
+
+SortedKeysIndexStub* create_index_stub(const char* suffix) {
+    return new SortedKeysIndexStub(suffix);
+}
+
+void free_index_stub(SortedKeysIndexStub* stub) {
+    delete stub;
+}
+
+TopDocsWithPositions::Elem *
+search_many_terms(SortedKeysIndexStub *index, const char **terms, int terms_length, /*out */ uint32_t *length) {
+    auto vec = from_char_arr(terms, terms_length);
+    auto output = index->search_many_terms(vec);
+    auto output_with_pos = DocumentsMatcher::combiner_with_position(*index, output, vec);
+
+    // Copy to new buffer
+    auto *buf_ = operator new[](output_with_pos.docs.size() * sizeof(TopDocsWithPositions::Elem));
+    auto *buf = (TopDocsWithPositions::Elem*) buf_;
+    std::copy(output_with_pos.docs.begin(), output_with_pos.docs.end(), buf);
+
+    *length = output_with_pos.docs.size();
+    return buf;
+}
+
+void free_elem_buf(TopDocsWithPositions::Elem *ptr) {
+    operator delete[](ptr);
+}
 }

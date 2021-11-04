@@ -46,12 +46,6 @@ inline void queue_produce_file_contents_stdin(SyncedQueue &contents) {
 
         // Erase the trailing whitespace
         file.erase(file.end() -1 );
-
-
-        if (search_name_database(FileListGenerator::get_ndb(), filename.c_str())) {
-            continue;
-        }
-
         thread_local_holder.emplace_back(std::move(file), DocIDFilePair{docid++, filename});
 
         if (thread_local_holder.size() >= 50) {

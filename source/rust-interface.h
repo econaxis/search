@@ -1,18 +1,9 @@
 #ifndef GAME_RUST_INTERFACE_H
 #define GAME_RUST_INTERFACE_H
 
-using NamesDatabase = void;
-using RustVec = void;
 
 using TableManager = void;
 
-// Old interface
-extern "C" NamesDatabase* new_name_database(const char* name);
-extern "C" bool search_name_database(const NamesDatabase* ndb, const char *key);
-extern "C" void serialize_namesdb(NamesDatabase* ndb);
-extern "C" void fill_rust_vec (RustVec*, void* data, std::size_t size);
-extern "C" void register_temporary_file(const NamesDatabase *, const char* path, uint32_t docid);
-extern "C" void drop_name_database(NamesDatabase *);
 
 // New interface
 extern "C" void db1_store(TableManager* db, unsigned int id, char* name, char* document);

@@ -22,6 +22,9 @@ namespace DocumentsMatcher {
             uint32_t document_id;
             uint32_t document_freq;
             std::array<uint32_t, 4> matches = {0};
+
+            template<typename _Dp, typename _Tp>
+            const std::unique_ptr<_Tp, _Dp> &to_string();
         };
 
         std::vector<Elem> docs;
@@ -40,6 +43,11 @@ namespace DocumentsMatcher {
 
         void insert(TopDocsWithPositions other) {
             std::move(other.docs.begin(), other.docs.end(), std::back_inserter(docs));
+        }
+        void to_string(std::ostream& stream) {
+            for (auto &i : docs) {
+                stream <<i.document_id<<" "<<i.document_freq<<"\n";
+            }
         }
 
         std::vector<Elem>::const_iterator begin() const { return docs.begin(); }

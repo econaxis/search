@@ -11,7 +11,9 @@ public:
     // Override this to define how to set up the environment.
     void SetUp() override {
         data_files_dir = filesystem::temp_directory_path() / "gtest-search-dir/";
+        data_files_dir = "/home/henry/search/data";
         indice_files_dir = data_files_dir / std::string("indices");
+
         fs::create_directories(data_files_dir);
         fs::create_directories(indice_files_dir);
     }

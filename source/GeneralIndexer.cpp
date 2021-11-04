@@ -17,9 +17,11 @@
 
 using FilePairs = std::vector<DocIDFilePair>;
 namespace fs = std::filesystem;
+
 SortedKeysIndex thread_process_files(SyncedQueue &file_contents);
-std::string persist_indices(const SortedKeysIndex &master,
-                            const FilePairs &filepairs);
+
+std::string persist_indices_filepairs(const SortedKeysIndex &master,
+                                      const FilePairs &filepairs);
 
 
 static void sort_and_group_all_par(std::vector<WordIndexEntry> &index) {
@@ -31,7 +33,7 @@ static void sort_and_group_all_par(std::vector<WordIndexEntry> &index) {
 //! Reads some files from a specified func* and indexes them.
 //! \param func function that produces content from a source (e.g. socket, STDIN, file) for the indexer to index.
 //! \return the file name of the produced index file.
-std::string GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc* func) {
+std::string GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc *func) {
     // Vector of arrays with custom allocator.
     SortedKeysIndex a1;
 
@@ -67,14 +69,14 @@ std::string GeneralIndexer::read_some_files(GeneralIndexer::ContentProducerFunc*
     // This could take a long time (many sorts), and there's no memory-conservation advantage,
     // so we only need to do it at the end.
     sort_and_group_all_par(a1.get_index());
-    return persist_indices(a1, file_contents.filepairs);
+    return persist_indices_filepairs(a1, file_contents.filepairs);
 }
 
 
 SortedKeysIndex thread_process_files(SyncedQueue &file_contents) {
     std::array<SortedKeysIndex, 10> reducer{};
     while (true) {
-        if(file_contents.input_is_done && !file_contents.size()) {
+        if (file_contents.input_is_done && !file_contents.size()) {
             break;
         }
 
@@ -103,7 +105,8 @@ SortedKeysIndex thread_process_files(SyncedQueue &file_contents) {
     return reducer[0];
 }
 
-std::string persist_indices(const SortedKeysIndex &master, const FilePairs &filepairs) {
+
+std::string persist_indices_filepairs(const SortedKeysIndex &master, const FilePairs &filepairs) {
 
     std::string suffix = random_b64_str(6);
 
@@ -117,6 +120,8 @@ std::string persist_indices(const SortedKeysIndex &master, const FilePairs &file
 
     return suffix;
 }
+
+
 
 void queue_produce_file_contents(SyncedQueue &contents) {
     const FilePairs filepairs = FileListGenerator::from_file();
@@ -158,4 +163,23 @@ void queue_produce_file_contents(SyncedQueue &contents) {
     }
     contents.input_is_done = true;
     contents.cv.notify_all();
+}
+
+
+extern "C" {
+SortedKeysIndex* new_index() {
+    return new SortedKeysIndex();
+}
+void persist_indices(SortedKeysIndex *index, const char *filename) {
+    sort_and_group_all_par(index->get_index());
+    Serializer::serialize(filename, *index);
+
+    delete index;
+}
+
+void append_file(SortedKeysIndex *index, const char *content, uint32_t docid) {
+    auto temp = Tokenizer::index_string_file(std::string(content), docid);
+    index->sort_and_group_shallow();
+    index->merge_into(std::move(temp));
+}
 }

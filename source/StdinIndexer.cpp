@@ -11,8 +11,6 @@
 int main() {
     initialize_directory_variables();
 
-    FileListGenerator::get_ndb();
-
     auto str = GeneralIndexer::read_some_files(queue_produce_file_contents_stdin);
     IndexFileLocker::do_lambda([&] {
         std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);

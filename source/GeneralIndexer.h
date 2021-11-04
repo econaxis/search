@@ -20,4 +20,12 @@ namespace GeneralIndexer {
 }
 
 void queue_produce_file_contents(SyncedQueue &contents);
+
+
+extern "C" {
+SortedKeysIndex* new_index();
+void append_file(SortedKeysIndex *index, const char *content, uint32_t docid);
+void persist_indices(SortedKeysIndex *index, const char *filename);
+}
+
 #endif //GAME_GENERALINDEXER_H

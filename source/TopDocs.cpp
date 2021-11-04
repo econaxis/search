@@ -1,4 +1,5 @@
 #include "TopDocs.h"
+#include <sstream>
 
 template<class InputIt1,  class OutputIt>
 static OutputIt merge_combine(InputIt1 first1, InputIt1 last1, InputIt1 first2, InputIt1 last2, OutputIt d_first);
@@ -86,7 +87,14 @@ std::optional<const char *> TopDocs::get_first_term() const {
     } else return included_terms.front().term.data();
 }
 
-
+std::string TopDocs::as_string() const {
+    std::stringstream out;
+    for (auto i : docs) {
+        out << i.document_id<<" ";
+    }
+    out<<"\n";
+    return out.str();
+}
 
 
 template<class InputIt1, class OutputIt>

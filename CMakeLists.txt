@@ -37,15 +37,14 @@ add_library(search-share SHARED
 target_include_directories(search-share PUBLIC source extern extern/mio/include)
 
 target_include_directories(general-indexer PUBLIC source extern extern/mio/include)
-
-target_link_libraries(general-indexer PRIVATE namesdb tbb)
+target_link_libraries(general-indexer PUBLIC tbb search-share)
 
 add_executable(search source/main.cpp source/TermsListSearcher.cpp source/DocumentsTier.cpp)
 target_link_libraries(search PRIVATE search-share general-indexer)
 
 
 add_executable(compactor source/compactor/main.cpp)
-target_link_libraries(compactor PRIVATE search-share namesdb pthread)
+target_link_libraries(compactor PRIVATE search-share pthread)
 
 add_library(c-search-abi SHARED source/c_abi.cpp)
 target_link_libraries(c-search-abi PRIVATE search-share)
@@ -63,38 +62,10 @@ endif()
 set(rust-build-command cargo build ${CARGO_RELEASE_MODE} --out-dir ${CMAKE_BINARY_DIR} -Z unstable-options)
 
 
-add_custom_command(
-        OUTPUT ${CMAKE_BINARY_DIR}/libnamesdb.so ${CMAKE_BINARY_DIR}/webserver
-        COMMAND CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR} ${rust-build-command}
-        DEPENDS rust/webserver/src rust/namesdb/src c-search-abi
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
-)
-
-add_custom_target(
-        rust-server ALL
-        DEPENDS ${CMAKE_SOURCE_DIR}/rust/webserver/src
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
-)
-add_custom_target(
-        namesdb2 ALL
-        DEPENDS ${CMAKE_SOURCE_DIR}/rust/namesdb/src ${CMAKE_BINARY_DIR}/libnamesdb.so
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/rust
-)
-
-#add_library(libnamesdb SHARED IMPORTED)
-#add_dependencies(libnamesdb namesdb)
-#set_target_properties(namesdb PROPERTIES IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/libnamesdb.so)
-#set_target_properties(c-search-abi PROPERTIES IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/libc-search-abi.so)
-
-add_dependencies(compactor rust-server)
-add_dependencies(general-indexer rust-server)
-add_dependencies(rust-server c-search-abi)
-add_dependencies(general-indexer namesdb2)
-
 
 add_executable(stdinindexer source/StdinIndexer.cpp)
 target_include_directories(stdinindexer PRIVATE source/)
-target_link_libraries(stdinindexer PRIVATE general-indexer search-share namesdb)
+target_link_libraries(stdinindexer PUBLIC general-indexer search-share)
 
 
 add_subdirectory(extern/fmt)
@@ -153,7 +124,7 @@ endif ()
 #
 #include(CTest)
 #target_link_directories(default-tests PRIVATE ${CMAKE_BINARY_DIR})
-target_link_libraries(default-tests PRIVATE gtest_main search-share general-indexer namesdb)
+target_link_libraries(default-tests PRIVATE gtest_main search-share general-indexer)
 
 
 add_custom_target(

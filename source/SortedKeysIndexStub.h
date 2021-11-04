@@ -47,8 +47,6 @@ class SortedKeysIndexStub {
 private:
 
     mutable std::ifstream frequencies, terms, positions;
-
-    const FPStub filemap;
     const std::vector<StubIndexEntry> index;
 
     std::optional<PreviewResult> seek_to_term(const std::string &term) const;
@@ -57,15 +55,15 @@ private:
 
 public:
 
-    explicit SortedKeysIndexStub(const std::string& suffix);
-
-    std::string query_filemap(uint32_t docid) const;
+    explicit SortedKeysIndexStub(const std::string &suffix);
 
     std::vector<TopDocs> search_many_terms(const std::vector<std::string> &terms) const;
 
     std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
 
 };
+
+
 
 
 #endif //GAME_SORTEDKEYSINDEXSTUB_H

@@ -4,7 +4,6 @@
 #include <vector>
 #include "DocumentFrequency.h"
 #include "PossiblyMatchingTerm.h"
-#include <sstream>
 
 class TopDocs {
 private:
@@ -14,14 +13,7 @@ private:
 public:
     using value_type = DocumentFrequency;
 
-    std::string as_string() const {
-        std::stringstream out;
-        for (auto i : docs) {
-            out << i.document_id<<" ";
-        }
-        out<<"\n";
-        return out.str();
-    }
+    std::string as_string() const;
 
     TopDocs() = default;
 

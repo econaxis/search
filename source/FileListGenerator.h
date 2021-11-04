@@ -15,19 +15,6 @@ namespace FileListGenerator {
     using FilePairs = std::vector<DocIDFilePair>;
     namespace fs = std::filesystem;
 
-    struct NamesDatabaseRAIIWrapper {
-        NamesDatabase *inner;
-
-        ~NamesDatabaseRAIIWrapper() noexcept {
-            std::cout<<"Dropping NDB";
-            drop_name_database(inner);
-        }
-        NamesDatabaseRAIIWrapper(NamesDatabase *inner) : inner(inner) {};
-    };
-
-    inline std::shared_ptr<NamesDatabaseRAIIWrapper> ndb{nullptr};
-
-
     inline std::ifstream &get_files_list() {
         static auto dir_it = std::ifstream(data_files_dir / "total-files-list");
         return dir_it;

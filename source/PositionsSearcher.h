@@ -39,7 +39,7 @@ namespace PositionsSearcher {
     PositionsList fill_positions_from_docs(const SortedKeysIndexStub &index,
                                                 const std::vector<std::string> &query_terms,
                                                 FilterFunc filter) {
-        if (query_terms.size() >= 32 || query_terms.size() < 2) {
+        if (query_terms.size() >= 32) {
             log("Positions searcher not active: terms size not within bounds [2, 32]");
             return {};
         }

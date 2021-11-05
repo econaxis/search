@@ -167,6 +167,7 @@ TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
             ret = AND(outputs);
         }
     }
+    ret.sort_by_frequencies();
     return ret;
 }
 

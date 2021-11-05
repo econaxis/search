@@ -16,9 +16,10 @@ namespace fs = std::filesystem;
  *
  * @return a score that means how well they match. A complete match (shorter == longer) will return CUTOFF_MAX;
  */
-static unsigned int string_prefix_compare(const std::string &one, const std::string &two) {
+static double string_prefix_compare(const std::string &one, const std::string &two) {
     // Score multiplier in case a word matches all (vs. only a prefix match)
-    constexpr float MATCHALL_BONUS = 1.5F;
+    constexpr double MATCHALL_BONUS = 15;
+    constexpr double MATCHSHORT_BONUS = 8.0;
     // Returns true if shorter is the prefix of longer.
     // e.g. shorter: "str" and longer: "string" returns true.
     auto ones = one.size();
@@ -29,7 +30,7 @@ static unsigned int string_prefix_compare(const std::string &one, const std::str
 
     if (ls < ss) return 0;
 
-    float divider = 7.F / (ls - ss + 7);
+    double divider = 7.F / (ls - ss + 7);
     int counter = 0;
     for (; counter < ss; counter++) {
         if (one[counter] != two[counter]) {
@@ -37,17 +38,20 @@ static unsigned int string_prefix_compare(const std::string &one, const std::str
         }
     }
     double counterd = counter;
-    if (counter >= ss && counterd <= 5) counterd *= 2;
-    counterd = sqrt(5 * counterd);
     const auto score = counterd * divider;
-    if (counter == ls) return MATCHALL_BONUS * score;
-    else return score;
+    if (one == two) {
+        return MATCHALL_BONUS * score;
+    }
+    if (counter == one.size()) {
+        return MATCHSHORT_BONUS * score;
+    }
+    return score;
 }
 
 
 template<typename Iterator>
-static int compute_average(Iterator begin, Iterator end) {
-    if (end - begin < 6) return 1;
+static double compute_average(Iterator begin, Iterator end) {
+    if (end - begin < 4) return 1;
 
     unsigned int sum = 0, square = 0;
 
@@ -56,9 +60,6 @@ static int compute_average(Iterator begin, Iterator end) {
         square += *i * *i;
     }
     sum += end - begin;
-
-    sum *= 1.4F;
-
     return square / sum;
 }
 
@@ -122,7 +123,7 @@ void correct_freq_pos_locations(std::istream &terms, std::istream &frequencies) 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-4));
-    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(2));
+    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(4));
 
     // Occurs when there's an empty index. No way to prefix-match, and we have to exit early.
     if (file_start >= index.end()) {
@@ -142,7 +143,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     correct_freq_pos_locations(terms, frequencies);
 
     std::vector<TopDocs> outputs;
-    std::vector<int> output_score;
+    std::vector<double> output_score;
     outputs.reserve(50);
 
     while (true) {
@@ -166,19 +167,19 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 //            log("Matched term, searched term " +  preview.key + " " + term, "score:", score, "docs size:", files.size());
             auto tot_score = 0;
             for (auto &i : files) {
-                i.document_freq = (std::log10(i.document_freq) + 1) * score;
+                i.document_freq = (std::log10(i.document_freq + 1) + 0.7) * score;
                 tot_score += i.document_freq;
             }
 
             TopDocs td(std::move(files));
 
-            if (tot_score >= 4000 || preview.key == term) td.add_term_str(PossiblyMatchingTerm(term, ti, score));
+            if (preview.key == term) td.add_term_str(PossiblyMatchingTerm(term, ti, score));
 
             // Early optimization -- if we find the word then just return
             // (Disable because it misses some matches).
 //            if (preview.key == term) return td;
 
-            output_score.emplace_back(tot_score / td.size());
+            output_score.emplace_back(score);
             outputs.push_back(std::move(td));
         }
 

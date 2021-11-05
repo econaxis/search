@@ -30,8 +30,7 @@ void TopDocs::append_multi(TopDocs other) {
 // Partial sorts the TopDocs collection by frequency. Useful for the last stage of processing when we don't care about maintaining
 // document id order, and instead want the top ranking documents.
 void TopDocs::sort_by_frequencies() {
-    auto partial_end = std::min(end(), begin() + 50);
-    std::partial_sort(begin(), partial_end, end(), [](auto &t, auto &t1) {
+    std::sort(begin(), end(), [](auto &t, auto &t1) {
         return t.document_freq < t1.document_freq;
     });
 }

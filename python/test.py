@@ -1,6 +1,8 @@
 import ctypes
 import json
 
+import rich.jupyter
+
 from query_console import QueryConsole
 from search_lib import ParallelIndexer
 
@@ -70,7 +72,7 @@ def fetch_pages(url: [str]) -> [str]:
     con.close()
 
 
-def load_pages() -> [dict]:
+def load_pages():
     import sqlite3
     con = sqlite3.connect('output.db')
     cur = con.cursor()
@@ -84,18 +86,38 @@ def load_pages() -> [dict]:
         ind.end()
 
 
+def load_wikibooks_pages():
+    import sqlite3
+    con = sqlite3.connect("f.db")
+    cur = con.cursor()
+
+    cur.execute("SELECT COUNT(rowid) FROM en")
+    count = cur.fetchone()
+    print(count, "rows")
+    with ParallelIndexer() as ind:
+        for row in cur.execute("SELECT rowid, body_text FROM en ORDER BY title"):
+            ind.append_file(row[1], row[0])
+        ind.end()
+
+
 def test_live():
     from search_lib import Searcher
     console = QueryConsole()
-    with Searcher("output") as searcher:
+    with Searcher("par-index") as searcher:
+        # while True:
+        #     terms = input()
+        #     terms = terms.upper().split(" ")
+        #     terms = list(filter(lambda k: len(k) > 0, terms))
+        #     rich.print(searcher.search_terms(*terms).printable())
         while console.valid:
             query = console.run_event_loop()
             if query:
-                with searcher.search_terms(*query) as result:
-                    console.set_results(result)
-        assert (ctypes.c_uint32.in_dll(searcher.dll, "elems_allocated").value == 0)
+                result = searcher.search_terms(*query).printable()
+                console.set_results(result)
+        # assert (ctypes.c_uint32.in_dll(searcher.dll, "elems_allocated").value == 0)
 
 
-load_pages()
-# test_live()
+# load_wikibooks_pages()
+test_live()
+print("done")
 # try_search()

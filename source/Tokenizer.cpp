@@ -28,7 +28,7 @@ void Tokenizer::remove_bad_words(std::vector<std::string> &terms) {
 
 
 // todo: fix bugs
-std::vector<WordPos> clean_string(std::string &file) {
+std::vector<WordPos> clean_string(const std::string &file) {
     std::vector<WordPos> result;
 
     unsigned int last_end = 1 << 31;

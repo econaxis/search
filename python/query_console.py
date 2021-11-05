@@ -2,6 +2,7 @@ import selectors
 from selectors import DefaultSelector
 from typing import Optional
 
+import rich.pretty
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
@@ -45,7 +46,7 @@ class QueryConsole:
         setup_term()
         layout = Layout()
         layout.split(
-            Layout(Panel("top"), name="top", ratio=10),
+            Layout(Panel("to1p"), name="top", ratio=10),
             Layout(Panel("query"), name="query", ratio=2)
         )
 
@@ -53,7 +54,7 @@ class QueryConsole:
         self.sel.register(sys.stdin.fileno(), selectors.EVENT_READ, sys.stdin)
 
         self.layout = layout
-        self.live = Live(layout)
+        self.live = Live(layout, refresh_per_second=5)
         self.query = ""
         self.prevquery = ""
         self.live.__enter__()
@@ -83,5 +84,9 @@ class QueryConsole:
             self.prevquery = self.query
             return terms
 
-    def set_results(self, sr: _SearchRetType):
-        self.layout["top"].update(Panel(sr.__rich__()))
+    def set_results(self, sr):
+        console = rich.console.Console()
+        with console.capture() as capture:
+            console.print(sr)
+
+        self.layout["top"].update(Panel(capture.get()))

@@ -40,8 +40,6 @@ def setup_term():
     termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, newattr)
 
 
-
-
 class QueryConsole:
     def __init__(self):
         setup_term()
@@ -62,10 +60,9 @@ class QueryConsole:
         self.valid = True
 
     def run_event_loop(self) -> Optional[list[str]]:
-        events = self.sel.select(0.1)
+        events = self.sel.select()
         for key, mask in events:
             ch = key.data.read(1)
-            print(ord(ch))
             if ch == 'q':
                 self.valid = False
                 self.live.__exit__(None, None, None)

@@ -12,7 +12,6 @@
  */
 class SortedKeysIndex {
 private:
-
 public:
     std::vector<WordIndexEntry> index;
 

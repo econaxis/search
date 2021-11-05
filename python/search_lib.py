@@ -10,6 +10,8 @@ os.environ["DATA_FILES_DIR"] = "/home/henry/search/data"
 class SortedKeysIndexStub(ctypes.Structure):
     pass
 
+class SortedKeysIndex(ctypes.Structure):
+    pass
 
 class DocumentFrequency(ctypes.Structure):
     _fields_ = [
@@ -68,18 +70,19 @@ def load(path):
     indexer = ctypes.cdll.LoadLibrary(f"{path}/libgeneral-indexer.so")
     indexer.initialize_directory_variables()
     indexer.new_index.argtypes = []
-    indexer.new_index.restype = POINTER(SortedKeysIndexStub)
+    indexer.new_index.restype = POINTER(SortedKeysIndex)
 
-    indexer.append_file.argtypes = [POINTER(SortedKeysIndexStub), c_char_p, c_uint32]
+    indexer.append_file.argtypes = [POINTER(SortedKeysIndex), c_char_p, c_uint32]
     indexer.append_file.restype = None
 
-    indexer.persist_indices.argtypes = [POINTER(SortedKeysIndexStub), c_char_p]
+    indexer.persist_indices.argtypes = [POINTER(SortedKeysIndex), c_char_p]
 
     indexer.search_many_terms.argtypes = [POINTER(SortedKeysIndexStub), POINTER(c_char_p), c_uint32]
 
     indexer.search_many_terms.restype = _SearchRetType
 
-    indexer.create_index_stub.restype = POINTER(SortedKeysIndexStub)
+    indexer.create_index_stub.restype = POINTER(SortedKeysIndex)
+    indexer.clean.argtypes = [POINTER(SortedKeysIndex)]
     return indexer
 
 
@@ -131,41 +134,66 @@ class Indexer:
         other.ind = None
         other.dll = None
 
+    def clean(self):
+        self.dll.clean(self.ind)
+
+    def address(self):
+        return self.ind
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
 
-from queue import SimpleQueue
-from collections import deque
-
+from queue import Queue
 from threading import Thread
 
 
 class ParallelIndexer:
-    def thread_run(self):
-        with Indexer() as index:
-
+    def thread_run(self, index: Indexer):
+        def inner():
             while True:
                 item = self.queue.get()
                 if item == "exit":
-                    index.persist(self.names.pop())
+                    index.clean()
                     return
 
                 index.append_file(item[0], item[1])
+        return inner
 
-    def __init__(self, num_t=1, name="par-index"):
-        self.queue = SimpleQueue()
-        self.threads = [Thread(target=lambda: self.thread_run()) for _ in range(0, num_t)]
+    def __init__(self, num_t=5, name="par-index"):
+        self.num_t = num_t
+        self.name = name
+
+    def __enter__(self):
+        self.queue = Queue(50)
+        self.indices = []
+        for _ in range(0, self.num_t):
+            ind = Indexer()
+            ind.__enter__()
+            self.indices.append(ind)
+
+        self.threads = [Thread(target=self.thread_run(i)) for i in self.indices]
         [x.start() for x in self.threads]
-        self.names = deque([f"{name}-{i}" for i in range(0, num_t)])
+        return self
 
     def append_file(self, contents: str, id: int):
         self.queue.put((contents, id))
 
-    def end(self):
+    def end(self) -> str:
         for _ in self.threads:
             self.queue.put("exit")
             self.queue.put("exit")
 
         for t in self.threads:
             t.join()
+
+        print("Merging")
+        for t in self.indices[1:]:
+            print("Merging")
+            self.indices[0].concat(t)
+
+        self.indices[0].persist(self.name)
+        return self.name
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        [i.__exit__(exc_type, exc_val, exc_tb) for i in self.indices]

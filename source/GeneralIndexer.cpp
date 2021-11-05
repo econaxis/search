@@ -122,7 +122,6 @@ std::string persist_indices_filepairs(const SortedKeysIndex &master, const FileP
 }
 
 
-
 void queue_produce_file_contents(SyncedQueue &contents) {
     const FilePairs filepairs = FileListGenerator::from_file();
 
@@ -167,7 +166,7 @@ void queue_produce_file_contents(SyncedQueue &contents) {
 
 
 extern "C" {
-SortedKeysIndex* new_index() {
+SortedKeysIndex *new_index() {
     return new SortedKeysIndex();
 }
 void persist_indices(SortedKeysIndex *index, const char *filename) {
@@ -179,24 +178,19 @@ void persist_indices(SortedKeysIndex *index, const char *filename) {
     delete index;
 }
 
-int started = 0;
+void clean(SortedKeysIndex* index) {
+    index->sort_and_group_shallow();
+}
 void append_file(SortedKeysIndex *index, const char *content, uint32_t docid) {
-    started++;
-    if (started != 1) {
-        std::cout<<"Started: "<<started<<"\n";
-    }
     auto temp = Tokenizer::index_string_file(std::string(content), docid);
     auto &to_insert = index->get_index();
     to_insert.insert(to_insert.end(), temp.begin(), temp.end());
-    started--;
 }
-void concat_indices(SortedKeysIndex* main, SortedKeysIndex* add) {
-    main->sort_and_group_shallow();
-    add->sort_and_group_shallow();
+void concat_indices(SortedKeysIndex *main, SortedKeysIndex *add) {
     main->merge_into(std::move(*add));
     assert(add->get_index().empty());
 
-    std::cout<<"Merging final size: "<<main->get_index().size()<<"\n";
+    std::cout << "Merging final size: " << main->get_index().size() << "\n";
     delete add;
 }
 }

@@ -74,18 +74,14 @@ def load_pages() -> [dict]:
     import sqlite3
     con = sqlite3.connect('output.db')
     cur = con.cursor()
-
-    size = 5
-    ind = ParallelIndexer()
-    for row in cur.execute('SELECT * FROM data ORDER BY id LIMIT 100000'):
-        ind.append_file(row[2], row[0])
-        ind.append_file(row[2], row[0] * 10)
-        ind.append_file(row[2], row[0] * 100)
-        ind.append_file(row[2], row[0] * 10000)
-        ind.append_file(row[2], row[0] * 100000)
-
-    print("Persisting")
-    ind.end()
+    with ParallelIndexer() as ind:
+        for row in cur.execute('SELECT * FROM data ORDER BY id LIMIT 100000'):
+            ind.append_file(row[2], row[0])
+            ind.append_file(row[2], row[0] * 10)
+            ind.append_file(row[2], row[0] * 100)
+            ind.append_file(row[2], row[0] * 10000)
+            ind.append_file(row[2], row[0] * 100000)
+        ind.end()
 
 
 def test_live():

@@ -171,15 +171,32 @@ SortedKeysIndex* new_index() {
     return new SortedKeysIndex();
 }
 void persist_indices(SortedKeysIndex *index, const char *filename) {
-    sort_and_group_all_par(index->get_index());
+    index->sort_and_group_shallow();
+    index->sort_and_group_all();
+
     Serializer::serialize(filename, *index);
 
     delete index;
 }
 
+int started = 0;
 void append_file(SortedKeysIndex *index, const char *content, uint32_t docid) {
+    started++;
+    if (started != 1) {
+        std::cout<<"Started: "<<started<<"\n";
+    }
     auto temp = Tokenizer::index_string_file(std::string(content), docid);
-    index->sort_and_group_shallow();
-    index->merge_into(std::move(temp));
+    auto &to_insert = index->get_index();
+    to_insert.insert(to_insert.end(), temp.begin(), temp.end());
+    started--;
+}
+void concat_indices(SortedKeysIndex* main, SortedKeysIndex* add) {
+    main->sort_and_group_shallow();
+    add->sort_and_group_shallow();
+    main->merge_into(std::move(*add));
+    assert(add->get_index().empty());
+
+    std::cout<<"Merging final size: "<<main->get_index().size()<<"\n";
+    delete add;
 }
 }

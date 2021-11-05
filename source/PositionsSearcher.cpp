@@ -87,28 +87,38 @@ void insert_to_array(Container &array, uint32_t value);
 
 //! Iterates through two sorted lists using two pointers (fingers) to find two terms with least difference between the two lists.
 //! \tparam T
-//! \param first1 Iterator/pointer type to beginning of first range
+//! \param &first1 Iterator/pointer type to beginning of first range. Is also set to the closest position
 //! \param last1 Last of first range
 //! \param first2 Beginning of second range
 //! \param last2 Last of second range
 //! \return minimum difference
 template<typename T>
-int two_finger_find_min(T &first1, T last1, T &first2, T last2) {
+int two_finger_find_min(T &first1, T last1, T first2, T last2) {
     assert(first1->document_id == (last1 - 1)->document_id);
     assert(first2->document_id == (last2 - 1)->document_id);
 
-    uint32_t curmin = std::numeric_limits<uint32_t>::max();
+    uint32_t min_score = std::numeric_limits<uint32_t>::max();
+    auto &curmin = first1;
+    // assert that no copy
+    assert(curmin.base() == first1.base());
+
     while (first1 < last1) {
         if (first2 == last2) break;
         if (first1->document_position > first2->document_position)
             first2++;
         else {
-            curmin = std::min(curmin, first2->document_position - first1->document_position);
-            if (curmin <= 1) break;
+            if (first2->document_position - first1->document_position < min_score) {
+                min_score = first2->document_position - first1->document_position;
+                curmin = first1;
+            }
+            if (min_score <= 1) break;
             first1++;
         }
     }
-    return static_cast<int>(curmin);
+    first1 = curmin;
+    first1 = std::min(first1, last1 - 1);
+    first2 = std::min(first2, last2 - 1);
+    return static_cast<int>(min_score);
 }
 
 
@@ -117,16 +127,21 @@ int two_finger_find_min(T &first1, T last1, T &first2, T last2) {
 //! \param tds
 //! \param td
 //! \return
+/*
 DocumentsMatcher::TopDocsWithPositions
-PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, const TopDocs &td,
+PositionsSearcher::rerank_by_positions(const PositionsList &positions_list, const TopDocs &td,
                                        const std::vector<std::string> &query_terms) {
     using TopDocsWithPositions = DocumentsMatcher::TopDocsWithPositions;
     TopDocsWithPositions ret(td);
 
     if (positions_list.empty()) return ret;
 
+    // For each document found...
     for (auto d = ret.begin(); d < ret.end(); d++) {
         int pos_difference = 0;
+
+        std::cout<<"Positions size: "<<positions_list.size()<<"\n";
+        // For each matched word...
         for (int i = 0; i < positions_list.size() - 1; i++) {
             auto[first1, last1] = std::equal_range(positions_list[i].begin(), positions_list[i].end(), d->document_id);
             auto[first2, last2] = std::equal_range(positions_list[i + 1].begin(), positions_list[i + 1].end(),
@@ -136,6 +151,7 @@ PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, co
             // Still, we should check.
             if (first1 == positions_list[i].end() || first2 == positions_list[i + 1].end() ||
                 first1->document_id != d->document_id || first2->document_id != d->document_id) {
+                std::cout<<"Pos dont exist\n";
                 print_range("error: Pos dont exist, probably AND error?", query_terms.begin(), query_terms.end());
                 pos_difference = std::numeric_limits<int>::max();
                 break;
@@ -145,6 +161,8 @@ PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, co
 
             a0 -= query_terms[i].size() + 1;
             pos_difference += abs(a0);
+
+            std::cout<<"Setting position "<<first1->document_position<<"\n";
             insert_to_array(d->matches, first1->document_position);
         }
         d->document_freq *= position_difference_scaler(pos_difference);
@@ -152,22 +170,9 @@ PositionsSearcher::rerank_by_positions(const PositionsMatrix &positions_list, co
     ret.sort_by_frequencies();
     return ret;
 }
+*/
 
-PositionsMatrix
-PositionsSearcher::fill_positions_from_docs(const SortedKeysIndexStub &index,
-                                            const std::vector<std::string> &query_terms) {
-    if (query_terms.size() >= 32 || query_terms.size() < 2) {
-        log("Positions searcher not active: terms size not within bounds [2, 32]");
-        return {};
-    }
-    PositionsMatrix positions_list(query_terms.size());
 
-    for (int i = 0; i < query_terms.size(); i++) {
-        positions_list[i] = index.get_positions_for_term(query_terms[i]);
-    }
-
-    return positions_list;
-}
 
 int position_difference_scaler(uint32_t posdiff) {
     if (posdiff <= 2) return 100;
@@ -180,6 +185,7 @@ int position_difference_scaler(uint32_t posdiff) {
 
 template<typename Container>
 void insert_to_array(Container &array, uint32_t value) {
+    assert(value != 0);
     for (auto &i : array) {
         if (i == 0) {
             i = value;

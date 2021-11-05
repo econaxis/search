@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "DocumentFrequency.h"
+#include <unordered_set>
 #include "PossiblyMatchingTerm.h"
 
 class TopDocs {
@@ -19,6 +20,14 @@ public:
 
     void add_term_str(PossiblyMatchingTerm term) {
         included_terms.push_back(std::move(term));
+    }
+
+    std::unordered_set<uint32_t> get_id_hashset() {
+        auto set = std::unordered_set<uint32_t>();
+        for (auto& j : docs) {
+            set.insert(j.document_id);
+        }
+        return set;
     }
 
     std::optional<const char *> get_first_term() const;
@@ -57,6 +66,12 @@ public:
     std::vector<value_type>::iterator begin() { return docs.begin(); }
     std::vector<value_type>::iterator end() { return docs.end(); }
     std::size_t size() const { return docs.size(); }
+
+
+
+    static inline std::vector<DocumentFrequency> into_docs(TopDocs td) {
+        return td.docs;
+    }
 };
 
 

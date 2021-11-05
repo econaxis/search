@@ -29,6 +29,7 @@ add_library(search-share SHARED
         "source/SortedKeysIndex.cpp"
         "source/compactor/Compactor.cpp"
         "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
+        source/IndexStubCApi.cpp
         source/Constants.cpp source/Base26Num.cpp
         source/FPStub.cpp
         source/DocumentsTier.cpp
@@ -135,7 +136,7 @@ add_custom_target(
 
 )
 
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-    find_library(pythonlib NAMES pythonlib PATHS ${CMAKE_BINARY_DIR} REQUIRED)
-    target_link_libraries(general-indexer PRIVATE pythonlib)
-endif()
+#if(CMAKE_BUILD_TYPE MATCHES Debug)
+#    find_library(pythonlib NAMES pythonlib PATHS ${CMAKE_BINARY_DIR} REQUIRED)
+#    target_link_libraries(general-indexer PRIVATE pythonlib)
+#endif()

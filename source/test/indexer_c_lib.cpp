@@ -9,8 +9,8 @@
 
 TEST(GeneralIndexer, c_lib_works) {
     auto index = new_index();
-    append_file(index, "fdafdsadf fdsa fsad fsa fdafda", 0);
-    persist_indices(index, "test");
+    append_file(index, "fdafdsadf fdsa hello world fsad fsa fdafda", 0);
+    persist_indices(index, "python-test");
 }
 
 TEST(scratch, scratch) {
@@ -19,5 +19,5 @@ TEST(scratch, scratch) {
 
     const char** _t = &terms[0];
     uint32_t len;
-    auto b = search_many_terms(index, _t, 2, &len);
+//    auto b = search_many_terms(index, _t, 2, &len);
 }

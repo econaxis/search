@@ -33,16 +33,9 @@ std::vector<WordPos> clean_string(std::string &file) {
 
     unsigned int last_end = 1 << 31;
     bool is_in_word = false;
-    bool is_in_xml = false;
     unsigned int i = 0;
     while (i < file.size()) {
-        if (is_in_xml) {
-            if (file[i] == '>') {
-                is_in_xml = false;
-            }
-            i++;
-            continue;
-        } else if (is_in_word) {
+        if (is_in_word) {
             if (!std::isalpha(file[i])) {
                 // Limit word length to 50;
                 if (i - last_end > 50) {
@@ -62,9 +55,6 @@ std::vector<WordPos> clean_string(std::string &file) {
                 is_in_word = true;
                 last_end = i;
             }
-        }
-        if (file[i] == '<') {
-            is_in_xml = true;
         }
         i++;
     }

@@ -11,45 +11,45 @@
 
 namespace fs = std::filesystem;
 
-
-void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::vector<DocIDFilePair>> &filemap,
-                      char *argv[]) {
-    using namespace std::chrono;
-
-    int NUM_SEARCHES = std::atoi(argv[1]);
-    std::uniform_int_distribution<uint> dist(0, 1000); // ASCII table codes for normal characters.
-    auto t1 = high_resolution_clock::now();
-    int i = 0;
-    while (i < NUM_SEARCHES) {
-
-        auto temp = (std::string) strings[dist(randgen())];
-        auto temp1 = (std::string) strings[dist(randgen())];
-
-        Tokenizer::clean_token_to_index(temp);
-        Tokenizer::clean_token_to_index(temp1);
-
-        std::vector<std::string> query{temp, temp1};
-        auto size = 0;
-        if (temp.size() && temp1.size()) {
-            Tokenizer::remove_bad_words(query);
-            if (!query.empty()) {
-                for (auto &j : index) {
-                    auto temp = j.search_many_terms(query);
-                    size += DocumentsMatcher::combiner_with_position(j, temp, query).docs.size();
-                }
-                i++;
-            }
-        }
-
-        if (i % 3 == 0)
-            std::cout << "Matched " << size << " files for " << temp1 << " " << temp << " "
-                      << i * 100 / NUM_SEARCHES << "%\n" << std::flush;
-    }
-    auto time = high_resolution_clock::now() - t1;
-    auto timedbl = duration_cast<milliseconds>(time).count();
-    std::cout << "Time for " << NUM_SEARCHES << " queries: " << timedbl << "\n";
-
-}
+//
+//void profile_indexing(std::vector<SortedKeysIndexStub> &index, std::vector<std::vector<DocIDFilePair>> &filemap,
+//                      char *argv[]) {
+//    using namespace std::chrono;
+//
+//    int NUM_SEARCHES = std::atoi(argv[1]);
+//    std::uniform_int_distribution<uint> dist(0, 1000); // ASCII table codes for normal characters.
+//    auto t1 = high_resolution_clock::now();
+//    int i = 0;
+//    while (i < NUM_SEARCHES) {
+//
+//        auto temp = (std::string) strings[dist(randgen())];
+//        auto temp1 = (std::string) strings[dist(randgen())];
+//
+//        Tokenizer::clean_token_to_index(temp);
+//        Tokenizer::clean_token_to_index(temp1);
+//
+//        std::vector<std::string> query{temp, temp1};
+//        auto size = 0;
+//        if (temp.size() && temp1.size()) {
+//            Tokenizer::remove_bad_words(query);
+//            if (!query.empty()) {
+//                for (auto &j : index) {
+//                    auto temp = j.search_many_terms(query);
+//                    size += DocumentsMatcher::combiner_with_position(j, temp, query).docs.size();
+//                }
+//                i++;
+//            }
+//        }
+//
+//        if (i % 3 == 0)
+//            std::cout << "Matched " << size << " files for " << temp1 << " " << temp << " "
+//                      << i * 100 / NUM_SEARCHES << "%\n" << std::flush;
+//    }
+//    auto time = high_resolution_clock::now() - t1;
+//    auto timedbl = duration_cast<milliseconds>(time).count();
+//    std::cout << "Time for " << NUM_SEARCHES << " queries: " << timedbl << "\n";
+//
+//}
 
 std::pair<std::vector<SortedKeysIndexStub>, std::vector<std::vector<DocIDFilePair>>>
 load_all_indices() {
@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
 
 
     auto[indices, filemap] = load_all_indices();
-    profile_indexing(indices, filemap, argv);
+//    profile_indexing(indices, filemap, argv);
     std::string inp_line;
     std::cout << "Ready\n>> ";
 

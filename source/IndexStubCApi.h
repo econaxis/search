@@ -1,17 +1,23 @@
-//
-// Created by henry on 2021-11-03.
-//
 
 #ifndef GAME_INDEXSTUBCAPI_H
 #define GAME_INDEXSTUBCAPI_H
+
 #include "DocumentsMatcher.h"
+#include "PositionsSearcher.h"
 
 extern "C" {
-    using namespace DocumentsMatcher;
-TopDocsWithPositions::Elem *
-search_many_terms(SortedKeysIndexStub *index, const char **terms, int terms_length, /*out */ uint32_t *length);
-void free_elem_buf(TopDocsWithPositions::Elem *ptr);
-void free_index_stub(SortedKeysIndexStub *stub);
+using namespace DocumentsMatcher;
+
+struct SearchRetType {
+    DocumentFrequency* topdocs;
+    uint32_t topdocs_length;
+    FoundPositions* pos;
+    uint32_t pos_len;
+};
+
+SearchRetType search_many_terms(SortedKeysIndexStub *index, const char **terms, int terms_length);
+void free_index(SortedKeysIndexStub* stub);
+void free_elem_buf(SearchRetType elem);
 SortedKeysIndexStub *create_index_stub(const char *suffix);
 }
 

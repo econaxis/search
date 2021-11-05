@@ -16,32 +16,38 @@ namespace fs = std::filesystem;
  *
  * @return a score that means how well they match. A complete match (shorter == longer) will return CUTOFF_MAX;
  */
-static unsigned int string_prefix_compare(const std::string &shorter, const std::string &longer) {
+static unsigned int string_prefix_compare(const std::string &one, const std::string &two) {
     // Score multiplier in case a word matches all (vs. only a prefix match)
     constexpr float MATCHALL_BONUS = 1.5F;
     // Returns true if shorter is the prefix of longer.
     // e.g. shorter: "str" and longer: "string" returns true.
-    auto ls = longer.size();
-    auto ss = shorter.size();
+    auto ones = one.size();
+    auto twos = two.size();
+    auto ls = std::max(ones, twos);
+    auto ss = std::min(ones, twos);
 
 
     if (ls < ss) return 0;
 
-    float divider = 5.F / (ls - ss + 5);
-    for (std::size_t i = 0; i < ss; i++) {
-        if (shorter[i] != longer[i]) {
-            return 0;
+    float divider = 7.F / (ls - ss + 7);
+    int counter = 0;
+    for (; counter < ss; counter++) {
+        if (one[counter] != two[counter]) {
+            break;
         }
     }
-    const auto score = ss * ss * divider;
-    if (ss == ls) return MATCHALL_BONUS * score;
+    double counterd = counter;
+    if (counter >= ss && counterd <= 5) counterd *= 2;
+    counterd = sqrt(5 * counterd);
+    const auto score = counterd * divider;
+    if (counter == ls) return MATCHALL_BONUS * score;
     else return score;
 }
 
 
 template<typename Iterator>
 static int compute_average(Iterator begin, Iterator end) {
-    if (end - begin < 6) return 8;
+    if (end - begin < 6) return 1;
 
     unsigned int sum = 0, square = 0;
 
@@ -51,7 +57,7 @@ static int compute_average(Iterator begin, Iterator end) {
     }
     sum += end - begin;
 
-    sum *= 1.2F;
+    sum *= 1.4F;
 
     return square / sum;
 }
@@ -116,11 +122,11 @@ void correct_freq_pos_locations(std::istream &terms, std::istream &frequencies) 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-4));
-    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(4));
+    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(2));
 
     // Occurs when there's an empty index. No way to prefix-match, and we have to exit early.
     if (file_start >= index.end()) {
-        print("ERROR: Cannot seek to index for search term ", term);
+        log("ERROR: Cannot seek to index for search term ", term);
         return {};
     };
 
@@ -143,11 +149,13 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
         // and since majority of keys don't fit within our criteria, previewing reduces computation and memory.
         auto preview = Serializer::preview_work_index_entry(terms);
-        log("Matching ", preview.key, "with ", term);
         // If the preview fits within the score cutoff, then we seek back to the previewed position and read the whole thing into memory
         // to process it.
+        auto score = string_prefix_compare(term, preview.key);
         auto min_cutoff_score = compute_average(output_score.begin(), output_score.end());
-        if (auto score = string_prefix_compare(term, preview.key); score >= min_cutoff_score) {
+        log("Matching " + preview.key + " with " + term);
+        log("Score: ", score, "/", min_cutoff_score);
+        if (score >= min_cutoff_score) {
             // Seek back to original previewed position.
             frequencies.seekg(preview.frequencies_pos);
 
@@ -212,43 +220,4 @@ SortedKeysIndexStub::SortedKeysIndexStub(const std::string &suffix) :
         index(Serializer::read_sorted_keys_index_stub_v2(
                 this->frequencies, this->terms)) {
     assert(this->frequencies && this->terms);
-}
-
-std::vector<std::string> from_char_arr(const char **terms, int length) {
-    auto vec = std::vector<std::string>();
-    for (int i = 0; i < length; i++) {
-        vec.push_back(terms[i]);
-    }
-    return vec;
-}
-// C interface functions
-extern "C" {
-using namespace DocumentsMatcher;
-
-SortedKeysIndexStub* create_index_stub(const char* suffix) {
-    return new SortedKeysIndexStub(suffix);
-}
-
-void free_index_stub(SortedKeysIndexStub* stub) {
-    delete stub;
-}
-
-TopDocsWithPositions::Elem *
-search_many_terms(SortedKeysIndexStub *index, const char **terms, int terms_length, /*out */ uint32_t *length) {
-    auto vec = from_char_arr(terms, terms_length);
-    auto output = index->search_many_terms(vec);
-    auto output_with_pos = DocumentsMatcher::combiner_with_position(*index, output, vec);
-
-    // Copy to new buffer
-    auto *buf_ = operator new[](output_with_pos.docs.size() * sizeof(TopDocsWithPositions::Elem));
-    auto *buf = (TopDocsWithPositions::Elem*) buf_;
-    std::copy(output_with_pos.docs.begin(), output_with_pos.docs.end(), buf);
-
-    *length = output_with_pos.docs.size();
-    return buf;
-}
-
-void free_elem_buf(TopDocsWithPositions::Elem *ptr) {
-    operator delete[](ptr);
-}
 }

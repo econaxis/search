@@ -26,6 +26,7 @@ extern "C" {
 SortedKeysIndex* new_index();
 void append_file(SortedKeysIndex *index, const char *content, uint32_t docid);
 void persist_indices(SortedKeysIndex *index, const char *filename);
+void concat_indices(SortedKeysIndex* main, SortedKeysIndex* add);
 }
 
 #endif //GAME_GENERALINDEXER_H

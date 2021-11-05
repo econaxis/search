@@ -172,32 +172,32 @@ TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
 
 constexpr char PLACEHOLDER[] = "(null word)";
 
-TopDocsWithPositions
-DocumentsMatcher::combiner_with_position(const SortedKeysIndexStub &index, std::vector<TopDocs> &outputs,
-                                         const std::vector<std::string> &query_terms) {
-
-    // We'll do operations on outputs, adding to it lesser-frequencied documents.
-    // If we can't find enough documents that match an AND boolean query, then we'll
-    // switch to the backup OR boolean query. When we do OR, we only want the top documents matching.
-    // Thus, we copy this and back it up, in case we need to do an OR on the original,
-    // high-frequencied document set.
-
-    auto outputs_backup = outputs;
-    auto ret = DocumentsMatcher::AND_Driver(outputs);
-
-    if (ret.size() == 0 && outputs.size() > 1) {
-        auto str1 = outputs[0].get_first_term().value_or(PLACEHOLDER);
-        auto str2 = outputs[1].get_first_term().value_or(PLACEHOLDER);
-        log("Warning: using OR backup ", str1, str2);
-        return TopDocsWithPositions(DocumentsMatcher::backup(outputs_backup));
-    } else {
-        // We get a positions matrix of all the document positions for each term in the query
-        auto pos_mat = PositionsSearcher::fill_positions_from_docs(index, query_terms);
-
-        // Use that position matrix to rerank/boost documents if they have proximal matching terms.
-        return PositionsSearcher::rerank_by_positions(pos_mat, ret, query_terms);
-    }
-}
+//TopDocsWithPositions
+//DocumentsMatcher::combiner_with_position(const SortedKeysIndexStub &index, std::vector<TopDocs> &outputs,
+//                                         const std::vector<std::string> &query_terms) {
+//
+//    // We'll do operations on outputs, adding to it lesser-frequencied documents.
+//    // If we can't find enough documents that match an AND boolean query, then we'll
+//    // switch to the backup OR boolean query. When we do OR, we only want the top documents matching.
+//    // Thus, we copy this and back it up, in case we need to do an OR on the original,
+//    // high-frequencied document set.
+//
+//    auto outputs_backup = outputs;
+//    auto ret = DocumentsMatcher::AND_Driver(outputs);
+//
+//    if (ret.size() == 0 && outputs.size() > 1) {
+//        auto str1 = outputs[0].get_first_term().value_or(PLACEHOLDER);
+//        auto str2 = outputs[1].get_first_term().value_or(PLACEHOLDER);
+//        log("Warning: using OR backup ", str1, str2);
+//        return TopDocsWithPositions(DocumentsMatcher::backup(outputs_backup));
+//    } else {
+//        // We get a positions matrix of all the document positions for each term in the query
+//        auto pos_mat = PositionsSearcher::fill_positions_from_docs(index, query_terms);
+//
+//        // Use that position matrix to rerank/boost documents if they have proximal matching terms.
+//        return PositionsSearcher::rerank_by_positions(pos_mat, ret, query_terms);
+//    }
+//}
 
 TopDocsWithPositions::Elem::Elem(unsigned int i, unsigned int i1) : document_id(i), document_freq(i1) {}
 

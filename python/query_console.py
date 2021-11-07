@@ -60,7 +60,7 @@ class QueryConsole:
         self.live.__enter__()
         self.valid = True
 
-    def run_event_loop(self) -> Optional[list[str]]:
+    def run_event_loop(self):
         events = self.sel.select()
         for key, mask in events:
             ch = key.data.read(1)
@@ -85,8 +85,4 @@ class QueryConsole:
             return terms
 
     def set_results(self, sr):
-        console = rich.console.Console()
-        with console.capture() as capture:
-            console.print(sr)
-
-        self.layout["top"].update(Panel(capture.get()))
+        self.layout["top"].update(Panel(sr))

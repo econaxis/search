@@ -1,39 +1,38 @@
 import ctypes
-import sqlite3
-from ctypes import POINTER, c_char_p, c_uint32, c_uint8
-
+from ctypes import POINTER, c_char_p, c_uint32, c_uint8, Structure
 import os
-from typing import Iterator, Iterable
+from typing import Iterable
+from queue import Queue
+from threading import Thread
+import codecs
+
+from table_manager import tbm
 
 os.environ["DATA_FILES_DIR"] = "/home/henry/search/data"
 
 
-class SortedKeysIndexStub(ctypes.Structure):
+class SortedKeysIndexStub(Structure):
     pass
 
 
-class SortedKeysIndex(ctypes.Structure):
+class SortedKeysIndex(Structure):
     pass
 
 
-conn = sqlite3.connect("f.db")
-
-
-class DocumentFrequency(ctypes.Structure):
+class DocumentFrequency(Structure):
     _fields_ = [
         ("document_id", c_uint32),
         ("document_freq", c_uint32)
     ]
 
-    def resolve_id(self, cur: sqlite3.Cursor) -> str:
-        cur.execute(f"SELECT url FROM en WHERE rowid = ?", (int(self.document_id),))
-        return cur.fetchone()
+    def resolve_id(self) -> str:
+        return tbm.get(int(self.document_id))[0]
 
     def __rich__(self):
-        return f"{self.resolve_id(conn.cursor())} ({self.document_freq} score)"
+        return f"{self.resolve_id()} ({self.document_freq} score)"
 
 
-class FoundPositions(ctypes.Structure):
+class FoundPositions(Structure):
     _fields_ = [
         ("terms_index", c_uint8),
         ("document_id", c_uint32),
@@ -51,7 +50,7 @@ def limit5(iterator):
         yield next(iterator)
 
 
-class _SearchRetType(ctypes.Structure):
+class _SearchRetType(Structure):
     _fields_ = [
         ("topdocs", POINTER(DocumentFrequency)),
         ("topdocs_length", c_uint32),
@@ -76,7 +75,6 @@ class _SearchRetType(ctypes.Structure):
 
 class SearchRetType:
     def __init__(self, dll, sr: _SearchRetType, terms: [bytes]):
-        cur = conn.cursor()
         td = {}
         td_terms_count = {}
         for i in sr.iter_td():
@@ -90,13 +88,18 @@ class SearchRetType:
             if id not in td:
                 continue
             if td_terms_count[id][index] < 3:
-                cur.execute("SELECT substr(body_text, ? + 1, ?) FROM en WHERE rowid = ?", (pos, len(terms[index]), id))
-                result = cur.fetchone()[0]
+                result = tbm.get(id, contents_offset=pos, len=len(terms[index]))[1][0:len(terms[index])]
                 td[id].append(result)
                 td_terms_count[id][index] += 1
 
         dll.free_elem_buf(sr)
-        self.td = td
+
+        output_str = ""
+        for key in td:
+            key_hyper = f"[link={tbm.get(key)[0]}]{tbm.get(key)[0][29:]}[/link]"
+            output_str += f"{key_hyper}: {td[key][1:]}\n"
+
+        self.td = output_str
 
     def printable(self):
         return self.td
@@ -180,12 +183,6 @@ class Indexer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
-
-
-from queue import Queue
-from threading import Thread
-
-import codecs
 
 
 class ParallelIndexer:

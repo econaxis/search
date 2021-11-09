@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="style.css">
+
+    <title>Title</title>
+</head>
+<body>
+
+<template id="preview-template">
+    <div class="preview">
+        <h4 style="overflow:hidden; text-overflow: ellipsis; margin: 0.1em">
+            <a></a>
+        </h4>
+        <p></p>
+    </div>
+</template>
+
+<div style="background-color: #944C7C; padding: 30px 45px 30px 45px; margin: auto; display: flex;
+justify-content: center; align-items: stretch">
+    <input type="text"
+           id="query-input"
+           oninput="query_onchange(event)"
+           style="border-radius: 5px 0 0 5px;
+           flex-basis: 63%; font-size: 1.2em; padding: 4px 8px; border: 1px solid #959595">
+    <button style="flex-basis: 40px; flex-grow: 0; font-size: 1.1em; border-radius: 0 5px 5px 0">🔎</button>
+</div>
+<div id="flex-display" style="display: flex; max-height: 95vh;">
+    <div id="urls" style="flex: 0 1 30%; overflow-y: scroll">
+    </div>
+
+    <div style="flex: 1 0; border: 1px solid dimgrey;overflow: hidden;">
+        <div id="control">
+            <div>
+                <button onclick="next_match('prev')">←</button>
+                <button onclick="next_match('next')">→</button>
+            </div>
+            <p id="highlight-counter">
+                <span id="current">1</span> out of <span id="total">0</span> matches</p>
+        </div>
+        <div id="website-display" style="overflow-y: scroll; max-height: 99vh" onscroll="next_match('update')">
+
+        </div>
+    </div>
+
+</div>
+<script src="index.js"></script>
+</body>
+</html>

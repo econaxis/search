@@ -45,6 +45,7 @@ class TableManager:
 
     @functools.lru_cache(500, typed=True)
     def get(self, id: int, contents_offset: int = 0, len=None):
+        print(f"Getting {id}")
         namep = DBDLL.db1_get(self.tbm, id, 0)
         contentsp = DBDLL.db1_get(self.tbm, id, 1)
 

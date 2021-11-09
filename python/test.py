@@ -2,7 +2,7 @@ import requests, concurrent.futures
 import json
 from query_console import QueryConsole
 from search_lib import ParallelIndexer
-from table_manager import TableManager
+from table_manager import TableManager, tbm
 
 
 def basic_test():
@@ -34,8 +34,6 @@ def load_bookmarks(data: dict = None) -> [str]:
                 result.extend(load_bookmarks(i))
 
     return result
-
-
 
 
 def download(url):
@@ -103,8 +101,38 @@ def test_live():
                 console.set_results(result)
 
 
+def test_flask():
+    from flask import Flask
+    from flask_cors import CORS, cross_origin
+    from search_lib import Searcher
+
+    with Searcher("par-index") as searcher:
+        app = Flask(__name__)
+        app.config['CORS_HEADERS'] = 'Content-Type'
+
+        print(searcher.search_terms("PROGRAMMING").printable())
+
+        @app.route("/<query>")
+        @cross_origin()
+        def run(query: str):
+            if len(query) == 0:
+                return None
+            query = query.upper().split('+')
+            print(query)
+            result = searcher.search_terms(*query).printable()
+            return result
+
+        @app.route("/id/<int:id>")
+        @cross_origin()
+        def get_id(id: int):
+            return tbm.get(id)[1]
+
+        app.run(threaded=False)
+
+
 # load_wikibooks_pages_tbm()
 # load_wikibooks_pages()
-test_live()
+# test_live()
+test_flask()
 print("done")
 # try_search()

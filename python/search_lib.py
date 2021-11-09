@@ -4,6 +4,7 @@ import os
 from typing import Iterable
 from queue import Queue
 from threading import Thread
+import json
 import codecs
 
 from table_manager import tbm
@@ -62,7 +63,7 @@ class _SearchRetType(Structure):
         for i in range(0, self.pos_len):
             yield self.pos[i]
 
-    def iter_td(self, limit=10) -> Iterable[POINTER(DocumentFrequency)]:
+    def iter_td(self, limit=60) -> Iterable[POINTER(DocumentFrequency)]:
         for i in list(reversed(range(0, self.topdocs_length)))[0:limit]:
             yield self.topdocs[i]
 
@@ -75,34 +76,54 @@ class _SearchRetType(Structure):
 
 class SearchRetType:
     def __init__(self, dll, sr: _SearchRetType, terms: [bytes]):
+        print("total: ", sr.topdocs_length, sr.pos_len)
         td = {}
+        scores = {}
         td_terms_count = {}
         for i in sr.iter_td():
-            td[int(i.document_id)] = [int(i.document_freq)]
+            td[int(i.document_id)] = []
+            scores[int(i.document_id)] = i.document_freq
             td_terms_count[int(i.document_id)] = [0] * len(terms)
 
         for i in sr.iter_positions():
-            pos = int(i.document_position)
-            id = int(i.document_id)
-            index = int(i.terms_index)
+            id = i.document_id
             if id not in td:
                 continue
-            if td_terms_count[id][index] < 3:
-                result = tbm.get(id, contents_offset=pos, len=len(terms[index]))[1][0:len(terms[index])]
-                td[id].append(result)
-                td_terms_count[id][index] += 1
+
+            td[id].append([i.document_position, i.terms_index])
+
+        json = {}
+        matches = {}
+
+        for i in reversed(sorted(td, key=lambda i: scores[i])):
+            td[i] = sorted(td[i])
+            if len(td[i]) == 0:
+                continue
+            new = [td[i][0]]
+            for pos, length in td[i][1:]:
+                if pos - new[-1][0] - new[-1][1] < 30:
+                    new[-1][1] = length + pos - new[-1][0]
+                else:
+                    new.append([pos, length])
+
+            new = sorted(new, key=lambda k: k[1])
+            joined_str = ""
+            url, contents = tbm.get(i)
+
+            print(f"Score for ({i}) {url} = {scores[i]}")
+            matches[i] = new
+            for pos, length in new[-6:]:
+                joined_str += "..." if len(joined_str) != 0 else ""
+                joined_str += f"{contents[pos:pos + length]}"
+
+            json[i] = (url, joined_str)
 
         dll.free_elem_buf(sr)
-
-        output_str = ""
-        for key in td:
-            key_hyper = f"[link={tbm.get(key)[0]}]{tbm.get(key)[0][29:]}[/link]"
-            output_str += f"{key_hyper}: {td[key][1:]}\n"
-
-        self.td = output_str
+        scores = list(reversed(sorted(scores.keys(), key=lambda k: scores[k])))
+        self.td = {"text": json, "matches": matches, "scores": scores}
 
     def printable(self):
-        return self.td
+        return json.dumps(self.td)
 
 
 def load(path):
@@ -142,7 +163,7 @@ class Searcher:
     def search_terms(self, *args):
         terms_len = len(args)
 
-        args = list(map(lambda k: bytes(k, 'ascii').upper(), args))
+        args = list(map(lambda k: bytes(k, 'ascii'), args))
         terms = (c_char_p * terms_len)(*args)
 
         terms = ctypes.cast(terms, POINTER(c_char_p))

@@ -61,7 +61,7 @@ class QueryConsole:
         self.valid = True
 
     def run_event_loop(self):
-        events = self.sel.select()
+        events = self.sel.select(0.1)
         for key, mask in events:
             ch = key.data.read(1)
             if ch == 'q':
@@ -75,7 +75,7 @@ class QueryConsole:
 
             if 0 <= ord(ch) - ord('a') < 26 or 0 <= ord(ch) - ord('A') < 26 or ch == ' ':
                 self.query += ch
-
+        # return ["HELLO", "WORLD"]
         self.layout["query"].update(Panel(self.query))
         self.live.refresh()
         if self.query != "" and self.query != self.prevquery:

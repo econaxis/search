@@ -2,10 +2,18 @@
 This project is a full text search engine, based upon an on-disk, binary inverted index data structure. All queries are done on-disk, so we can search through many gigabytes of text with constant memory usage (~50MB).
 
 ## Demo
+The entire English wikibooks dataset (around 800 MB of pure text) is searched.
 
+https://user-images.githubusercontent.com/25783926/140873586-c9c587d3-8138-4c32-a1fa-7fcf1289238e.mp4
+
+As of November 2021, I have completely revamed the ranking metrics, indexing method, storage engine, web server, and website UI. These improvements enabled me to show "previews" and highlight relevant parts. More information on the storage engine is further down.
+
+
+
+### Old Demo (before November 2021)
 Around 50,000 Instructables documents are searched near-instantly as the user types. 
-
 ![image](/demo.gif)
+
 
 These queries are run in parallel across independent, horizontal-sharded indices. 
 
@@ -27,10 +35,28 @@ This engine does not currently support:
  - mutability. Documents cannot be edited or removed from the index. Only additions are supported.
  - multiple fields. The whole document is indexed as one field.
  - distributed execution. Distributed execution should be easy to implement, as it'd be based off the multithreaded execution API. However, I haven't implemented it yet.
- - separation of storage and compute. The current implementation uses the filesystem as the storage layer when serving documents. However, it should be simple to enable the engine to serve arbitrary URL's rather than file paths, which decouples storage and compute. Note: the indices are still stored locally for quick access, however, this means the actual documents can be stored via S3 or another service.
+ - (note: as of Nov 2021, this has been implemented) separation of storage and compute. The current implementation uses the filesystem as the storage layer when serving documents. However, it should be simple to enable the engine to serve arbitrary URL's rather than file paths, which decouples storage and compute. Note: the indices are still stored locally for quick access, however, this means the actual documents can be stored via S3 or another service.
 
 
 # Cool Implementation Tidbits
+## *New!* Improved storage engine
+
+The search engine only tracks 32 bit document ID's. This allows quicker searching and reduced memory pressure. However, we need some way to translate those ID's into actual user data, like URL's, names, or documents. Before, I coded a simple but inefficient storage engine that stored ID's and their corresponding URL's consecutively. Searching would be O(n). 
+
+This quick design was the performance bottleneck and lacked extensibility. What if I wanted to store more than URL's, like actual, large documents? I experimented briefly with SQLite, which worked more than enough for my needs. However, after making this whole search engine myself, I had an itch to replace SQLite with my own database.
+
+Therefore, I created my own database with lists of homogenous, fixed-size structs as the fundamental data type. This is similar to a table in SQLite. Since all rows are fixed size, rows requiring variable length data, like textual documents or URL's, place their data on an on-disk heap, and store 64 bit offsets (like pointers) into the heap. 
+
+I knew my access patterns well. Documents will be inserted in monotonically increasing order of ID. Documents will always be queried by ID. There will be no mutations. Therefore, I coded these access patterns straight into the database itself. In addition, I already knew that I'd need to store ID's, and two variable length strings: the URL and the actual content. Therefore, I compiled that struct definition with the database. There are only two functions: `read(id) -> string` and `put(id, url, contents`. These decisions saved me from writing query parsers, runtime struct offset calculations, or runtime type checks.
+
+The database is at `/rust/db1/` in this repo, and is written in Rust. The design is a much simpler version of a log-structured merge tree, because my usage doesn't need the more advanced techniques of an LSM. I learned many things by writing this database, and some of these topics definitely needs more write-up:
+ - buffer pool (instead of relying on the filesystem cache, I made my own LRU cache) `buffer_pool.rs`
+ - heap (the original design had no intention for variable-length data, and adding a heap was a massive refactoring effort) `db1_string.rs`
+ - Rust - Python FFI and Rust - C FFI (how to transfer data from a non-GC'ed language to a GC'ed language with minimal copies) `python_lib.rs`, `c_lib.rs`
+
+
+The updated demo (video at the top) uses this database to load the full contents when the user clicks on a Wikibooks entry.
+
 ## Serialization/Deserialization
 
 I considered using a well-established KV store, like LMDB, for the storage layer of the engine. I could build the inverted index without worrying about database organization and serialization. I would also get some guarantees, like thread-safety. I would also get features like prefix compression, cross-language FFI bindings, and a place to store metadata for free. However, I decided to roll my own storage engine and implement all serialization/deserialization code from scratch, based off the SSTable architecture. I went this route because storage architecture interested me as much as search engine architecture. Of course, if I was building this search engine for a business, rather than for my own curiosity, I would've chosen to use LMDB instead.

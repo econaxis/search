@@ -55,7 +55,6 @@ namespace PositionsSearcher {
             };
 
         }
-        std::cout << "Counter: " << counter << "\n";
         return positions_list;
     };
 }

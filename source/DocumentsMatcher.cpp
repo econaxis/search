@@ -154,19 +154,19 @@ TopDocs AND(std::vector<TopDocs> &results) {
 
 TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
     auto ret = AND(outputs);
-//    while (ret.size() < 20) {
-//        bool has_more = false;
-//        for (auto &td : outputs) {
-//            if (td.extend_from_tier_iterators()) {
-//                has_more = true;
-//                log("search extended from tier iterator once");
-//            }
-//        }
-//        if (!has_more) break;
-//        else {
-//            ret = AND(outputs);
-//        }
-//    }
+    while (ret.size() < 200) {
+        bool has_more = false;
+        for (auto &td : outputs) {
+            if (td.extend_from_tier_iterators()) {
+                has_more = true;
+                log("search extended from tier iterator once");
+            }
+        }
+        if (!has_more) break;
+        else {
+            ret = AND(outputs);
+        }
+    }
     ret.sort_by_frequencies();
     return ret;
 }

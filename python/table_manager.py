@@ -45,7 +45,6 @@ class TableManager:
 
     @functools.lru_cache(500, typed=True)
     def get(self, id: int, contents_offset: int = 0, len=None):
-        print(f"Getting {id}")
         namep = DBDLL.db1_get(self.tbm, id, 0)
         contentsp = DBDLL.db1_get(self.tbm, id, 1)
 
@@ -57,7 +56,6 @@ class TableManager:
         else:
             len = min(contentsp.len - contents_offset, len)
 
-        print(namep.len, contentsp.len)
         name = ctypes.string_at(namep.ptr, namep.len)
         contents = ctypes.string_at(contentsp.ptr + contents_offset, size=len)
         return_type = codecs.decode(name, 'ascii'), codecs.decode(contents, 'ascii')

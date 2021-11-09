@@ -63,7 +63,7 @@ class _SearchRetType(Structure):
         for i in range(0, self.pos_len):
             yield self.pos[i]
 
-    def iter_td(self, limit=60) -> Iterable[POINTER(DocumentFrequency)]:
+    def iter_td(self, limit=40) -> Iterable[POINTER(DocumentFrequency)]:
         for i in list(reversed(range(0, self.topdocs_length)))[0:limit]:
             yield self.topdocs[i]
 
@@ -76,7 +76,6 @@ class _SearchRetType(Structure):
 
 class SearchRetType:
     def __init__(self, dll, sr: _SearchRetType, terms: [bytes]):
-        print("total: ", sr.topdocs_length, sr.pos_len)
         td = {}
         scores = {}
         td_terms_count = {}
@@ -110,7 +109,6 @@ class SearchRetType:
             joined_str = ""
             url, contents = tbm.get(i)
 
-            print(f"Score for ({i}) {url} = {scores[i]}")
             matches[i] = new
             for pos, length in new[-6:]:
                 joined_str += "..." if len(joined_str) != 0 else ""

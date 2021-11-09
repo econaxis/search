@@ -1,14 +1,13 @@
 .preview {
-    height: 6em;
+    max-height: 8em;
     overflow: hidden;
     text-overflow: ellipsis;
     border-bottom: 0.5px solid rgba(137, 147, 165, 0.98);
-    padding: 0.2em;
-    padding-left: 10px;
+    padding: 0.2em 0.2em 1em 10px;
     background-color: white;
 }
 
-.preview:hover:not(.darken){
+.preview:hover:not(.darken) {
     filter: brightness(90%);
 }
 
@@ -16,8 +15,18 @@
     filter: brightness(85%);
 }
 
+.preview > h4 {
+    font-size: 0.9em;
+}
+
 .preview > h4 > a {
     color: #112768;
+}
+
+.preview > p {
+    margin-top: 5px;
+    font-size: 0.8em;
+    color: #383838;
 }
 
 #website-display {

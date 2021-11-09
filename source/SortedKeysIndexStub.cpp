@@ -163,7 +163,9 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             frequencies.seekg(preview.frequencies_pos);
 
             MultiDocumentsTier::TierIterator ti(frequencies);
-            auto files = ti.read_next().value();
+            auto files = ti.read_all();
+
+//            auto files = ti.read_next().value();
 
 
 //            log("Matched term, searched term " +  preview.key + " " + term, "score:", score, "docs size:", files.size());
@@ -176,7 +178,9 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             TopDocs td(std::move(files));
 
             if (preview.key == term || score >= 16)
-                td.add_term_str(PossiblyMatchingTerm(std::move(preview.key), preview.positions_pos, preview.frequencies_pos, ti, score));
+                td.add_term_str(
+                        PossiblyMatchingTerm(std::move(preview.key), preview.positions_pos, preview.frequencies_pos, ti,
+                                             score));
 
             // Early optimization -- if we find the word then just return
             // (Disable because it misses some matches).
@@ -208,10 +212,18 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 std::vector<TopDocs> SortedKeysIndexStub::search_many_terms(const std::vector<std::string> &terms) const {
     std::vector<TopDocs> all_outputs;
     all_outputs.reserve(terms.size());
-
     for (auto &term: terms) {
         auto result = this->search_one_term(term);
+
+        for (auto &r : result) {
+            if (r.document_id == 19669) {
+                log("Document ", r.document_id, "contains " + term);
+            }
+        }
+
         all_outputs.push_back(std::move(result));
+
+
     };
     return all_outputs;
 }

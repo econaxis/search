@@ -80,10 +80,14 @@ bool TopDocs::extend_from_tier_iterators() {
     return has_more;
 }
 
-std::optional<const char *> TopDocs::get_first_term() const {
+std::optional<PossiblyMatchingTerm> TopDocs::pop_next_term()  {
     if (included_terms.empty()) {
         return std::nullopt;
-    } else return included_terms.front().term.data();
+    } else {
+        auto ret = std::move(included_terms.back());
+        included_terms.pop_back();
+        return ret;
+    }
 }
 
 std::string TopDocs::as_string() const {

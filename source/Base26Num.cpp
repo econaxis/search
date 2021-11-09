@@ -37,7 +37,6 @@ constexpr std::size_t MAX_CHARS = 11;
  */
 Base26Num::Base26Num(std::string from) {
     num = 0;
-    Tokenizer::remove_punctuation(from);
     const int max_iter = std::min(from.size(), MAX_CHARS);
     for (int i = 0; i < max_iter; i++) {
         num += (from[i] - 'A' + 1) * alphabet_pow[MAX_CHARS - i - 1];

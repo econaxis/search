@@ -73,21 +73,21 @@ namespace TopDocsResultsJoiner {
             return Iterator{docs.begin().base(), docs.end().base()};
         }
     };
-
-    inline IterativeInputter query_multiple_indices(std::span<const SortedKeysIndexStub> indices,
-                                  const std::vector<std::string> &terms) {
-        IterativeInputter join;
-        for (const auto &indice : indices) {
-            auto temp = indice.search_many_terms(terms);
-
-            // If we dont' want positions_matching, call DocumentsMatcher::AND_Driver(temp);
-            auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(indice, temp, terms);
-
-            // Insert it into the "joiner" instance. This reconciles topdocs across multiple indices and handles cutoff scores.
-            join.join_results(std::move(topdocs_with_pos.docs));
-        }
-        return join;
-    }
+//
+//    inline IterativeInputter query_multiple_indices(std::span<const SortedKeysIndexStub> indices,
+//                                  const std::vector<std::string> &terms) {
+//        IterativeInputter join;
+//        for (const auto &indice : indices) {
+//            auto temp = indice.search_many_terms(terms);
+//
+//            // If we dont' want positions_matching, call DocumentsMatcher::AND_Driver(temp);
+//            auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(indice, temp, terms);
+//
+//            // Insert it into the "joiner" instance. This reconciles topdocs across multiple indices and handles cutoff scores.
+//            join.join_results(std::move(topdocs_with_pos.docs));
+//        }
+//        return join;
+//    }
 }
 
 

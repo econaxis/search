@@ -24,12 +24,20 @@ namespace MultiDocumentsTier {
     struct TierIterator {
         int remaining;
         std::streampos read_position;
-        std::istream& frequencies;
+        std::istream* frequencies;
 
         std::optional<SingleDocumentsTier> read_next();
         TierIterator (std::istream&);
 
         SingleDocumentsTier read_all();
+
+        TierIterator& operator=(const TierIterator& ti) {
+            this->remaining = ti.remaining;
+            this->read_position = ti.read_position;
+            this->frequencies = ti.frequencies;
+
+            return *this;
+        }
     };
 
     // Constructs a MultiDocumentsTier instance and serializes it.

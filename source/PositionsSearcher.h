@@ -35,26 +35,29 @@ namespace PositionsSearcher {
 //    DocumentsMatcher::TopDocsWithPositions
 //    rerank_by_positions(const PositionsList &positions_list, const TopDocs &td, const std::vector<std::string>& query_terms);
 
+    // todo: use all prefix matched terms too
     template<typename FilterFunc>
     PositionsList fill_positions_from_docs(const SortedKeysIndexStub &index,
-                                                const std::vector<std::string> &query_terms,
-                                                FilterFunc filter) {
-        if (query_terms.size() >= 32) {
-            log("Positions searcher not active: terms size not within bounds [2, 32]");
-            return {};
-        }
+                                           std::vector<TopDocs> &tdvec,
+                                           FilterFunc filter) {
         PositionsList positions_list;
-
-        for (uint8_t i = 0; i < query_terms.size(); i++) {
-            for (auto &pos : index.get_positions_for_term(query_terms[i])) {
-                if (filter(pos.document_id)) {
-                    positions_list.push_back(FoundPositions{i, pos.document_id, pos.document_position});
+        int counter = 0;
+        for (auto &td: tdvec) {
+            for (auto term = td.pop_next_term(); term.has_value(); term = td.pop_next_term()) {
+                counter++;
+                for (auto &pos : index.get_positions_from_streampos(term->freq, term->positions)) {
+                    if (filter(pos.document_id)) {
+                        positions_list.push_back(
+                                FoundPositions{static_cast<uint8_t>(term->term.size()), pos.document_id,
+                                               pos.document_position});
+                    }
                 }
-            }
-        }
-        return positions_list;
-    }
-};
+            };
 
+        }
+        std::cout << "Counter: " << counter << "\n";
+        return positions_list;
+    };
+}
 
 #endif //GAME_POSITIONSSEARCHER_H

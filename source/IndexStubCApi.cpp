@@ -39,13 +39,17 @@ void free_index(SortedKeysIndexStub* stub) {
 
 SearchRetType
 search_many_terms(SortedKeysIndexStub *index, const char **terms, int terms_length) {
+    if (terms_length <= 0) {
+        throw std::runtime_error("Searched zero terms");
+    }
+
     auto terms_vec = from_char_arr(terms, terms_length);
     auto output = index->search_many_terms(terms_vec);
     auto outputs_anded = DocumentsMatcher::AND_Driver(output);
     auto outputs_size = (uint32_t) outputs_anded.size();
 
     auto docs_hashset = outputs_anded.get_id_hashset();
-    auto pos_mat = PositionsSearcher::fill_positions_from_docs(*index, terms_vec, [&](auto id) {
+    auto pos_mat = PositionsSearcher::fill_positions_from_docs(*index, output, [&](auto id) {
         return docs_hashset.contains(id);
     });
     auto pos_size = (uint32_t) pos_mat.size();

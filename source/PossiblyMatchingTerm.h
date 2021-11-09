@@ -8,13 +8,14 @@
 #include "DocumentsTier.h"
 
 struct PossiblyMatchingTerm {
-    const std::string &term;
+    PossiblyMatchingTerm(std::string term, std::streampos positions, std::streampos freq, MultiDocumentsTier::TierIterator ti,
+                                               uint32_t score);
+
+    std::string term;
+    std::streampos positions;
+    std::streampos freq;
     MultiDocumentsTier::TierIterator ti;
     uint32_t score;
-
-    PossiblyMatchingTerm(const std::string &term,
-                         MultiDocumentsTier::TierIterator ti,
-                         uint32_t score);
 
     std::optional<SingleDocumentsTier> extend();
 

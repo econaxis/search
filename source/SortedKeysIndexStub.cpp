@@ -57,14 +57,18 @@ static double compute_average(Iterator begin, Iterator end) {
 
     for (auto i = begin; i < end; i++) {
         sum += *i;
-        square += *i * *i;
     }
     sum += end - begin;
-    return square / sum;
+    return sum / (end - begin);
 }
 
+/*
+ * 190716193099524870
+ * 5994033433795872
+ */
 
 std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string &term) const {
+    auto num = Base26Num(term);
     auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term));
     if (file_start > index.begin()) file_start--;
 
@@ -77,9 +81,11 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
         auto terms_pos = file_start->terms_pos;
         terms.seekg(terms_pos);
 
-        while (true) {
+        auto max_search_times = index.end() - file_start - 1;
+
+        while (max_search_times--) {
             auto preview = Serializer::preview_work_index_entry(terms);
-            if (preview.key.compare(term) > 0 || terms.bad()) {
+            if (preview.key > term || terms.bad()) {
                 break;
             }
 
@@ -93,18 +99,14 @@ std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string
     return std::nullopt;
 }
 
-std::vector<DocumentPositionPointer> SortedKeysIndexStub::get_positions_for_term(const std::string &term) const {
-    auto loc = seek_to_term(term);
-    if (loc) {
-        positions.seekg(loc->positions_pos);
-        frequencies.seekg(loc->frequencies_pos);
+std::vector<DocumentPositionPointer>
+SortedKeysIndexStub::get_positions_from_streampos(std::streampos freq, std::streampos pos) const {
+    positions.seekg(pos);
+    frequencies.seekg(freq);
 
-        assert(positions.good());
-        auto freq_list = MultiDocumentsTier::TierIterator(frequencies).read_all();
-        return PositionsSearcher::read_positions_all(positions, freq_list);
-    } else {
-        return {};
-    }
+    assert(positions.good());
+    auto freq_list = MultiDocumentsTier::TierIterator(frequencies).read_all();
+    return PositionsSearcher::read_positions_all(positions, freq_list);
 }
 
 // We assume that the positions of `terms` and `frequencies` are indetermined.
@@ -167,13 +169,14 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 //            log("Matched term, searched term " +  preview.key + " " + term, "score:", score, "docs size:", files.size());
             auto tot_score = 0;
             for (auto &i : files) {
-                i.document_freq = (std::log10(i.document_freq + 1) + 0.7) * score;
+                i.document_freq = (std::log10(i.document_freq) + 1) * score;
                 tot_score += i.document_freq;
             }
 
             TopDocs td(std::move(files));
 
-            if (preview.key == term) td.add_term_str(PossiblyMatchingTerm(term, ti, score));
+            if (preview.key == term || score >= 16)
+                td.add_term_str(PossiblyMatchingTerm(std::move(preview.key), preview.positions_pos, preview.frequencies_pos, ti, score));
 
             // Early optimization -- if we find the word then just return
             // (Disable because it misses some matches).

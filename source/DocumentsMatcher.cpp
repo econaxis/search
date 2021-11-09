@@ -116,7 +116,7 @@ TopDocs AND(std::vector<TopDocs> &results) {
     // Cutoff must be above the average score.
     for (auto pair = min_docs.begin(); pair != min_docs.end(); pair++) {
         bool exists_in_all = true;
-        auto acculumated_score = 1UL;
+        double acculumated_score = 0;
 
         for (auto &[_, idx] : sorted_sizes) {
             if (walkers[idx] >= enders[idx]) {
@@ -131,7 +131,7 @@ TopDocs AND(std::vector<TopDocs> &results) {
 
                 // Add a bonus for document matching more than one query term.
                 // Add the frequency of the found term.
-                acculumated_score += (walkers[idx] - 1)->document_freq;
+                acculumated_score += (walkers[idx] - 1)->document_freq * 1.3;
             } else {
                 exists_in_all = false;
                 break;
@@ -154,19 +154,19 @@ TopDocs AND(std::vector<TopDocs> &results) {
 
 TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
     auto ret = AND(outputs);
-    while (ret.size() < 20) {
-        bool has_more = false;
-        for (auto &td : outputs) {
-            if (td.extend_from_tier_iterators()) {
-                has_more = true;
-                log("search extended from tier iterator once");
-            }
-        }
-        if (!has_more) break;
-        else {
-            ret = AND(outputs);
-        }
-    }
+//    while (ret.size() < 20) {
+//        bool has_more = false;
+//        for (auto &td : outputs) {
+//            if (td.extend_from_tier_iterators()) {
+//                has_more = true;
+//                log("search extended from tier iterator once");
+//            }
+//        }
+//        if (!has_more) break;
+//        else {
+//            ret = AND(outputs);
+//        }
+//    }
     ret.sort_by_frequencies();
     return ret;
 }

@@ -59,8 +59,7 @@ public:
 
     std::vector<TopDocs> search_many_terms(const std::vector<std::string> &terms) const;
 
-    std::vector<DocumentPositionPointer> get_positions_for_term(const std::string &term) const;
-
+    std::vector<DocumentPositionPointer> get_positions_from_streampos(std::streampos freq, std::streampos pos) const;
 };
 
 

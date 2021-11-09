@@ -30,7 +30,7 @@ public:
         return set;
     }
 
-    std::optional<const char *> get_first_term() const;
+    std::optional<PossiblyMatchingTerm> pop_next_term();
 
     // We're using tiered postings list. This function extends the current postings list to include the next tier.
     bool extend_from_tier_iterators();

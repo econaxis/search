@@ -15,11 +15,9 @@ namespace Compactor {
     std::pair<Compactor::ReadState, std::string> read_and_mark_line(std::fstream &stream);
     std::pair<Compactor::ReadState, std::string> read_line(std::ifstream &stream);
 
-    std::optional<std::string> compact_two_files();
-
     void test_makes_sense(const std::string& suffix);
 
-    std::optional<std::string> compact_two_files(std::string &one, std::string &two);
+    bool compact_two_files(std::string &one, std::string &two, std::string& out);
 };
 
 

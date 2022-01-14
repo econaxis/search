@@ -7,6 +7,18 @@
 
 #include "SyncedQueue.h"
 
+inline void fuzz_producer(SyncedQueue &contents) {
+    while (true) {
+        std::string file;
+        std::cin >> file;
+        if(std::cin.eof()) break;
+        auto d = DocIDFilePair{3, "hello"};
+        contents.push({file, d});
+    }
+    contents.input_is_done = true;
+    contents.cv.notify_all();
+}
+
 inline void queue_produce_file_contents_stdin(SyncedQueue &contents) {
     std::vector<SyncedQueue::value_type> thread_local_holder;
     uint docid = 0;
@@ -24,7 +36,7 @@ inline void queue_produce_file_contents_stdin(SyncedQueue &contents) {
 
         // Filename
         if (word != "filename") {
-            throw std::runtime_error ("Word: " + word + " wrong");
+            throw std::runtime_error("Word: " + word + " wrong");
         }
         std::cin >> word;
 
@@ -45,7 +57,7 @@ inline void queue_produce_file_contents_stdin(SyncedQueue &contents) {
         }
 
         // Erase the trailing whitespace
-        file.erase(file.end() -1 );
+        file.erase(file.end() - 1);
         thread_local_holder.emplace_back(std::move(file), DocIDFilePair{docid++, filename});
 
         if (thread_local_holder.size() >= 50) {

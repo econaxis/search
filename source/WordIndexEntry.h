@@ -1,7 +1,7 @@
 #ifndef GAME_WORDINDEXENTRY_H
 #define GAME_WORDINDEXENTRY_H
 
-
+#include <fmt/ostream.h>
 #include <string>
 #include <vector>
 #include <cassert>
@@ -22,20 +22,26 @@ struct WordIndexEntry_v2 {
 };
 
 /**
- * Each WordIndexEntry is a list of files that contain the word "key" + where the file has that word.
+ * Each WordIndexEntry is a list of files and positions that contain the word "key" + where the file has that word.
  */
 struct WordIndexEntry {
     std::string key;
     std::vector<DocumentPositionPointer> files;
+    float frequency_multiplier = 1.0f;
 
     void merge_into(const WordIndexEntry& other) {
         assert(other.key == key);
         assert(std::is_sorted(files.begin(), files.end()));
         assert(std::is_sorted(other.files.begin(), other.files.end()));
-        assert(files.back().document_id < other.files.front().document_id);
+//        if(!(files.back().document_id < other.files.front().document_id || files.front().document_id > other.files.back().document_id)) {
+//            fmt::print("Merge error {} {} {} {}", files.front().document_id, files.back().document_id, other.files.front().document_id, other.files.back().document_id);
+//            assert(false);
+//        }
 
         files.insert(files.end(), other.files.begin(), other.files.end());
 
+        // todo: can optimize, no need sorting
+        std::sort(files.begin(), files.end());
         assert(std::is_sorted(files.begin(), files.end()));
     }
 

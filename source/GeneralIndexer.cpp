@@ -164,7 +164,7 @@ void queue_produce_file_contents(SyncedQueue &contents) {
     contents.cv.notify_all();
 }
 
-
+// External C API
 extern "C" {
 SortedKeysIndex *new_index() {
     return new SortedKeysIndex();

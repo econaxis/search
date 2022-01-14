@@ -85,7 +85,7 @@ TEST(SerializationWordIndexEntry, can_serialize_for_many_wies) {
 
 TEST(SerializationWordIndexEntry, can_serialize_and_load_wies) {
     serialize_test("TEST-serialize-and-load");
-    Compactor::test_makes_sense("TEST-serialize-and-load");
+//    Compactor::test_makes_sense("TEST-serialize-and-load");
 }
 
 

@@ -17,7 +17,6 @@ namespace IndexFileLocker {
     namespace fs = std::filesystem;
 
 
-
     inline bool acquire_lock_file() {
         return true;
         using namespace std::chrono;

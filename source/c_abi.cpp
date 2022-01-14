@@ -21,7 +21,7 @@ void abi_error(std::string message) {
  * Below are functions to load, search, and deallocate StubIndexes.
  */
 void initialize_dir_vars() {
-    initialize_directory_variables();
+    initialize_directory_variables(nullptr);
 }
 
 

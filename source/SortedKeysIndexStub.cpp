@@ -51,9 +51,9 @@ static double string_prefix_compare(const std::string &one, const std::string &t
 
 template<typename Iterator>
 static double compute_average(Iterator begin, Iterator end) {
-    if (end - begin < 4) return 1;
+    if (end - begin < 4) return 2;
 
-    unsigned int sum = 0, square = 0;
+    unsigned int sum = 0;
 
     for (auto i = begin; i < end; i++) {
         sum += *i;
@@ -62,13 +62,7 @@ static double compute_average(Iterator begin, Iterator end) {
     return sum / (end - begin);
 }
 
-/*
- * 190716193099524870
- * 5994033433795872
- */
-
 std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string &term) const {
-    auto num = Base26Num(term);
     auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term));
     if (file_start > index.begin()) file_start--;
 
@@ -115,6 +109,8 @@ SortedKeysIndexStub::get_positions_from_streampos(std::streampos freq, std::stre
 // Now, we have both streams at the correct location.
 void correct_freq_pos_locations(std::istream &terms, std::istream &frequencies) {
     auto terms_pos = terms.tellg();
+
+    // Terms position changes here.
     auto locations = Serializer::preview_work_index_entry(terms);
 
     frequencies.seekg(locations.frequencies_pos);
@@ -124,8 +120,8 @@ void correct_freq_pos_locations(std::istream &terms, std::istream &frequencies) 
 
 
 TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
-    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-4));
-    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(4));
+    auto file_start = std::lower_bound(index.begin(), index.end(), Base26Num(term).fiddle(-5));
+    auto file_end = std::upper_bound(index.begin(), index.end(), Base26Num(term).fiddle(5));
 
     // Occurs when there's an empty index. No way to prefix-match, and we have to exit early.
     if (file_start >= index.end()) {
@@ -146,7 +142,6 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
     std::vector<TopDocs> outputs;
     std::vector<double> output_score;
-    outputs.reserve(50);
 
     while (true) {
         // Preview the WIE without loading everything into memory. Since we expect to do many more previews than actual reads,
@@ -156,8 +151,9 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
         // to process it.
         auto score = string_prefix_compare(term, preview.key);
         auto min_cutoff_score = compute_average(output_score.begin(), output_score.end());
-        log("Matching " + preview.key + " with " + term);
-        log("Score: ", score, "/", min_cutoff_score);
+
+
+//        log(preview.key + " with " + term, "Score: ", score, min_cutoff_score);
         if (score >= min_cutoff_score) {
             // Seek back to original previewed position.
             frequencies.seekg(preview.frequencies_pos);
@@ -165,10 +161,6 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
             MultiDocumentsTier::TierIterator ti(frequencies);
             auto files = ti.read_all();
 
-//            auto files = ti.read_next().value();
-
-
-//            log("Matched term, searched term " +  preview.key + " " + term, "score:", score, "docs size:", files.size());
             auto tot_score = 0;
             for (auto &i : files) {
                 i.document_freq = (std::log10(i.document_freq) + 1) * score;
@@ -177,9 +169,9 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
 
             TopDocs td(std::move(files));
 
-            if (preview.key == term || score >= 16)
+            if (preview.key == term || score >= 20)
                 td.add_term_str(
-                        PossiblyMatchingTerm(std::move(preview.key), preview.positions_pos, preview.frequencies_pos, ti,
+                        PossiblyMatchingTerm(preview.key, preview.positions_pos, preview.frequencies_pos, ti,
                                              score));
 
             // Early optimization -- if we find the word then just return
@@ -203,7 +195,7 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     };
 
     for (int i = 1; i < outputs.size(); i++) {
-        outputs[0].append_multi(outputs[i]);
+        outputs[0].append_multi(std::move(outputs[i]));
     }
     return outputs[0];
 }
@@ -214,12 +206,6 @@ std::vector<TopDocs> SortedKeysIndexStub::search_many_terms(const std::vector<st
     all_outputs.reserve(terms.size());
     for (auto &term: terms) {
         auto result = this->search_one_term(term);
-
-        for (auto &r : result) {
-            if (r.document_id == 19669) {
-                log("Document ", r.document_id, "contains " + term);
-            }
-        }
 
         all_outputs.push_back(std::move(result));
 

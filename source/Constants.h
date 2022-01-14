@@ -5,6 +5,6 @@
 extern std::filesystem::path data_files_dir;
 extern std::filesystem::path indice_files_dir;
 constexpr inline int STUB_INTERVAL = 20;
-extern "C" void initialize_directory_variables();
+extern "C" void initialize_directory_variables(const char* hint);
 
 #endif //GAME_CONSTANTS_H

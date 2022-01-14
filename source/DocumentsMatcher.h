@@ -9,6 +9,7 @@
 namespace DocumentsMatcher {
 
     TopDocs AND_Driver(std::vector<TopDocs>& outputs);
+    TopDocs OR(std::vector<TopDocs>& outputs);
 
 
     TopDocs backup(std::vector<TopDocs> &results);

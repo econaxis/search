@@ -8,7 +8,7 @@
 using namespace std;
 
 TEST(DocumentsMatcher, test) {
-    constexpr int MAXDOCID = 2000000;
+    constexpr int MAXDOCID = 200000;
     constexpr int num_elems = MAXDOCID / 6;
     std::vector<std::vector<TopDocs::value_type>> a(6);
     vector<set<uint32_t>> intersect(6);

@@ -1,5 +1,4 @@
 #include <filesystem>
-#include "IndexFileLocker.h"
 #include "compactor/Compactor.h"
 #include <fstream>
 #include <iostream>
@@ -8,42 +7,9 @@
 #include "Serializer.h"
 #include "Constants.h"
 #include "IndexFileLocker.h"
-#include "random_b64_gen.h"
 
 namespace fs = std::filesystem;
 
-void insert_string(std::fstream &stream, const std::string &ins) {
-    static std::unique_ptr<char[]> temp_buf = std::make_unique<char[]>(100000);
-    if (stream.read(temp_buf.get(), 100000).good()) {
-        throw std::runtime_error("Buffer too small");
-    }
-    auto num_write = stream.gcount();
-    stream.clear();
-    stream.seekp(-num_write, std::ios_base::end);
-    stream.sync();
-    stream << ins;
-    auto pos = stream.tellg();
-    stream.write(temp_buf.get(), num_write);
-    stream.seekg(pos);
-}
-
-
-std::pair<Compactor::ReadState, std::string> Compactor::read_and_mark_line(std::fstream &stream) {
-    std::string line;
-    auto before_read = stream.tellg();
-
-    if (!std::getline(stream, line) || stream.eof()) return {Compactor::ReadState::STREAM_ERROR, ""};
-
-    if (line[0] == '#') {
-        return read_and_mark_line(stream); //recursive call.
-    } else {
-        stream.seekg(before_read);
-        insert_string(stream, "# joined ");
-        //         Use up the remaining line
-        std::getline(stream, line);
-        return {Compactor::ReadState::GOOD, line};
-    }
-}
 
 fs::path make_path(const std::string &name, const std::string &suffix) {
     return indice_files_dir / (name + "-" + suffix);
@@ -55,7 +21,6 @@ struct StreamSet {
     stream_t frequencies;
     stream_t terms;
     stream_t positions;
-    stream_t filemap;
     std::string suffix;
     std::unique_ptr<char[]> buffer;
 
@@ -65,6 +30,10 @@ struct StreamSet {
 
     void serialize(const WordIndexEntry &wie) {
         Serializer::serialize_work_index_entry(frequencies, terms, positions, wie);
+    }
+
+    bool valid() {
+        return frequencies.good() && terms.good() && positions.good();
     }
 
     int getlen() {
@@ -81,7 +50,6 @@ struct StreamSet {
         fs::remove(make_path("frequencies", suffix));
         fs::remove(make_path("terms", suffix));
         fs::remove(make_path("positions", suffix));
-        fs::remove(make_path("filemap", suffix));
     }
 
     template<typename Lambda>
@@ -89,11 +57,10 @@ struct StreamSet {
         l(frequencies);
         l(terms);
         l(positions);
-        // Filemap not applied because it's special.
     }
 };
 
-static constexpr std::size_t BUFLEN = 5e6;
+static constexpr std::size_t BUFLEN = 5e5;
 
 template<typename T>
 StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
@@ -103,7 +70,6 @@ StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
             .frequencies = T(make_path("frequencies", suffix), inoutbinary),
             .terms = T(make_path("terms", suffix), inoutbinary),
             .positions = T(make_path("positions", suffix), inoutbinary),
-            .filemap = T(make_path("filemap", suffix), inoutbinary),
             .suffix = suffix,
             .buffer = std::make_unique<char[]>(BUFLEN * 2)
     };
@@ -124,62 +90,16 @@ StreamSet<T> open_file_set(const std::string &suffix, bool create = false) {
 // Tilde is greater ascii character than all other alphabetical characters.
 const std::string INVALIDATED = "~~~INVALIDATED";
 
-bool check_stream_good(std::ifstream &stream) {
-    stream.get();
-    if (!stream.good()) {
-        stream.clear();
-        stream.unget();
-        return false;
-    } else {
-        stream.unget();
-        return true;
-    }
-}
-
-std::vector<DocIDFilePair> merge_filepairs(std::vector<DocIDFilePair> &one, std::vector<DocIDFilePair> &two) {
-    std::vector<DocIDFilePair> merged;
-    std::merge(one.begin(), one.end(), two.begin(), two.end(), std::back_inserter(merged));
-    return merged;
-}
-
-bool check_file(StreamSet<std::fstream> &str) {
-    return fs::file_size(make_path("positions", str.suffix)) < 1e9;
-}
-
 using namespace Serializer;
 
-std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std::string &suffix1) {
-    std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
-
-
+bool Compactor::compact_two_files(std::string &suffix, std::string &suffix1, std::string& joined_suffix) {
     auto streamset = open_file_set<std::fstream>(suffix);
     auto streamset1 = open_file_set<std::fstream>(suffix1);
 
-
-    auto joined_suffix = suffix + "-" + suffix1;
-
-    if (joined_suffix.size() > 20) joined_suffix = random_b64_str(5);
-    auto temp_joined_suffix = "TEMP-" + joined_suffix;
-
-    auto filepairs = Serializer::read_filepairs(streamset.filemap);
-    auto filepairs1 = Serializer::read_filepairs(streamset1.filemap);
-
-    std::cout << suffix << "-" << suffix1 << "\n";
-    std::cout << "Greatest id: " << filepairs.back().document_id << " " << filepairs1.back().document_id << "\n";
-
-    const auto diff1 = filepairs.back().document_id + 1;
-    auto upgrade_ids = [&](auto &iterable) {
-
-        // Upgrade all documents from 1 to avoid ID duplication
-        // All ID's in database 1 will increase by diff1
-        for (auto &i : iterable) {
-            i.document_id += diff1;
-        }
-    };
-
-    upgrade_ids(filepairs1);
-    auto merged_filepair = merge_filepairs(filepairs, filepairs1);
-
+    if (!(streamset.valid() && streamset1.valid())) {
+        std::cerr<<"One is not valid\n";
+        return false;
+    }
 
     /* newsize: a counter for the size of the merged index
      * len: size of first index
@@ -188,9 +108,8 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
     uint32_t len = streamset.getlen();
     uint32_t len1 = streamset1.getlen();
 
-
-    auto ostreamset = open_file_set<std::fstream>(temp_joined_suffix, true);
-    serialize(ostreamset.filemap, merged_filepair);
+    auto temp_suffix = joined_suffix + "temp";
+    auto ostreamset = open_file_set<std::fstream>(temp_suffix, true);
 
     // Temporarily pad the beginning of the file with the number of elements
     // This would change as we're merging elements. Don't know the length until after merge.
@@ -210,8 +129,6 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
         if (wie1.key == INVALIDATED && len1) {
             // Refill this key.
             wie1 = streamset1.read();
-            upgrade_ids(wie1.files);
-
             len1--;
         }
         if (wie1.key == INVALIDATED && wie.key == INVALIDATED && !len && !len1) {
@@ -256,88 +173,75 @@ std::optional<std::string> Compactor::compact_two_files(std::string &suffix, std
     streamset.remove_all();
     streamset1.remove_all();
 
-    // Move all to valid location
-    IndexFileLocker::move_all(temp_joined_suffix, joined_suffix);
+    fs::rename(make_path("frequencies", temp_suffix), make_path("frequencies", joined_suffix));
+    fs::rename(make_path("terms", temp_suffix), make_path("terms", joined_suffix));
+    fs::rename(make_path("positions", temp_suffix), make_path("positions", joined_suffix));
 
-    IndexFileLocker::do_lambda([&] {
-        std::ofstream index_file(indice_files_dir / "index_files", std::ios_base::app);
-        index_file << joined_suffix << "\n";
-    });
-    return joined_suffix;
+    return true;
 }
 
-
-// todo: copy-on-write mechanism
-std::optional<std::string> Compactor::compact_two_files() {
-    using namespace Serializer;
-    std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
-    assert(index_file);
-
-    IndexFileLocker::acquire_lock_file();
-    auto[err_state1, suffix] = read_and_mark_line(index_file);
-    auto[err_state2, suffix1] = read_and_mark_line(index_file);
-    IndexFileLocker::release_lock_file();
-
-
-    assert(err_state2 == ReadState::GOOD && err_state1 == err_state2);
-
-    auto streamset = open_file_set<std::fstream>(suffix);
-    auto streamset1 = open_file_set<std::fstream>(suffix1);
-
-
-    if (check_file(streamset) && check_file(streamset1)) return compact_two_files(suffix, suffix1);
-    else {
-        // Re-add it back to index files.
-        index_file.seekg(0, std::ios_base::end);
-        index_file << suffix << "\n";
-        index_file << suffix1 << "\n";
-        return "CONTINUE";
-    }
-
+extern "C" void compact_two_files(const char* a, const char* b, const char* out) {
+    std::string as (a);
+    std::string bs (b);
+    std::string outs (out);
+    Compactor::compact_two_files(as, bs, outs);
 }
+//// todo: copy-on-write mechanism
+//std::optional<std::string> Compactor::compact_two_files() {
+//    using namespace Serializer;
+//    std::fstream index_file(indice_files_dir / "index_files", std::ios_base::in | std::ios_base::out);
+//    assert(index_file);
+//
+//    IndexFileLocker::acquire_lock_file();
+//    auto[err_state1, suffix] = read_and_mark_line(index_file);
+//    auto[err_state2, suffix1] = read_and_mark_line(index_file);
+//    IndexFileLocker::release_lock_file();
+//
+//
+//    assert(err_state2 == ReadState::GOOD && err_state1 == err_state2);
+//
+//    auto streamset = open_file_set<std::fstream>(suffix);
+//    auto streamset1 = open_file_set<std::fstream>(suffix1);
+//
+//
+//    if (check_file(streamset) && check_file(streamset1)) return compact_two_files(suffix, suffix1);
+//    else {
+//        // Re-add it back to index files.
+//        index_file.seekg(0, std::ios_base::end);
+//        index_file << suffix << "\n";
+//        index_file << suffix1 << "\n";
+//        return "CONTINUE";
+//    }
+//
+//}
 
 
 // Deserializes and then serializes an index (comprised of terms, frequencies, positions, and filemap) to check for consistency.
 // If the index is serialized correctly (e.g. program was not left in a bad state/sudden SIGTERM), then the MD5 sums should match.
-void Compactor::test_makes_sense(const std::string &suffix) {
-    using namespace Serializer;
-
-    auto streamset = open_file_set<std::ifstream>(suffix);
-    int len = streamset.getlen();
-
-    auto filepairs = Serializer::read_filepairs(streamset.filemap);
-
-    assert(!filepairs.empty());
-
-
-    assert(streamset.frequencies && streamset.terms && streamset.positions);
-
-    WordIndexEntry wie;
-
-    while (check_stream_good(dynamic_cast<std::ifstream &>(streamset.terms)) && len > 0) {
-        len--;
-        wie = read_work_index_entry(streamset.frequencies, streamset.terms, streamset.positions);
-
-        for(auto i = wie.files.begin(); i < wie.files.end() - 1; i++) {
-            if(*i > *(i+1)) {
-                throw std::runtime_error("Bad! unsorted");
-            }
-        }
-    }
-    assert(len == 0);
-}
-
-std::pair<Compactor::ReadState, std::string> Compactor::read_line(std::ifstream &stream) {
-    std::string line;
-
-    if (!std::getline(stream, line)) return {Compactor::ReadState::STREAM_ERROR, ""};
-
-    if (line[0] == '#') {
-        return read_line(stream); //recursive call.
-    } else {
-        return {Compactor::ReadState::GOOD, line};
-    }
-
-
-}
-
+//void Compactor::test_makes_sense(const std::string &suffix) {
+//    using namespace Serializer;
+//
+//    auto streamset = open_file_set<std::ifstream>(suffix);
+//    int len = streamset.getlen();
+//
+//    auto filepairs = Serializer::read_filepairs(streamset.filemap);
+//
+//    assert(!filepairs.empty());
+//
+//
+//    assert(streamset.frequencies && streamset.terms && streamset.positions);
+//
+//    WordIndexEntry wie;
+//
+//    while (check_stream_good(dynamic_cast<std::ifstream &>(streamset.terms)) && len > 0) {
+//        len--;
+//        wie = read_work_index_entry(streamset.frequencies, streamset.terms, streamset.positions);
+//
+//        for(auto i = wie.files.begin(); i < wie.files.end() - 1; i++) {
+//            if(*i > *(i+1)) {
+//                throw std::runtime_error("Bad! unsorted");
+//            }
+//        }
+//    }
+//    assert(len == 0);
+//}

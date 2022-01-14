@@ -70,10 +70,6 @@ TopDocs DocumentsMatcher::backup(std::vector<TopDocs> &results) {
     for (int i = 1; i < results.size(); i++) {
         results[0].append_multi(results[i]);
     }
-    for (auto &i : results[0]) {
-        // Nerf scores because we're using backup
-        i.document_freq /= 5;
-    }
     results[0].sort_by_frequencies();
     return results[0];
 }
@@ -151,7 +147,9 @@ TopDocs AND(std::vector<TopDocs> &results) {
 
 }
 
-
+TopDocs DocumentsMatcher::OR(std::vector<TopDocs>& outputs) {
+    return backup(outputs);
+}
 TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
     auto ret = AND(outputs);
     while (ret.size() < 200) {

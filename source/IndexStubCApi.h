@@ -15,7 +15,7 @@ struct SearchRetType {
     uint32_t pos_len;
 };
 
-SearchRetType search_many_terms(SortedKeysIndexStub *index, const char **terms, int terms_length);
+SearchRetType search_many_terms(SortedKeysIndexStub *index, const char **terms, int terms_length, bool load_positions, bool and_query);
 void free_index(SortedKeysIndexStub* stub);
 void free_elem_buf(SearchRetType elem);
 SortedKeysIndexStub *create_index_stub(const char *suffix);

@@ -72,7 +72,8 @@ TEST(indexing, indexes_correctly_and_deserialize_correctly) {
 
 TEST(indexing, zero_documents) {
     LOOP_ITERS = 0;
-    SortedKeysIndexStub index(do_index("SHOULDHAVE"));
+    auto suffix = do_index("ISHOULDHAVE");
+    SortedKeysIndexStub index(suffix);
 
     auto res_bad = index.search_many_terms({"SHOULDHAVE"});
     EXPECT_EQ(res_bad[0].size(), 0);

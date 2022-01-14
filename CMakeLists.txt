@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.16)
 project("search")
 enable_testing()
 
+
+if (FUZZ_ON)
+    set(CMAKE_C_COMPILER /home/henry/afl-2.52b/afl-g++)
+endif()
+
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
@@ -27,8 +32,7 @@ add_library(search-share SHARED
         "source/Tokenizer.h"
         "source/SortedKeysIndex.h"
         "source/SortedKeysIndex.cpp"
-        "source/compactor/Compactor.cpp"
-        "source/compactor/Compactor.h" source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
+        source/SortedKeysIndexStub.cpp source/SortedKeysIndexStub.h
         source/IndexStubCApi.cpp
         source/Constants.cpp source/Base26Num.cpp
         source/FPStub.cpp
@@ -44,12 +48,13 @@ add_executable(search source/main.cpp source/TermsListSearcher.cpp source/Docume
 target_link_libraries(search PRIVATE search-share general-indexer)
 
 
-add_executable(compactor source/compactor/main.cpp)
-target_link_libraries(compactor PRIVATE search-share pthread)
-
 add_library(c-search-abi SHARED source/c_abi.cpp)
 target_link_libraries(c-search-abi PRIVATE search-share)
 
+
+add_library(compactor SHARED source/compactor/Compactor.cpp)
+target_include_directories(compactor PRIVATE source/compactor)
+target_link_libraries(compactor PRIVATE search-share)
 
 file(GLOB rust-sources rust/webserver/src/*)
 

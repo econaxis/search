@@ -26,7 +26,7 @@
 #include "PositionsSearcher.h"
 
 inline unsigned int LOOP_ITERS = 200;
-inline float LOOP_ITERS_MULTIPLY = 1;
+inline int LOOP_ITERS_MULTIPLY = 1;
 
 namespace utils {
     inline unsigned long rand() {
@@ -71,7 +71,7 @@ inline std::string generate_words(int num = 100) {
 }
 
 inline std::string do_index_custom(auto callable) {
-    uint32_t multed = LOOP_ITERS * LOOP_ITERS_MULTIPLY;
+    uint32_t multed = 30;
     std::stringstream fakecin;
     std::cin.rdbuf(fakecin.rdbuf());
     std::vector<std::string> filenames(multed), files(multed);

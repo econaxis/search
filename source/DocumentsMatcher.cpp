@@ -152,7 +152,8 @@ TopDocs DocumentsMatcher::OR(std::vector<TopDocs>& outputs) {
 }
 TopDocs DocumentsMatcher::AND_Driver(std::vector<TopDocs> &outputs) {
     auto ret = AND(outputs);
-    while (ret.size() < 200) {
+    while (ret.size() < 50) {
+        std::cout<<"Extending more\n";
         bool has_more = false;
         for (auto &td : outputs) {
             if (td.extend_from_tier_iterators()) {

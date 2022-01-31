@@ -63,7 +63,7 @@ class _SearchRetType(Structure):
         for i in range(0, self.pos_len):
             yield self.pos[i]
 
-    def iter_td(self, limit=40) -> Iterable[POINTER(DocumentFrequency)]:
+    def iter_td(self, limit=20) -> Iterable[POINTER(DocumentFrequency)]:
         for i in list(reversed(range(0, self.topdocs_length)))[0:limit]:
             yield self.topdocs[i]
 
@@ -107,7 +107,9 @@ class SearchRetType:
 
             new = sorted(new, key=lambda k: k[1])
             joined_str = ""
-            url, contents = tbm.get(i)
+            sr = tbm.get(i)
+            url = sr.filename
+            contents = sr.data
 
             matches[i] = new
             for pos, length in new[-6:]:
@@ -116,17 +118,17 @@ class SearchRetType:
 
             json[i] = (url, joined_str)
 
-        dll.free_elem_buf(sr)
         scores = list(reversed(sorted(scores.keys(), key=lambda k: scores[k])))
         self.td = {"text": json, "matches": matches, "scores": scores}
 
     def printable(self):
         return json.dumps(self.td)
 
-
+    def __repr__(self):
+        return self.printable()
 def load(path):
     indexer = ctypes.cdll.LoadLibrary(f"{path}/libgeneral-indexer.so")
-    indexer.initialize_directory_variables()
+    indexer.initialize_directory_variables(0)
     indexer.new_index.argtypes = []
     indexer.new_index.restype = POINTER(SortedKeysIndex)
 
@@ -167,6 +169,8 @@ class Searcher:
         terms = ctypes.cast(terms, POINTER(c_char_p))
 
         result = self.dll.search_many_terms(self.ind, terms, terms_len)
+
+        print("Len: ", result.topdocs_length)
 
         return SearchRetType(self.dll, result, terms[0:terms_len])
 

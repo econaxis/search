@@ -56,7 +56,7 @@ function prev_match() {
 
 function to_next_word(text, index, direction) {
     let ch = text[index];
-    while (ch.match("[a-zA-Z]")) {
+    while (ch !== undefined && ch.match("[a-zA-Z]")) {
         index += direction;
         ch = text[index];
     }

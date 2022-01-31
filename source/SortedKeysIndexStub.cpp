@@ -51,7 +51,7 @@ static double string_prefix_compare(const std::string &one, const std::string &t
 
 template<typename Iterator>
 static double compute_average(Iterator begin, Iterator end) {
-    if (end - begin < 4) return 2;
+    if (end - begin < 12) return 4;
 
     unsigned int sum = 0;
 
@@ -59,7 +59,7 @@ static double compute_average(Iterator begin, Iterator end) {
         sum += *i;
     }
     sum += end - begin;
-    return sum / (end - begin);
+    return sum / (end - begin) * 1.9;
 }
 
 std::optional<PreviewResult> SortedKeysIndexStub::seek_to_term(const std::string &term) const {
@@ -197,6 +197,8 @@ TopDocs SortedKeysIndexStub::search_one_term(const std::string &term) const {
     for (int i = 1; i < outputs.size(); i++) {
         outputs[0].append_multi(std::move(outputs[i]));
     }
+
+    std::cout<<"Output len: "<<outputs[0].size()<<"\n";
     return outputs[0];
 }
 

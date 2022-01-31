@@ -19,15 +19,15 @@ extern "C" void initialize_directory_variables(const char *hint) {
     } else {
         const char *data_files_dir_env = std::getenv("DATA_FILES_DIR");
         if (data_files_dir_env == nullptr) {
-            data_files_dir = fs::path(".");
+            data_files_dir = fs::path("./");
             indice_files_dir = data_files_dir;
         } else {
             data_files_dir = fs::path(data_files_dir_env);
-            indice_files_dir = data_files_dir / "indices";
-
+            indice_files_dir = data_files_dir;
         }
 
     }
     std::cout << "Using dir: " << data_files_dir << "\n";
+    std::cout<<std::filesystem::current_path()<<"\n";
 }
 

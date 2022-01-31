@@ -1,10 +1,12 @@
-import requests, concurrent.futures
+import concurrent.futures
 import json
+import os
 
-from web import test_flask
+import requests
 from query_console import QueryConsole
 from search_lib import ParallelIndexer
 from table_manager import TableManager
+from web import test_flask
 
 
 def basic_test():
@@ -70,41 +72,53 @@ def fetch_pages(url: [str]) -> [str]:
 
 
 def load_wikibooks_pages():
-    tbm = TableManager(b"/tmp/test.db")
+    tbm = TableManager(b"/tmp/wikibooks.db")
     with ParallelIndexer() as ind:
         for index in range(1, 86736):
-            url, contents = tbm.get(index)
-            ind.append_file(contents, index)
+            print(index)
+            sr = tbm.get(index)
+            ind.append_file(sr.data, index)
         ind.end()
 
-
+import os
 def load_wikibooks_pages_tbm():
     import sqlite3
-    con = sqlite3.connect("f.db")
+    con = sqlite3.connect("wikibooks.sqlite")
     cur = con.cursor()
 
     cur.execute("SELECT COUNT(rowid) FROM en")
     count = cur.fetchone()
     print(count, "rows")
-    tbm = TableManager()
+    try:
+        os.remove("/tmp/wikibooks.db")
+    except FileNotFoundError:
+        pass
+    tbm = TableManager(b"/tmp/wikibooks.db")
+    rowcount = 0
     for row in cur.execute("SELECT rowid,url, body_text FROM en ORDER BY rowid"):
         tbm.store(row[0], row[1], row[2])
+        rowcount += 1
+        print(rowcount)
+
+    print("Done storing")
     tbm.flush()
 
 
 def test_live():
     from search_lib import Searcher
-    console = QueryConsole()
+    # console = QueryConsole()
     with Searcher("par-index") as searcher:
-        while console.valid:
-            query = console.run_event_loop()
-            if query:
-                result = searcher.search_terms(*query).printable()
-                console.set_results(result)
+        print(searcher.search_terms("WIKI"))
+        print(searcher.search_terms("TEST", "HELLO"))
+        # while console.valid:
+        #     query = console.run_event_loop()
+        #     if query:
+        #         result = searcher.search_terms(*query).printable()
+        #         console.set_results(result)
 
 
 # load_wikibooks_pages_tbm()
-# load_wikibooks_pages()
+load_wikibooks_pages()
 # test_live()
 test_flask()
 print("done")

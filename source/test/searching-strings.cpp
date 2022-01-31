@@ -38,45 +38,45 @@ TEST(Searching, should_not_contain) {
 }
 
 
-// tests that documents with terms closer together should rank higher.
-//TEST(Searching, more_precise_searching_test) {
-//    std::vector<int> good_docs;
-//    auto generator = [&](int index, auto _) -> std::string {
-//        if (utils::rand() % (LOOP_ITERS / 50) == 0) {
-//            good_docs.push_back(index);
-//            return fmt::format("{} {} {}", generate_words(100), "RUDSVF UVNCXK AVNCXRU", generate_words(100));
-//        } else {
-//            std::ostringstream random_words;
-//            std::vector<std::string_view> must_include {"RUDSVF", "UVNCXK", "AVNCXRU"};
-//            int counter = 0;
-//            while(!must_include.empty()) {
-//                if(counter++ % 30 == 0 && !must_include.empty()) {
-//                    random_words<<must_include.back()<<" ";
-//                    must_include.pop_back();
-//                } else {
-//                    random_words<<generate_words(10);
-//                }
-//            }
-//            return random_words.str();
-//        }
-//    };
-//    LOOP_ITERS = 200;
-//    auto suffix = do_index_custom(generator);
-//    SortedKeysIndexStub index(suffix);
-//    auto temp = index.search_many_terms({"RUDSVF", "UVNCXK", "AVNCXRU"});
-//
-//    // Expand all to avoid the chunking optimization
-//    for(auto& td : temp) td.extend_from_tier_iterators();
-//
-//    auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(index, temp, {"RUDSVF", "UVNCXK", "AVNCXRU"});
-//
-//    std::reverse(topdocs_with_pos.begin(), topdocs_with_pos.end());
-//    std::sort(topdocs_with_pos.begin(), topdocs_with_pos.begin() + good_docs.size(), [](const auto& a, const auto& b) {
-//        return a.document_id < b.document_id;
-//    });
-//    std::sort(good_docs.begin(), good_docs.end());
-//    print("Testing", good_docs.size(), "high ranking documents");
-//    ASSERT_TRUE(std::equal(good_docs.begin(), good_docs.end(), topdocs_with_pos.begin(), [](int i, DocumentsMatcher::TopDocsWithPositions::Elem& j) {
-//        return i == j.document_id;
-//    }));
-//}
+// // tests that documents with terms closer together should rank higher.
+// TEST(Searching, more_precise_searching_test) {
+//     std::vector<int> good_docs;
+//     auto generator = [&](int index, auto _) -> std::string {
+//         if (utils::rand() % (LOOP_ITERS / 50) == 0) {
+//             good_docs.push_back(index);
+//             return fmt::format("{} {} {}", generate_words(100), "RUDSVF UVNCXK AVNCXRU", generate_words(100));
+//         } else {
+//             std::ostringstream random_words;
+//             std::vector<std::string_view> must_include {"RUDSVF", "UVNCXK", "AVNCXRU"};
+//             int counter = 0;
+//             while(!must_include.empty()) {
+//                 if(counter++ % 30 == 0 && !must_include.empty()) {
+//                     random_words<<must_include.back()<<" ";
+//                     must_include.pop_back();
+//                 } else {
+//                     random_words<<generate_words(10);
+//                 }
+//             }
+//             return random_words.str();
+//         }
+//     };
+//     LOOP_ITERS = 200;
+//     auto suffix = do_index_custom(generator);
+//     SortedKeysIndexStub index(suffix);
+//     auto temp = index.search_many_terms({"RUDSVF", "UVNCXK", "AVNCXRU"});
+// 
+//     // Expand all to avoid the chunking optimization
+//     for(auto& td : temp) td.extend_from_tier_iterators();
+// 
+//     auto topdocs_with_pos = DocumentsMatcher::combiner_with_position(index, temp, {"RUDSVF", "UVNCXK", "AVNCXRU"});
+// 
+//     std::reverse(topdocs_with_pos.begin(), topdocs_with_pos.end());
+//     std::sort(topdocs_with_pos.begin(), topdocs_with_pos.begin() + good_docs.size(), [](const auto& a, const auto& b) {
+//         return a.document_id < b.document_id;
+//     });
+//     std::sort(good_docs.begin(), good_docs.end());
+//     print("Testing", good_docs.size(), "high ranking documents");
+//     ASSERT_TRUE(std::equal(good_docs.begin(), good_docs.end(), topdocs_with_pos.begin(), [](int i, DocumentsMatcher::TopDocsWithPositions::Elem& j) {
+//         return i == j.document_id;
+//     }));
+// }

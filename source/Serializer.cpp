@@ -261,7 +261,7 @@ std::vector<StubIndexEntry> Serializer::read_sorted_keys_index_stub_v2(std::istr
 
 void Serializer::serialize(const std::string &suffix, const SortedKeysIndex &index) {
 
-    std::cout<<"Serializing "<<indice_files_dir<<"\n";
+    std::cout<<"Serializing "<<indice_files_dir<<" "<<suffix<<"\n";
 
     std::ofstream frequencies(indice_files_dir / ("frequencies-" + suffix), std::ios_base::binary);
     std::ofstream positions(indice_files_dir / ("positions-" + suffix), std::ios_base::binary);

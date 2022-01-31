@@ -25,6 +25,6 @@ def test_flask():
         @app.route("/id/<int:id>")
         @cross_origin()
         def get_id(id: int):
-            return tbm.get(id)[1]
+            return tbm.get(id).data
 
         app.run(threaded=False)
